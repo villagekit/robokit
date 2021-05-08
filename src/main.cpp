@@ -1,4 +1,7 @@
 #include <Arduino.h>
+#include <StateMachine.h>
+#include <functional>
+#include <utility>
 
 #if !( defined(STM32F0) || defined(STM32F1) || defined(STM32F2) || defined(STM32F3)  ||defined(STM32F4) || defined(STM32F7) || \
        defined(STM32L0) || defined(STM32L1) || defined(STM32L4) || defined(STM32H7)  ||defined(STM32G0) || defined(STM32G4) || \
@@ -41,57 +44,39 @@ STM32_ISR_Timer ISR_Timer;
 
 #define TIMER_INTERVAL_TICK           100L
 
-static uint16_t GREEN_TICKS_TOTAL = 10;
-static uint16_t BLUE_TICKS_TOTAL = 20;
-static uint16_t RED_TICKS_TOTAL = 40;
+StateMachine create_led_machine(uint16_t led_pin, uint16_t total_ticks) {
+  uint16_t ticks_left = 0;
 
-volatile bool greenStatus = false;
-volatile bool blueStatus = false;
-volatile bool redStatus = false;
+  pinMode(led_pin, OUTPUT);
 
-volatile uint16_t greenTicksLeft = 0;
-volatile uint16_t blueTicksLeft = 0;
-volatile uint16_t redTicksLeft = 0;
+  StateMachine machine = StateMachine();
+
+  State* ON = machine.addState(std::function[=]() {
+    if (machine.executeOnce) {
+      digitalWrite(led_pin, true);
+    }
+    
+    ticks_left -= 1;
+  });
+  State* OFF = machine.addState([=]() {
+    if (machine.executeOnce) {
+      digitalWrite(led_pin, false);
+    }
+  });
+
+  ON->addTransition([=]() {
+    return ticks_left < 0;
+  }, OFF);
+  OFF->addTransition([=]() {
+    return ticks_left < 0;
+  }, ON);
+
+  return machine;
+};
 
 void TimerHandler()
 {
   ISR_Timer.run();
-}
-
-void processGreen()
-{
-  if (greenTicksLeft == 0) {
-    greenStatus = !greenStatus;
-    greenTicksLeft = GREEN_TICKS_TOTAL;
-  }
-
-  digitalWrite(LED_BUILTIN, greenStatus);
-
-  greenTicksLeft -= 1;
-}
-
-void processBlue()
-{
-  if (blueTicksLeft == 0) {
-    blueStatus = !blueStatus;
-    blueTicksLeft = BLUE_TICKS_TOTAL;
-  }
-
-  digitalWrite(LED_BLUE, blueStatus);
-
-  blueTicksLeft -= 1;
-}
-
-void processRed()
-{
-  if (redTicksLeft == 0) {
-    redStatus = !redStatus;
-    redTicksLeft = RED_TICKS_TOTAL;
-  }
-
-  digitalWrite(LED_RED, redStatus);
-
-  redTicksLeft -= 1;
 }
 
 void setup()
@@ -105,12 +90,7 @@ void setup()
   Serial.println(STM32_TIMER_INTERRUPT_VERSION);
   Serial.print(F("CPU Frequency = ")); Serial.print(F_CPU / 1000000); Serial.println(F(" MHz"));
 
-  // configure pin in output mode
-  pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(LED_BLUE, OUTPUT);
-  pinMode(LED_RED, OUTPUT);
-
-  // Interval in microsecs
+  // hardware interval in microsecs
   if (ITimer.attachInterruptInterval(HW_TIMER_INTERVAL_MS * 1000, TimerHandler))
   {
     Serial.print(F("Starting ITimer OK, millis() = ")); Serial.println(millis());
@@ -119,10 +99,9 @@ void setup()
     Serial.println(F("Can't set ITimer. Select another freq. or timer"));
   }
 
-  // You can use up to 16 timer for each ISR_Timer
-  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, processGreen);
-  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, processBlue);
-  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, processRed);
+  StateMachine green_machine = create_led_machine(LED_BUILTIN, 10);
+
+  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, &green_machine.run);
 }
 
 
