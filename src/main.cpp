@@ -33,42 +33,65 @@
 #define TIMER_INTERVAL_MS         100
 #define HW_TIMER_INTERVAL_MS      50
 
-// Depending on the board, you can select STM32 Hardware Timer from TIM1-TIM22
-// For example, F767ZI can select Timer from TIM1-TIM14
-// If you select a Timer not correctly, you'll get a message from ci[ompiler
-// 'TIMxx' was not declared in this scope; did you mean 'TIMyy'? 
-
-// Init STM32 timer TIM1
+// F767ZI can select Timer from TIM1-TIM14
 STM32Timer ITimer(TIM1);
 
-// Init STM32_ISR_Timer
 // Each STM32_ISR_Timer can service 16 different ISR-based timers
 STM32_ISR_Timer ISR_Timer;
 
-#define TIMER_INTERVAL_0_5S           500L
-#define TIMER_INTERVAL_1S             1000L
-#define TIMER_INTERVAL_1_5S           1500L
+#define TIMER_INTERVAL_TICK           100L
+
+static uint16_t GREEN_TICKS_TOTAL = 10;
+static uint16_t BLUE_TICKS_TOTAL = 20;
+static uint16_t RED_TICKS_TOTAL = 40;
+
+volatile bool greenStatus = false;
+volatile bool blueStatus = false;
+volatile bool redStatus = false;
+
+volatile uint16_t greenTicksLeft = 0;
+volatile uint16_t blueTicksLeft = 0;
+volatile uint16_t redTicksLeft = 0;
 
 void TimerHandler()
 {
   ISR_Timer.run();
 }
 
-// In STM32, avoid doing something fancy in ISR, for example complex Serial.print with String() argument
-// The pure simple Serial.prints here are just for demonstration and testing. Must be eliminate in working environment
-// Or you can get this run-time error / crash
-void doingSomething1()
+void processGreen()
 {
-  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+  if (greenTicksLeft == 0) {
+    greenStatus = !greenStatus;
+    greenTicksLeft = GREEN_TICKS_TOTAL;
+  }
+
+  digitalWrite(LED_BUILTIN, greenStatus);
+
+  greenTicksLeft -= 1;
 }
 
-void doingSomething2()
+void processBlue()
 {
-  digitalWrite(LED_BLUE, !digitalRead(LED_BLUE));
+  if (blueTicksLeft == 0) {
+    blueStatus = !blueStatus;
+    blueTicksLeft = BLUE_TICKS_TOTAL;
+  }
+
+  digitalWrite(LED_BLUE, blueStatus);
+
+  blueTicksLeft -= 1;
 }
-void doingSomething3()
+
+void processRed()
 {
-  digitalWrite(LED_RED, !digitalRead(LED_RED));
+  if (redTicksLeft == 0) {
+    redStatus = !redStatus;
+    redTicksLeft = RED_TICKS_TOTAL;
+  }
+
+  digitalWrite(LED_RED, redStatus);
+
+  redTicksLeft -= 1;
 }
 
 void setup()
@@ -82,27 +105,24 @@ void setup()
   Serial.println(STM32_TIMER_INTERRUPT_VERSION);
   Serial.print(F("CPU Frequency = ")); Serial.print(F_CPU / 1000000); Serial.println(F(" MHz"));
 
-  // Instantiate HardwareTimer object. Thanks to 'new' instanciation, HardwareTimer is not destructed when setup() function is finished.
-  //HardwareTimer *MyTim = new HardwareTimer(Instance);
-
   // configure pin in output mode
-  pinMode(LED_BUILTIN,  OUTPUT);
-  pinMode(LED_BLUE,     OUTPUT);
-  pinMode(LED_RED,      OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(LED_BLUE, OUTPUT);
+  pinMode(LED_RED, OUTPUT);
 
   // Interval in microsecs
   if (ITimer.attachInterruptInterval(HW_TIMER_INTERVAL_MS * 1000, TimerHandler))
   {
     Serial.print(F("Starting ITimer OK, millis() = ")); Serial.println(millis());
   }
-  else
+  else {
     Serial.println(F("Can't set ITimer. Select another freq. or timer"));
+  }
 
-  // Just to demonstrate, don't use too many ISR Timers if not absolutely necessary
   // You can use up to 16 timer for each ISR_Timer
-  ISR_Timer.setInterval(TIMER_INTERVAL_0_5S,  doingSomething1);
-  ISR_Timer.setInterval(TIMER_INTERVAL_1S,    doingSomething2);
-  ISR_Timer.setInterval(TIMER_INTERVAL_1_5S,  doingSomething3);
+  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, processGreen);
+  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, processBlue);
+  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, processRed);
 }
 
 
