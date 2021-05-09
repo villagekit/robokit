@@ -91,28 +91,36 @@ struct Transitions {
   }
 };
 
-template <typename StateVariant, typename EventVariant, typename Transitions>
+template <typename Parameters, typename StateVariant, typename EventVariant, typename Transitions>
 struct Machine {
-    StateVariant current_state;
+  Machine(Parameters parameters);
+  ~Machine();
 
-    void dispatch(const EventVariant &Event)
-    {
-        std::optional<StateVariant> new_state = std::visit(Transitions{}, current_state, Event);
-        if (new_state)
-            current_state = *std::move(new_state);
-    }
+  Parameters parameters;
+  StateVariant current_state;
+
+  void dispatch(const EventVariant &Event) {
+    std::optional<StateVariant> new_state = std::visit(Transitions{}, current_state, Event);
+    if (new_state)
+        current_state = *std::move(new_state);
+  }
 };
 
+struct Params {
+  uint8_t led_pin;
+  uint16_t ticks_until_switch;
+};
+
+Params green_params = {
+  LED_BUILTIN, // led_pin
+  10 // ticks_until_switch
+};
+
+volatile Machine<Params, State, Event, Transitions> green_machine(green_params);
 
 void TimerHandler()
 {
   ISR_Timer.run();
-}
-
-Machine<State, Event, Transitions> led;
-
-void process_green () {
-  led.dispatch(EventTick{});
 }
 
 void setup()
@@ -136,8 +144,8 @@ void setup()
     Serial.println(F("Can't set ITimer. Select another freq. or timer"));
   }
 
-  led.dispatch(EventStart{});
-  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, [](){ led.dispatch(EventTick{}); });
+  green_machine.dispatch(EventStart{});
+  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, [](){ green_machine.dispatch(EventTick{}); });
 }
 
 void loop()
