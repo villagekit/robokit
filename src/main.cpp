@@ -1,7 +1,6 @@
 #include <Arduino.h>
-#include <StateMachine.h>
-#include <functional>
-#include <utility>
+#include <variant> // std::variant
+#include <optional> // std::optional
 
 #if !( defined(STM32F0) || defined(STM32F1) || defined(STM32F2) || defined(STM32F3)  ||defined(STM32F4) || defined(STM32F7) || \
        defined(STM32L0) || defined(STM32L1) || defined(STM32L4) || defined(STM32H7)  ||defined(STM32G0) || defined(STM32G4) || \
@@ -44,39 +43,76 @@ STM32_ISR_Timer ISR_Timer;
 
 #define TIMER_INTERVAL_TICK           100L
 
-StateMachine create_led_machine(uint16_t led_pin, uint16_t total_ticks) {
-  uint16_t ticks_left = 0;
+// Events
+//
+struct EventStart {};
+struct EventStop {};
+struct EventTick {};
 
-  pinMode(led_pin, OUTPUT);
+using Event = std::variant<EventStart, EventStop, EventTick>;
 
-  StateMachine machine = StateMachine();
-
-  State* ON = machine.addState(std::function[=]() {
-    if (machine.executeOnce) {
-      digitalWrite(led_pin, true);
-    }
-    
-    ticks_left -= 1;
-  });
-  State* OFF = machine.addState([=]() {
-    if (machine.executeOnce) {
-      digitalWrite(led_pin, false);
-    }
-  });
-
-  ON->addTransition([=]() {
-    return ticks_left < 0;
-  }, OFF);
-  OFF->addTransition([=]() {
-    return ticks_left < 0;
-  }, ON);
-
-  return machine;
+// States
+//
+struct Idle {};
+struct Active {
+  bool isOn = true;
+  uint16_t ticksUntilSwitch = 20;
 };
+
+using State = std::variant<Idle, Active>;
+
+// Transitions
+//
+struct Transitions {
+  std::optional<State> operator()(Idle &, const EventStart &) {
+    pinMode(LED_BUILTIN, OUTPUT);
+
+    return Active{};
+  }
+
+  std::optional<State> operator()(Active &, const EventStop &) {
+    return Idle{};
+  }
+
+  std::optional<State> operator()(Active &s, const EventTick &) {
+    digitalWrite(LED_BUILTIN, s.isOn);
+
+    if (s.ticksUntilSwitch-- == 0) {
+      s.isOn = !s.isOn;
+      s.ticksUntilSwitch = 20;
+    }
+
+    return std::nullopt;
+  }
+
+  template <typename State_t, typename Event_t>
+  std::optional<State> operator()(State_t &, const Event_t &) const {
+      return std::nullopt;
+  }
+};
+
+template <typename StateVariant, typename EventVariant, typename Transitions>
+struct Machine {
+    StateVariant current_state;
+
+    void dispatch(const EventVariant &Event)
+    {
+        std::optional<StateVariant> new_state = std::visit(Transitions{}, current_state, Event);
+        if (new_state)
+            current_state = *std::move(new_state);
+    }
+};
+
 
 void TimerHandler()
 {
   ISR_Timer.run();
+}
+
+Machine<State, Event, Transitions> led;
+
+void process_green () {
+  led.dispatch(EventTick{});
 }
 
 void setup()
@@ -90,7 +126,8 @@ void setup()
   Serial.println(STM32_TIMER_INTERRUPT_VERSION);
   Serial.print(F("CPU Frequency = ")); Serial.print(F_CPU / 1000000); Serial.println(F(" MHz"));
 
-  // hardware interval in microsecs
+
+  // Interval in microsecs
   if (ITimer.attachInterruptInterval(HW_TIMER_INTERVAL_MS * 1000, TimerHandler))
   {
     Serial.print(F("Starting ITimer OK, millis() = ")); Serial.println(millis());
@@ -99,11 +136,9 @@ void setup()
     Serial.println(F("Can't set ITimer. Select another freq. or timer"));
   }
 
-  StateMachine green_machine = create_led_machine(LED_BUILTIN, 10);
-
-  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, &green_machine.run);
+  led.dispatch(EventStart{});
+  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, [](){ led.dispatch(EventTick{}); });
 }
-
 
 void loop()
 {
