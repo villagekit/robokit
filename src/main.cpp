@@ -1,34 +1,15 @@
 #include <Arduino.h>
+#include "STM32TimerInterrupt.h"
+#include "STM32_ISR_Timer.h"
+#include <store.hpp>
+#include <mapbox/variant.hpp>
+#include <mapbox/variant_visitor.hpp>
 
 #if !( defined(STM32F0) || defined(STM32F1) || defined(STM32F2) || defined(STM32F3)  ||defined(STM32F4) || defined(STM32F7) || \
        defined(STM32L0) || defined(STM32L1) || defined(STM32L4) || defined(STM32H7)  ||defined(STM32G0) || defined(STM32G4) || \
        defined(STM32WB) || defined(STM32MP1) )
   #error This code is designed to run on STM32F/L/H/G/WB/MP1 platform! Please check your Tools->Board setting.
 #endif
-
-// These define's must be placed at the beginning before #include "STM32TimerInterrupt.h"
-// _TIMERINTERRUPT_LOGLEVEL_ from 0 to 4
-// Don't define _TIMERINTERRUPT_LOGLEVEL_ > 0. Only for special ISR debugging only. Can hang the system.
-// Don't define TIMER_INTERRUPT_DEBUG > 2. Only for special ISR debugging only. Can hang the system.
-#define TIMER_INTERRUPT_DEBUG         0
-#define _TIMERINTERRUPT_LOGLEVEL_     0
-
-#include "STM32TimerInterrupt.h"
-
-#ifndef LED_BUILTIN
-  #define LED_BUILTIN       PB0               // Pin 33/PB0 control on-board LED_GREEN on F767ZI
-#endif
-
-#ifndef LED_BLUE
-  #define LED_BLUE          PB7               // Pin 73/PB7 control on-board LED_BLUE on F767ZI
-#endif
-
-#ifndef LED_RED
-  #define LED_RED           PB14              // Pin 74/PB14 control on-board LED_BLUE on F767ZI
-#endif
-   
-#include "STM32TimerInterrupt.h"
-#include "STM32_ISR_Timer.h"
 
 #define TIMER_INTERVAL_MS         100
 #define HW_TIMER_INTERVAL_MS      50
@@ -41,56 +22,83 @@ STM32_ISR_Timer ISR_Timer;
 
 #define TIMER_INTERVAL_TICK           100L
 
-class LedMachine {
-  public:
-    LedMachine(uint8_t led_pin, uint16_t ticks_per_switch);
-    ~LedMachine();
-
-    void setup();
-    void tick();
-
-    // params
-    volatile uint8_t led_pin;
-    volatile uint16_t ticks_per_switch;
-
-    // state
-    volatile bool is_on;
-    volatile uint16_t ticks_until_switch;
+struct StateLeds {
+  bool green = true;
+  bool blue = true;
+  bool red = true;
 };
 
-LedMachine::LedMachine(uint8_t led_pin, uint16_t ticks_per_switch): led_pin(led_pin), ticks_per_switch(ticks_per_switch) {
-  is_on = true;
-  ticks_until_switch = ticks_per_switch;
+enum class LED_ID { GREEN, RED, BLUE };
+struct ActionLedToggle {
+  LED_ID led_id;
+};
+struct ActionLedOther {};
+using ActionLeds = mapbox::util::variant<ActionLedToggle, ActionLedOther>;
+
+StateLeds reducer_leds(StateLeds state, ActionLeds action) {
+  action.match(
+    [&state](const ActionLedToggle action) {
+      switch (action.led_id) {
+        case LED_ID::GREEN:
+          state.green = !state.green;
+          break;
+        case LED_ID::BLUE:
+          state.blue = !state.blue;
+          break;
+        case LED_ID::RED:
+          state.red = !state.red;
+          break;
+      }
+    },
+    [](ActionLedOther) {}
+  );
+  
+  return state;
 }
-LedMachine::~LedMachine(void) {}
 
-void LedMachine::setup() {
-  pinMode(led_pin, OUTPUT);
+struct ActionClockTick {};
+using ActionClock = mapbox::util::variant<ActionClockTick>;
+
+struct StateClock {
+  uint16_t ticks = 0;
+};
+
+StateClock reducer_clock(StateClock state, ActionClock action) {
+  action.match(
+    [&state](const ActionClockTick) {
+      state.ticks++;
+    }
+  );
+
+  return state;
 }
 
-void LedMachine::tick() {
-  digitalWrite(led_pin, is_on);
+struct StateBot {
+  StateLeds leds;
+  StateClock clock;
+};
 
-  noInterrupts();
+using ActionBot = mapbox::util::variant<ActionLeds, ActionClock>;
 
-  if (ticks_until_switch == 0) {
-    is_on = !is_on;
-    ticks_until_switch = ticks_per_switch;
-  }
+StateBot reducer(StateBot state, ActionBot action) {
+  action.match(
+    [&state](const ActionLeds a) {
+      state.leds = reducer_leds(state.leds, a);
+    },
+    [&state](const ActionClock a) {
+      state.clock = reducer_clock(state.clock, a);
+    }
+  );
 
-  ticks_until_switch -= 1;
-
-  interrupts();
+  return state;
 }
-
-LedMachine green_machine = LedMachine(LED_BUILTIN, 5);
-LedMachine blue_machine = LedMachine(LED_BLUE, 10);
-LedMachine red_machine = LedMachine(LED_RED, 20);
 
 void TimerHandler()
 {
   ISR_Timer.run();
 }
+
+mapbox::util::variant<int> singleton = 5;
 
 void setup()
 {
@@ -103,7 +111,6 @@ void setup()
   Serial.println(STM32_TIMER_INTERRUPT_VERSION);
   Serial.print(F("CPU Frequency = ")); Serial.print(F_CPU / 1000000); Serial.println(F(" MHz"));
 
-
   // Interval in microsecs
   if (ITimer.attachInterruptInterval(HW_TIMER_INTERVAL_MS * 1000, TimerHandler))
   {
@@ -113,6 +120,7 @@ void setup()
     Serial.println(F("Can't set ITimer. Select another freq. or timer"));
   }
 
+  /*
   green_machine.setup();
   blue_machine.setup();
   red_machine.setup();
@@ -120,7 +128,7 @@ void setup()
   ISR_Timer.setInterval(TIMER_INTERVAL_TICK, [](){ green_machine.tick(); });
   ISR_Timer.setInterval(TIMER_INTERVAL_TICK, [](){ blue_machine.tick(); });
   ISR_Timer.setInterval(TIMER_INTERVAL_TICK, [](){ red_machine.tick(); });
-
+  */
 }
 
 void loop()
