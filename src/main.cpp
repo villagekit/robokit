@@ -1,9 +1,11 @@
 #include <Arduino.h>
+#include <variant>
+
 #include "STM32TimerInterrupt.h"
 #include "STM32_ISR_Timer.h"
+
+#include <overloaded.hpp>
 #include <store.hpp>
-#include <mapbox/variant.hpp>
-#include <mapbox/variant_visitor.hpp>
 
 #if !( defined(STM32F0) || defined(STM32F1) || defined(STM32F2) || defined(STM32F3)  ||defined(STM32F4) || defined(STM32F7) || \
        defined(STM32L0) || defined(STM32L1) || defined(STM32L4) || defined(STM32H7)  ||defined(STM32G0) || defined(STM32G4) || \
@@ -11,16 +13,16 @@
   #error This code is designed to run on STM32F/L/H/G/WB/MP1 platform! Please check your Tools->Board setting.
 #endif
 
+// pins
+// - https://github.com/stm32duino/Arduino_Core_STM32/blob/master/variants/STM32F7xx/F765Z(G-I)T_F767Z(G-I)T_F777ZIT/variant_NUCLEO_F767ZI.h
+
 #define TIMER_INTERVAL_MS         100
 #define HW_TIMER_INTERVAL_MS      50
 
 // F767ZI can select Timer from TIM1-TIM14
 STM32Timer ITimer(TIM1);
 
-// Each STM32_ISR_Timer can service 16 different ISR-based timers
 STM32_ISR_Timer ISR_Timer;
-
-#define TIMER_INTERVAL_TICK           100L
 
 struct StateLeds {
   bool green = true;
@@ -32,11 +34,10 @@ enum class LED_ID { GREEN, RED, BLUE };
 struct ActionLedToggle {
   LED_ID led_id;
 };
-struct ActionLedOther {};
-using ActionLeds = mapbox::util::variant<ActionLedToggle, ActionLedOther>;
+using ActionLeds = std::variant<ActionLedToggle>;
 
 StateLeds reducer_leds(StateLeds state, ActionLeds action) {
-  action.match(
+  std::visit(overloaded {
     [&state](const ActionLedToggle action) {
       switch (action.led_id) {
         case LED_ID::GREEN:
@@ -49,56 +50,59 @@ StateLeds reducer_leds(StateLeds state, ActionLeds action) {
           state.red = !state.red;
           break;
       }
-    },
-    [](ActionLedOther) {}
-  );
+    }
+  }, action);
   
   return state;
 }
 
 struct ActionClockTick {};
-using ActionClock = mapbox::util::variant<ActionClockTick>;
+using ActionClock = std::variant<ActionClockTick>;
 
 struct StateClock {
   uint16_t ticks = 0;
 };
 
 StateClock reducer_clock(StateClock state, ActionClock action) {
-  action.match(
+  std::visit(overloaded {
     [&state](const ActionClockTick) {
       state.ticks++;
     }
-  );
+  }, action);
 
   return state;
 }
 
 struct StateBot {
-  StateLeds leds;
-  StateClock clock;
+  StateLeds leds = StateLeds {};
+  StateClock clock = StateClock {};
 };
 
-using ActionBot = mapbox::util::variant<ActionLeds, ActionClock>;
+using ActionBot = std::variant<ActionLeds, ActionClock>;
 
-StateBot reducer(StateBot state, ActionBot action) {
-  action.match(
+StateBot reducer_bot(StateBot state, ActionBot action) {
+  noInterrupts();
+
+  std::visit(overloaded {
     [&state](const ActionLeds a) {
       state.leds = reducer_leds(state.leds, a);
     },
     [&state](const ActionClock a) {
       state.clock = reducer_clock(state.clock, a);
     }
-  );
+  }, action);
+
+  interrupts();
 
   return state;
 }
+
+Store<StateBot, ActionBot> store(reducer_bot, StateBot {});
 
 void TimerHandler()
 {
   ISR_Timer.run();
 }
-
-mapbox::util::variant<int> singleton = 5;
 
 void setup()
 {
@@ -120,15 +124,34 @@ void setup()
     Serial.println(F("Can't set ITimer. Select another freq. or timer"));
   }
 
-  /*
-  green_machine.setup();
-  blue_machine.setup();
-  red_machine.setup();
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_BLUE, OUTPUT);
+  pinMode(LED_RED, OUTPUT);
 
-  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, [](){ green_machine.tick(); });
-  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, [](){ blue_machine.tick(); });
-  ISR_Timer.setInterval(TIMER_INTERVAL_TICK, [](){ red_machine.tick(); });
-  */
+  ISR_Timer.setInterval(100L, [](){
+    StateBot state = store.getState();
+    digitalWrite(LED_GREEN, state.leds.green);
+    digitalWrite(LED_BLUE, state.leds.blue);
+    digitalWrite(LED_RED, state.leds.red);
+  });
+
+  ISR_Timer.setInterval(400L, [](){
+    store.dispatch(ActionLedToggle {
+      led_id: LED_ID::GREEN
+    });
+  });
+
+  ISR_Timer.setInterval(800L, [](){
+    store.dispatch(ActionLedToggle {
+      led_id: LED_ID::BLUE
+    });
+  });
+
+  ISR_Timer.setInterval(1600L, [](){
+    store.dispatch(ActionLedToggle {
+      led_id: LED_ID::RED
+    });
+  });
 }
 
 void loop()
