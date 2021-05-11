@@ -58,14 +58,14 @@ Store<STATE_T, ACTION_T>::Store(Reducer reducer, STATE_T initialState) :
 
 template <typename STATE_T, typename ACTION_T>
 void Store<STATE_T, ACTION_T>::subscribe(Subscriber subscriber) {
-	subscribers.push_back(subscriber);
+	subscribers.push_back(std::move(subscriber));
 }
 
 template <typename STATE_T, typename ACTION_T>
 void Store<STATE_T, ACTION_T>::dispatch(ACTION_T action) {
 	state = reducer(state, action);
 
-	for(int i = 0; i < subscribers.size(); i++) {
+	for(uint i = 0; i < subscribers.size(); i++) {
 		subscribers[i](state);
 	}
 }

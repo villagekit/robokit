@@ -1,10 +1,10 @@
 #include <Arduino.h>
-#include <variant>
 
 #include "STM32TimerInterrupt.h"
 #include "STM32_ISR_Timer.h"
 
-#include <overloaded.hpp>
+#include <mpark/variant.hpp>
+#include <overload.hpp>
 #include <store.hpp>
 
 #if !( defined(STM32F0) || defined(STM32F1) || defined(STM32F2) || defined(STM32F3)  ||defined(STM32F4) || defined(STM32F7) || \
@@ -34,10 +34,10 @@ enum class LED_ID { GREEN, RED, BLUE };
 struct ActionLedToggle {
   LED_ID led_id;
 };
-using ActionLeds = std::variant<ActionLedToggle>;
+using ActionLeds = mpark::variant<ActionLedToggle>;
 
 StateLeds reducer_leds(StateLeds state, ActionLeds action) {
-  std::visit(overloaded {
+  mpark::visit(overload(
     [&state](const ActionLedToggle action) {
       switch (action.led_id) {
         case LED_ID::GREEN:
@@ -51,24 +51,24 @@ StateLeds reducer_leds(StateLeds state, ActionLeds action) {
           break;
       }
     }
-  }, action);
+  ), action);
   
   return state;
 }
 
 struct ActionClockTick {};
-using ActionClock = std::variant<ActionClockTick>;
+using ActionClock = mpark::variant<ActionClockTick>;
 
 struct StateClock {
   uint16_t ticks = 0;
 };
 
 StateClock reducer_clock(StateClock state, ActionClock action) {
-  std::visit(overloaded {
+  mpark::visit(overload(
     [&state](const ActionClockTick) {
       state.ticks++;
     }
-  }, action);
+  ), action);
 
   return state;
 }
@@ -78,19 +78,19 @@ struct StateBot {
   StateClock clock = StateClock {};
 };
 
-using ActionBot = std::variant<ActionLeds, ActionClock>;
+using ActionBot = mpark::variant<ActionLeds, ActionClock>;
 
 StateBot reducer_bot(StateBot state, ActionBot action) {
   noInterrupts();
 
-  std::visit(overloaded {
+  mpark::visit(overload(
     [&state](const ActionLeds a) {
       state.leds = reducer_leds(state.leds, a);
     },
     [&state](const ActionClock a) {
       state.clock = reducer_clock(state.clock, a);
     }
-  }, action);
+  ), action);
 
   interrupts();
 
