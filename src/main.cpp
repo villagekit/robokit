@@ -1,11 +1,15 @@
 #include <Arduino.h>
-
-#include "STM32TimerInterrupt.h"
-#include "STM32_ISR_Timer.h"
+#include <LwIP.h>
+#include <STM32Ethernet.h>
+#include <AsyncWebServer_STM32.h>
+#include <STM32TimerInterrupt.h>
+#include <STM32_ISR_Timer.h>
 
 #include <mpark/variant.hpp>
 #include <overload.hpp>
 #include <store.hpp>
+
+#include <ui/index.h>
 
 #if !( defined(STM32F0) || defined(STM32F1) || defined(STM32F2) || defined(STM32F3)  ||defined(STM32F4) || defined(STM32F7) || \
        defined(STM32L0) || defined(STM32L1) || defined(STM32L4) || defined(STM32H7)  ||defined(STM32G0) || defined(STM32G4) || \
@@ -99,6 +103,33 @@ StateBot reducer_bot(StateBot state, ActionBot action) {
 
 Store<StateBot, ActionBot> store(reducer_bot, StateBot {});
 
+IPAddress ip(10, 0, 0, 2);
+AsyncWebServer server(80);
+// uint8_t mac[] = { MAC_ADDR0, MAC_ADDR1, MAC_ADDR2, MAC_ADDR3, MAC_ADDR4, MAC_ADDR5 };
+uint8_t mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x32, 0x01 };
+AsyncEventSource events("/events");
+
+void handleNotFound(AsyncWebServerRequest *request)
+{
+  String message = "File Not Found\n\n";
+
+  message += "URI: ";
+  //message += server.uri();
+  message += request->url();
+  message += "\nMethod: ";
+  message += (request->method() == HTTP_GET) ? "GET" : "POST";
+  message += "\nArguments: ";
+  message += request->args();
+  message += "\n";
+
+  for (uint8_t i = 0; i < request->args(); i++)
+  {
+    message += " " + request->argName(i) + ": " + request->arg(i) + "\n";
+  }
+
+  request->send(404, "text/plain", message);
+}
+
 void TimerHandler()
 {
   ISR_Timer.run();
@@ -109,9 +140,9 @@ void setup()
   Serial.begin(115200);
   while (!Serial);
 
-  delay(100);
+  delay(1000);
 
-  Serial.print(F("\nStarting TimerInterruptLEDDemo on ")); Serial.println(BOARD_NAME);
+  Serial.print(F("\nStarting TimerInterrupt on ")); Serial.println(BOARD_NAME);
   Serial.println(STM32_TIMER_INTERRUPT_VERSION);
   Serial.print(F("CPU Frequency = ")); Serial.print(F_CPU / 1000000); Serial.println(F(" MHz"));
 
@@ -124,6 +155,36 @@ void setup()
     Serial.println(F("Can't set ITimer. Select another freq. or timer"));
   }
 
+  Serial.println("\nStart AsyncWebServer on " + String(BOARD_NAME));
+  Ethernet.begin(mac, ip);
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest * request)
+  {
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", PAGE_INDEX);
+    request->send(response);
+  });
+
+  events.onConnect([](AsyncEventSourceClient * client) 
+  {
+    client->send("hello!", NULL);
+  });
+
+  store.subscribe([](StateBot state){
+    String status = "";
+    if (state.leds.green) status += ":green";
+    if (state.leds.blue) status += ":blue";
+    if (state.leds.red) status += ":red";
+
+    events.send(status.c_str(), "status", millis());
+  });
+  
+  server.addHandler(&events);
+  server.onNotFound(handleNotFound);
+  server.begin();
+
+  Serial.print(F("HTTP EthernetWebServer is @ IP : "));
+  Serial.println(Ethernet.localIP());
+
   pinMode(LED_GREEN, OUTPUT);
   pinMode(LED_BLUE, OUTPUT);
   pinMode(LED_RED, OUTPUT);
@@ -135,19 +196,19 @@ void setup()
     digitalWrite(LED_RED, state.leds.red);
   });
 
-  ISR_Timer.setInterval(400L, [](){
+  ISR_Timer.setInterval(1000L, [](){
     store.dispatch(ActionLedToggle {
       led_id: LED_ID::GREEN
     });
   });
 
-  ISR_Timer.setInterval(800L, [](){
+  ISR_Timer.setInterval(2000L, [](){
     store.dispatch(ActionLedToggle {
       led_id: LED_ID::BLUE
     });
   });
 
-  ISR_Timer.setInterval(1600L, [](){
+  ISR_Timer.setInterval(4000L, [](){
     store.dispatch(ActionLedToggle {
       led_id: LED_ID::RED
     });
