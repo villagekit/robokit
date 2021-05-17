@@ -135,6 +135,8 @@ void TimerHandler()
   ISR_Timer.run();
 }
 
+volatile bool has_state_changed;
+
 void setup()
 {
   Serial.begin(115200);
@@ -169,13 +171,9 @@ void setup()
     client->send("hello!", NULL);
   });
 
+  has_state_changed = false;
   store.subscribe([](StateBot state){
-    String status = "";
-    if (state.leds.green) status += ":green";
-    if (state.leds.blue) status += ":blue";
-    if (state.leds.red) status += ":red";
-
-    events.send(status.c_str(), "status", millis());
+    has_state_changed = true;
   });
   
   server.addHandler(&events);
@@ -189,7 +187,7 @@ void setup()
   pinMode(LED_BLUE, OUTPUT);
   pinMode(LED_RED, OUTPUT);
 
-  ISR_Timer.setInterval(100L, [](){
+  ISR_Timer.setInterval(10L, [](){
     StateBot state = store.getState();
     digitalWrite(LED_GREEN, state.leds.green);
     digitalWrite(LED_BLUE, state.leds.blue);
@@ -217,5 +215,15 @@ void setup()
 
 void loop()
 {
-  /* Nothing to do all is done by hardware. Even no interrupt required. */
+  if (has_state_changed) {
+    StateBot state = store.getState();
+
+    String status = "";
+    if (state.leds.green) status += ":green";
+    if (state.leds.blue) status += ":blue";
+    if (state.leds.red) status += ":red";
+
+    events.send(status.c_str(), "status", millis());
+    has_state_changed = false;
+  }
 }
