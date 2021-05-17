@@ -1,3 +1,8 @@
+// https://github.com/mpark/variant/issues/44#issuecomment-377333877
+
+#ifndef OVERLOAD_HPP
+#define OVERLOAD_HPP
+
 template <class... Fs>
 struct OverLoaded;
 
@@ -22,3 +27,5 @@ template <class... Fs>
 OverLoaded<Fs...> overload(Fs&&... fs) {
     return OverLoaded<Fs...>(std::forward<Fs>(fs)...);
 }
+
+#endif
