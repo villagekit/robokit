@@ -1,8 +1,10 @@
+#pragma once
+
 #include <redux.hpp>
 
 #include <models/bot.hpp>
 
-class BotStore : public Store<StateBot, ActionBot> {
+class BotStore : public Store<BotModel::State, BotModel::Action> {
   public:
-    BotStore(): Store(reducer_bot, StateBot {}) {};
+    BotStore(): Store(BotModel::reducer, BotModel::State {}) {};
 };

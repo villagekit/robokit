@@ -1,7 +1,8 @@
+#pragma once
+
 #include <STM32TimerInterrupt.h>
 #include <STM32_ISR_Timer.h>
 
-#define TIMER_INTERVAL_MS 100
 #define HW_TIMER_INTERVAL_MS 50
 
 STM32_ISR_Timer isr_timer;
@@ -32,7 +33,11 @@ class BotTimer {
       }
     }
 
-    bool set_interval(unsigned long interval, timerCallback callback) {
+    int16_t set_interval(uint32_t interval, timerCallback callback) {
       return isr_timer.setInterval(interval, callback);
+    }
+
+    int16_t set_interval(uint32_t interval, timerCallback_p callback, void *params) {
+      return isr_timer.setInterval(interval, callback, params);
     }
 };

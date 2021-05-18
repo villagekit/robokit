@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Arduino.h>
 
 #include <mpark/variant.hpp>
@@ -5,27 +7,30 @@
 
 #include <models/clock.hpp>
 #include <models/leds.hpp>
+#include <timer.hpp>
 
-struct StateBot {
-  StateLeds leds = StateLeds {};
-  StateClock clock = StateClock {};
-};
+namespace BotModel {
+  struct State {
+    LedsModel::State leds = LedsModel::State {};
+    ClockModel::State clock = ClockModel::State {};
+  };
 
-using ActionBot = mpark::variant<ActionLeds, ActionClock>;
+  using Action = mpark::variant<LedsModel::Action, ClockModel::Action>;
 
-StateBot reducer_bot(StateBot state, ActionBot action) {
-  noInterrupts();
+  State reducer(State state, Action action) {
+    noInterrupts();
 
-  mpark::visit(overload(
-    [&state](const ActionLeds a) {
-      state.leds = reducer_leds(state.leds, a);
-    },
-    [&state](const ActionClock a) {
-      state.clock = reducer_clock(state.clock, a);
-    }
-  ), action);
+    mpark::visit(overload(
+      [&state](const LedsModel::Action a) {
+        state.leds = LedsModel::reducer(state.leds, a);
+      },
+      [&state](const ClockModel::Action a) {
+        state.clock = ClockModel::reducer(state.clock, a);
+      }
+    ), action);
 
-  interrupts();
+    interrupts();
 
-  return state;
+    return state;
+  }
 }

@@ -1,19 +1,23 @@
+#pragma once
+
 #include <mpark/variant.hpp>
 #include <overload.hpp>
 
-struct ActionClockTick {};
-using ActionClock = mpark::variant<ActionClockTick>;
+namespace ClockModel {
+  struct ActionTick {};
+  using Action = mpark::variant<ActionTick>;
 
-struct StateClock {
-  uint16_t ticks = 0;
-};
+  struct State {
+    uint16_t ticks = 0;
+  };
 
-StateClock reducer_clock(StateClock state, ActionClock action) {
-  mpark::visit(overload(
-    [&state](const ActionClockTick) {
-      state.ticks++;
-    }
-  ), action);
+  State reducer(State state, Action action) {
+    mpark::visit(overload(
+      [&state](const ActionTick) {
+        state.ticks++;
+      }
+    ), action);
 
-  return state;
+    return state;
+  }
 }
