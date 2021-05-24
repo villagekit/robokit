@@ -30,8 +30,7 @@ SOFTWARE.
 See also: 
 */
 
-#ifndef REDUX_HPP
-#define REDUX_HPP
+#pragma once
 
 #include <functional>
 #include <vector>
@@ -77,5 +76,3 @@ template <typename STATE_T, typename ACTION_T>
 STATE_T Store<STATE_T, ACTION_T>::get_state() {
 	return state;
 }
-
-#endif

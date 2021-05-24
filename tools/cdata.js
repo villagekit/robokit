@@ -6,7 +6,6 @@ const inliner = require("inliner")
 const MinifyHTML = require("html-minifier-terser").minify
 
 const fs = require("fs")
-const packageJson = require("../package.json")
 
 writeHtmlGzipped("INDEX", "ui/index.html", "src/ui/index.h")
 
