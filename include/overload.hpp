@@ -1,3 +1,7 @@
+// https://github.com/mpark/variant/issues/44#issuecomment-377333877
+
+#pragma once
+
 template <class... Fs>
 struct OverLoaded;
 

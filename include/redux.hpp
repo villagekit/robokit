@@ -30,6 +30,8 @@ SOFTWARE.
 See also: 
 */
 
+#pragma once
+
 #include <functional>
 #include <vector>
 
@@ -42,7 +44,7 @@ class Store {
 		Store(Reducer, STATE_T);
 		void subscribe(Subscriber);
 		void dispatch(ACTION_T);
-		STATE_T getState();
+		STATE_T get_state();
 
 	private:
 		Reducer reducer;
@@ -71,6 +73,6 @@ void Store<STATE_T, ACTION_T>::dispatch(ACTION_T action) {
 }
 
 template <typename STATE_T, typename ACTION_T>
-STATE_T Store<STATE_T, ACTION_T>::getState() {
+STATE_T Store<STATE_T, ACTION_T>::get_state() {
 	return state;
 }
