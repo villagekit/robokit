@@ -25,8 +25,6 @@ BotContext context = {
   &timer
 };
 
-volatile bool has_state_changed = false;
-
 void setup()
 {
   Serial.begin(115200);
@@ -35,26 +33,13 @@ void setup()
   delay(1000);
   
   timer.setup();
-  server.begin();
   BotEffects::setup(&context);
 
-  store.subscribe([](BotModel::State state) {
-    has_state_changed = true;
-  });
-
+  server.begin(&store);
 }
 
 void loop()
 {
-  if (has_state_changed) {
-    BotModel::State state = store.get_state();
-
-    char *output = NULL;
-    mjson_printf(&mjson_print_dynamic_buf, &output, "%M", BotModel::print, &state);
-
-    server.events.send(output, "status", millis());
-
-    has_state_changed = false;
-    delay(100);
-  }
+  server.loop();
+  delay(10);
 }
