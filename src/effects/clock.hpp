@@ -10,10 +10,6 @@ namespace ClockEffects {
   }
 
   void setup(BotContext *context) {
-    pinMode(LED_GREEN, OUTPUT);
-    pinMode(LED_BLUE, OUTPUT);
-    pinMode(LED_RED, OUTPUT);
-
     auto timer = context->timer;
     timer->set_interval(10L, tick, context);
   }
