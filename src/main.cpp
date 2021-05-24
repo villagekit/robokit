@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <STM32TimerInterrupt.h>
 #include <STM32_ISR_Timer.h>
+#include <mjson.h>
 
 #include <store.hpp>
 #include <timer.hpp>
@@ -24,7 +25,7 @@ BotContext context = {
   &timer
 };
 
-volatile bool has_state_changed;
+volatile bool has_state_changed = false;
 
 void setup()
 {
@@ -41,23 +42,6 @@ void setup()
     has_state_changed = true;
   });
 
-  timer.set_interval(1000L, [](){
-    store.dispatch(LedsModel::ActionToggle {
-      led_id: LedsModel::LED_ID::GREEN
-    });
-  });
-
-  timer.set_interval(2000L, [](){
-    store.dispatch(LedsModel::ActionToggle {
-      led_id: LedsModel::LED_ID::BLUE
-    });
-  });
-
-  timer.set_interval(4000L, [](){
-    store.dispatch(LedsModel::ActionToggle {
-      led_id: LedsModel::LED_ID::RED
-    });
-  });
 }
 
 void loop()
@@ -65,12 +49,12 @@ void loop()
   if (has_state_changed) {
     BotModel::State state = store.get_state();
 
-    String status = "";
-    if (state.leds.green) status += ":green";
-    if (state.leds.blue) status += ":blue";
-    if (state.leds.red) status += ":red";
+    char *output = NULL;
+    mjson_printf(&mjson_print_dynamic_buf, &output, "%M", BotModel::print, &state);
 
-    server.events.send(status.c_str(), "status", millis());
+    server.events.send(output, "status", millis());
+
     has_state_changed = false;
+    delay(100);
   }
 }
