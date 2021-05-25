@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mjson.h>
+
 #include <mpark/variant.hpp>
 #include <overload.hpp>
 
@@ -8,7 +10,7 @@ namespace ClockModel {
   using Action = mpark::variant<ActionTick>;
 
   struct State {
-    uint16_t ticks = 0;
+    volatile unsigned long ticks = 0UL;
   };
 
   State reducer(State state, Action action) {
@@ -19,5 +21,14 @@ namespace ClockModel {
     ), action);
 
     return state;
+  }
+
+  int print(mjson_print_fn_t fn, void * fndata, va_list *ap) {
+    State *state = va_arg(*ap, State*);
+    return mjson_printf(
+      fn, fndata,
+      "{ %Q: %lu }",
+      "ticks", state->ticks
+    );
   }
 }

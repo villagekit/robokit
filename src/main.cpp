@@ -24,8 +24,6 @@ BotContext context = {
   &timer
 };
 
-volatile bool has_state_changed;
-
 void setup()
 {
   Serial.begin(115200);
@@ -34,43 +32,13 @@ void setup()
   delay(1000);
   
   timer.setup();
-  server.begin();
   BotEffects::setup(&context);
 
-  store.subscribe([](BotModel::State state) {
-    has_state_changed = true;
-  });
-
-  timer.set_interval(1000L, [](){
-    store.dispatch(LedsModel::ActionToggle {
-      led_id: LedsModel::LED_ID::GREEN
-    });
-  });
-
-  timer.set_interval(2000L, [](){
-    store.dispatch(LedsModel::ActionToggle {
-      led_id: LedsModel::LED_ID::BLUE
-    });
-  });
-
-  timer.set_interval(4000L, [](){
-    store.dispatch(LedsModel::ActionToggle {
-      led_id: LedsModel::LED_ID::RED
-    });
-  });
+  server.begin(&store);
 }
 
 void loop()
 {
-  if (has_state_changed) {
-    BotModel::State state = store.get_state();
-
-    String status = "";
-    if (state.leds.green) status += ":green";
-    if (state.leds.blue) status += ":blue";
-    if (state.leds.red) status += ":red";
-
-    server.events.send(status.c_str(), "status", millis());
-    has_state_changed = false;
-  }
+  server.loop();
+  delay(10);
 }

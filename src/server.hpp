@@ -7,6 +7,7 @@
 #include <STM32Ethernet.h>
 #include <AsyncWebServer_STM32.h>
 
+#include <store.hpp>
 #include <ui/index.h>
 
 // TODO: generate random mac on first run and store in EEPROM
@@ -18,12 +19,15 @@ class BotServer {
     AsyncWebServer web_server;
     AsyncEventSource events;
 
+    BotStore* store;
+    volatile bool has_state_changed = false;
+
     BotServer() :
       ip(10, 0, 0, 2),
       web_server(80),
       events("/events") {};
 
-    void begin() { 
+    void begin(BotStore *_store) { 
       Serial.println("\nStart AsyncWebServer on " + String(BOARD_NAME));
       Ethernet.begin(mac, ip);
 
@@ -37,6 +41,32 @@ class BotServer {
 
       Serial.print(F("HTTP EthernetWebServer is @ IP : "));
       Serial.println(Ethernet.localIP());
+
+      store = _store;
+      store->subscribe([this](BotModel::State state) {
+        this->has_state_changed = true;
+      });
+    }
+
+    void loop() {
+      if (has_state_changed) {
+        send_state_json(&events);
+        has_state_changed = false;
+      }
+    }
+
+    void send_state_json(AsyncEventSourceClient *client) {
+      BotModel::State state = store->get_state();
+      char *output = NULL;
+      mjson_printf(&mjson_print_dynamic_buf, &output, "%M", BotModel::print, &state);
+      client->send(output, "state", millis());
+    }
+
+    void send_state_json(AsyncEventSource *events) {
+      BotModel::State state = store->get_state();
+      char *output = NULL;
+      mjson_printf(&mjson_print_dynamic_buf, &output, "%M", BotModel::print, &state);
+      events->send(output, "state", millis());
     }
 
     void handle_index (AsyncWebServerRequest *request) {
@@ -65,6 +95,6 @@ class BotServer {
     }
 
     void on_events_connect (AsyncEventSourceClient *client) {
-      client->send("hello!", NULL);
+      send_state_json(client);
     }
 };

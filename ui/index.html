@@ -1,10 +1,7 @@
 <html>
   <head>
     <title>GridBot</title>
-  </head>
-  <body>
-    <h1>GridBot</h1>
-    <script>
+    <script type="text/javascript">
       var source = new EventSource('/events')
 
       source.addEventListener('open', function(e) {
@@ -21,9 +18,78 @@
         console.log("message", e.data)
       }, false)
 
-      source.addEventListener('status', function(e) {
-        console.log("status", e.data)
+      source.addEventListener('state', function(e) {
+        let json = e.data
+        let state = JSON.parse(json)
+        onState(state)
       }, false)
+
+      let ledsElement, ledsGreenElement, ledsBlueElement, ledsRedElement
+      let clockElement, clockTicksElement
+
+      document.addEventListener('DOMContentLoaded', () => {
+        ledsElement = document.querySelector('.leds')
+        ledsGreenElement = ledsElement.querySelector('.green')
+        ledsBlueElement = ledsElement.querySelector('.blue')
+        ledsRedElement = ledsElement.querySelector('.red')
+
+        clockElement = document.querySelector('.clock')
+        clockTicksElement = clockElement.querySelector('.ticks')
+      })
+
+      function onState(state) {
+        console.log('state', state)
+        onStateLeds(state.leds)
+        onStateClock(state.clock)
+      }
+
+      function onStateLeds(state) {
+        ledsGreenElement.classList.toggle('on', state.green)
+        ledsBlueElement.classList.toggle('on', state.blue)
+        ledsRedElement.classList.toggle('on', state.red)
+      }
+
+      function onStateClock(state) {
+        clockTicksElement.textContent = state.ticks
+      }
     </script>
+    <style type="text/css">
+      .leds {
+        display: flex;
+        flex-direction: row;
+      }
+      .leds .led {
+        height: 200px;
+        width: 200px;
+        border-radius: 80px;
+        margin: 10px;
+      }
+      .leds .led {
+        opacity: 0.1;
+      }
+      .leds .led.on {
+        opacity: 1;
+      }
+      .leds .led.green {
+        background-color: limegreen;
+      }
+      .leds .led.blue {
+        background-color: cornflowerblue;
+      }
+      .leds .led.red {
+        background-color: lightcoral;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>GridBot</h1>
+    <div class="leds">
+      <div class="led green"></div>
+      <div class="led blue"></div>
+      <div class="led red"></div>
+    </div>
+    <div class="clock">
+      <div class="ticks"></div>
+    </div>
   </body>
 </html>
