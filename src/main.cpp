@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <STM32TimerInterrupt.h>
 #include <STM32_ISR_Timer.h>
-#include <mjson.h>
 
 #include <store.hpp>
 #include <timer.hpp>

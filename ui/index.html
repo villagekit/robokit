@@ -44,23 +44,9 @@
       }
 
       function onStateLeds(state) {
-        if (state.green) {
-          ledsGreenElement.classList.add('on')
-        } else {
-          ledsGreenElement.classList.remove('on')
-        }
-
-        if (state.blue) {
-          ledsBlueElement.classList.add('on')
-        } else {
-          ledsBlueElement.classList.remove('on')
-        }
-
-        if (state.red) {
-          ledsRedElement.classList.add('on')
-        } else {
-          ledsRedElement.classList.remove('on')
-        }
+        ledsGreenElement.classList.toggle('on', state.green)
+        ledsBlueElement.classList.toggle('on', state.blue)
+        ledsRedElement.classList.toggle('on', state.red)
       }
 
       function onStateClock(state) {
