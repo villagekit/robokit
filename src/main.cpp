@@ -19,10 +19,6 @@
 BotTimer timer;
 BotServer server;
 BotStore store;
-BotContext context = {
-  &store,
-  &timer
-};
 
 void setup()
 {
@@ -30,11 +26,15 @@ void setup()
   while (!Serial);
 
   delay(1000);
-  
-  timer.setup();
-  BotEffects::setup(&context);
+
+  Serial.println();
+  Serial.print(F("Starting GridBot on ")); Serial.println(BOARD_NAME);
+  Serial.print(F("CPU Frequency = ")); Serial.print(F_CPU / 1000000); Serial.println(F(" MHz"));
+  Serial.println();
 
   server.begin(&store);
+  
+  BotEffects::setup();
 }
 
 void loop()

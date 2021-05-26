@@ -5,7 +5,14 @@
 #include <effects/clock.hpp>
 
 namespace BotEffects {
-  void setup(BotContext *context) {
+  BotContext context;
+
+  void setup(BotStore *store) {
+    BotTimer = 
+    BotContext context = {
+      &store,
+      &timer
+    };
     LedsEffects::setup(context);
     ClockEffects::setup(context);
   }

@@ -1,35 +1,34 @@
 #pragma once
 
+#include <functional>
+
 #include <STM32TimerInterrupt.h>
 #include <STM32_ISR_Timer.h>
 
-#define HW_TIMER_INTERVAL_MS 50
-
-STM32_ISR_Timer isr_timer;
-
-void timer_handler() {
-  isr_timer.run();
-}
+#define HW_TIMER_INTERVAL_MICROSECONDS 10UL * 1000UL
 
 class BotTimer {
   public:
-    STM32Timer itimer;
-    
+    STM32TimerInterrupt hardware_timer;
+    STM32_ISR_Timer isr_timer;
+
     // F767ZI can select itimer from TIM1-TIM14
-    BotTimer() : itimer(TIM1) {};
+    BotTimer(TIM_TypeDef *tim) : hardware_timer(tim) {
+      isr_timer.init();
+      // hardware_timer = new STM32TimerInterrupt(tim);
+    };
+
+    ~BotTimer() {
+      // if (hardware_timer) delete hardware_timer;
+    };
 
     void setup() {
-      Serial.print(F("\nStarting TimerInterrupt on ")); Serial.println(BOARD_NAME);
-      Serial.println(STM32_TIMER_INTERRUPT_VERSION);
-      Serial.print(F("CPU Frequency = ")); Serial.print(F_CPU / 1000000); Serial.println(F(" MHz"));
-
-      // Interval in microsecs
-      if (itimer.attachInterruptInterval(HW_TIMER_INTERVAL_MS * 1000, timer_handler))
+      if (hardware_timer.attachInterruptInterval(HW_TIMER_INTERVAL_MICROSECONDS, std::bind(&BotTimer::timer_handler, this)))
       {
-        Serial.print(F("Starting ITimer OK, millis() = ")); Serial.println(millis());
+        Serial.print(F("Starting Timer OK, millis() = ")); Serial.println(millis());
       }
       else {
-        Serial.println(F("Can't set ITimer. Select another freq. or timer"));
+        Serial.println(F("Can't set Timer. Select another freq. or timer"));
       }
     }
 
@@ -39,5 +38,10 @@ class BotTimer {
 
     int16_t set_interval(uint32_t interval, timerCallback_p callback, void *params) {
       return isr_timer.setInterval(interval, callback, params);
+    }
+
+  private:
+    void timer_handler() {
+      isr_timer.run();
     }
 };
