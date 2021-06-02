@@ -1,9 +1,6 @@
 #include <Arduino.h>
-#include <STM32TimerInterrupt.h>
-#include <STM32_ISR_Timer.h>
 
 #include <store.hpp>
-#include <timer.hpp>
 #include <server.hpp>
 #include <effects/bot.hpp>
 
@@ -16,7 +13,6 @@
 // pins
 // - https://github.com/stm32duino/Arduino_Core_STM32/blob/master/variants/STM32F7xx/F765Z(G-I)T_F767Z(G-I)T_F777ZIT/variant_NUCLEO_F767ZI.h
 
-BotTimer timer;
 BotServer server;
 BotStore store;
 
@@ -33,12 +29,11 @@ void setup()
   Serial.println();
 
   server.begin(&store);
-  
-  BotEffects::setup();
+  BotEffects::setup(&store);
 }
 
 void loop()
 {
   server.loop();
-  delay(10);
+  delay(1000);
 }

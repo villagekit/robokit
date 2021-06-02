@@ -43,10 +43,10 @@ namespace LedsEffects {
     pinMode(LED_BLUE, OUTPUT);
     pinMode(LED_RED, OUTPUT);
 
-    auto timer = context->timer;
-    timer->set_interval(10L, output, context);
-    timer->set_interval(1000L, green_toggle, context);
-    timer->set_interval(2000L, blue_toggle, context);
-    timer->set_interval(4000L, red_toggle, context);
+    auto timer = context->isr_timer;
+    timer->setInterval(10L, output, context);
+    timer->setInterval(1000L, green_toggle, context);
+    timer->setInterval(2000L, blue_toggle, context);
+    timer->setInterval(4000L, red_toggle, context);
   }
 }

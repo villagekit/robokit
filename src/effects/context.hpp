@@ -1,9 +1,10 @@
 #pragma once
 
+#include <STM32_ISR_Timer.h>
+
 #include <store.hpp>
-#include <timer.hpp>
 
 struct BotContext {
   BotStore *store;
-  BotTimer *timer;
+  STM32_ISR_Timer *isr_timer;
 };

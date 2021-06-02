@@ -26,21 +26,31 @@
 
       let ledsElement, ledsGreenElement, ledsBlueElement, ledsRedElement
       let clockElement, clockTicksElement
+      let motorsElement, motorsXElement, motorsXStepsElement
 
       document.addEventListener('DOMContentLoaded', () => {
+        clockElement = document.querySelector('.clock')
+        clockTicksElement = clockElement.querySelector('.ticks')
+
         ledsElement = document.querySelector('.leds')
         ledsGreenElement = ledsElement.querySelector('.green')
         ledsBlueElement = ledsElement.querySelector('.blue')
         ledsRedElement = ledsElement.querySelector('.red')
 
-        clockElement = document.querySelector('.clock')
-        clockTicksElement = clockElement.querySelector('.ticks')
+        motorsElement = document.querySelector('.motors')
+        motorsXElement = motorsElement.querySelector('.x')
+        motorsXStepsElement = motorsXElement.querySelector('.steps')
       })
 
       function onState(state) {
         console.log('state', state)
-        onStateLeds(state.leds)
         onStateClock(state.clock)
+        onStateLeds(state.leds)
+        onStateMotors(state.motors)
+      }
+
+      function onStateClock(state) {
+        clockTicksElement.textContent = state.ticks
       }
 
       function onStateLeds(state) {
@@ -49,8 +59,8 @@
         ledsRedElement.classList.toggle('on', state.red)
       }
 
-      function onStateClock(state) {
-        clockTicksElement.textContent = state.ticks
+      function onStateMotors(state) {
+        motorsXStepsElement.textContent = state.xSteps
       }
     </script>
     <style type="text/css">
@@ -83,13 +93,18 @@
   </head>
   <body>
     <h1>GridBot</h1>
+    <div class="clock">
+      <div class="ticks"></div>
+    </div>
     <div class="leds">
       <div class="led green"></div>
       <div class="led blue"></div>
       <div class="led red"></div>
     </div>
-    <div class="clock">
-      <div class="ticks"></div>
+    <div class="motors">
+      <div class="x">
+        <div class="steps"></div>
+      </div>
     </div>
   </body>
 </html>

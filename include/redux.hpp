@@ -44,6 +44,7 @@ class Store {
 		Store(Reducer, STATE_T);
 		void subscribe(Subscriber);
 		void dispatch(ACTION_T);
+		void dispatch(ACTION_T, bool);
 		STATE_T get_state();
 
 	private:
@@ -64,12 +65,23 @@ void Store<STATE_T, ACTION_T>::subscribe(Subscriber subscriber) {
 }
 
 template <typename STATE_T, typename ACTION_T>
-void Store<STATE_T, ACTION_T>::dispatch(ACTION_T action) {
+void Store<STATE_T, ACTION_T>::dispatch(ACTION_T action, bool should_notify) {
+	noInterrupts();
+
 	state = reducer(state, action);
 
-	for(uint i = 0; i < subscribers.size(); i++) {
-		subscribers[i](state);
+	interrupts();
+
+	if (should_notify) {
+		for(uint i = 0; i < subscribers.size(); i++) {
+			subscribers[i](state);
+		}
 	}
+}
+
+template <typename STATE_T, typename ACTION_T>
+void Store<STATE_T, ACTION_T>::dispatch(ACTION_T action) {
+	dispatch(action, true);
 }
 
 template <typename STATE_T, typename ACTION_T>

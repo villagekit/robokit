@@ -16,27 +16,31 @@
 namespace MotorsModel {
   enum class Direction { CW, CCW };
 
-  struct ActionTick {};
-  struct ActionSetX {};
+  struct ActionStep {};
+  struct ActionSetX {
+    uint32_t steps;
+  };
 
-  using Action = mpark::variant<ActionTick>;
+  using Action = mpark::variant<ActionStep, ActionSetX>;
 
   struct State {
-    volatile bool x_enabled = false;
+    volatile bool x_enabled = true;
     volatile Direction x_direction = Direction::CW;
-    volatile uint32_t x_steps = 0UL;
+    volatile uint32_t x_steps = 10000UL;
   };
 
   State reducer(State state, Action action) {
     mpark::visit(overload(
-      [&state](const ActionTick) {
+      [&state](const ActionStep) {
         if (state.x_enabled) {
           state.x_steps--;
-          if (state.x_steps == 0) state.x_enabled = false;
+          if (state.x_steps == 0UL) {
+            state.x_steps = 10000UL;
+          }
         }
       },
-      [&state](const ActionTick action) {
-        state.x_ticks = 
+      [&state](const ActionSetX action) {
+        state.x_steps = action.steps;
       }
     ), action);
 
@@ -48,7 +52,7 @@ namespace MotorsModel {
     return mjson_printf(
       fn, fndata,
       "{ %Q: %lu }",
-      "ticks", state->ticks
+      "xSteps", state->x_steps
     );
   }
 

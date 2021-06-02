@@ -1,20 +1,16 @@
 #pragma once
 
-#include <functional>
-
-#include <STM32TimerInterrupt.h>
-
 #include <effects/context.hpp>
 
 namespace ClockEffects {
-  STM32Timer timer = STM32Timer(TIM8);
-
-  void tick(BotContext *context) {
+  void tick(void *params) {
+    BotContext *context = (BotContext *) params;
     auto store = context->store;
     store->dispatch(ClockModel::ActionTick {});
   }
 
   void setup(BotContext *context) {
-    // timer.attachInterruptInterval(1300UL, std::bind(&tick, context));
+    auto timer = context->isr_timer;
+    timer->setInterval(1UL, &tick, context);
   }
 }
