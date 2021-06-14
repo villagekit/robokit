@@ -97,7 +97,7 @@ namespace MotorsEffects {
     pinMode(MOTORS_X_DIR_PIN, OUTPUT);
     pinMode(MOTORS_X_STEP_PIN, OUTPUT);
 
-    const uint32_t interval = 200UL; // microseconds
+    const uint32_t interval = 20000UL; // microseconds
     // const float frequency = (1000000.0f / interval);
     // const uint32_t timer_count = (uint32_t) 1000000 / frequency;
     hw_timer.setCount(0, MICROSEC_FORMAT);

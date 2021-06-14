@@ -11,6 +11,6 @@ namespace ClockEffects {
 
   void setup(BotContext *context) {
     auto timer = context->isr_timer;
-    timer->setInterval(1UL, &tick, context);
+    timer->setInterval(10UL, &tick, context);
   }
 }

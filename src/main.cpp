@@ -10,6 +10,10 @@
   #error This code is designed to run on STM32F/L/H/G/WB/MP1 platform! Please check your Tools->Board setting.
 #endif
 
+#include <SimplyAtomic.h>
+#define RB_ATOMIC_START ATOMIC() {
+#define RB_ATOMIC_END }
+
 // pins
 // - https://github.com/stm32duino/Arduino_Core_STM32/blob/master/variants/STM32F7xx/F765Z(G-I)T_F767Z(G-I)T_F777ZIT/variant_NUCLEO_F767ZI.h
 
@@ -34,6 +38,6 @@ void setup()
 
 void loop()
 {
-  server.loop();
-  delay(1000);
+  store.loop();
+  delay(5);
 }

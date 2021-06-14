@@ -19,6 +19,7 @@ ST Nucleo F767ZI
 - timer interrupt error handling
   - watchdog timer
     - "if we don't reset the watchdog within X microseconds, something is broken!"
+    - https://github.com/stm32duino/Arduino_Core_STM32/tree/master/libraries/IWatchdog
   - set a flag at the end of the timer interrupt
     - if not 
 - timer interrupt queue
