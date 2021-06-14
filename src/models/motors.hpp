@@ -5,42 +5,40 @@
 #include <mpark/variant.hpp>
 #include <overload.hpp>
 
-// queue commands?
-// queue motor movements?
-// keep state of motors?
-//   - enabled
-//   - direction
-//   - steps
-
-
 namespace MotorsModel {
-  enum class Direction { CW, CCW };
+  enum class MotorId { X };
 
-  struct ActionStep {};
-  struct ActionSetX {
-    uint32_t steps;
+  struct ActionSchedule {
+    MotorId id;
+    double position_in_mm;
+  };
+  struct ActionProgress {
+    MotorId id;
+    double position_in_mm;
   };
 
-  using Action = mpark::variant<ActionStep, ActionSetX>;
+  using Action = mpark::variant<ActionSchedule, ActionProgress>;
 
   struct State {
-    volatile bool x_enabled = true;
-    volatile Direction x_direction = Direction::CW;
-    volatile uint32_t x_steps = 10000UL;
+    volatile double x_current_position_in_mm;
+    volatile double x_next_position_in_mm;
   };
 
   State reducer(State state, Action action) {
     mpark::visit(overload(
-      [&state](const ActionStep) {
-        if (state.x_enabled) {
-          state.x_steps--;
-          if (state.x_steps == 0UL) {
-            state.x_steps = 10000UL;
-          }
+      [&state](const ActionSchedule action) {
+        switch (action.id) {
+          case MotorId::X:
+            state.x_next_position_in_mm = action.position_in_mm;
+            break;
         }
       },
-      [&state](const ActionSetX action) {
-        state.x_steps = action.steps;
+      [&state](const ActionProgress action) {
+        switch (action.id) {
+          case MotorId::X:
+            state.x_current_position_in_mm = action.position_in_mm;
+            break;
+        }
       }
     ), action);
 
@@ -51,21 +49,9 @@ namespace MotorsModel {
     State *state = va_arg(*ap, State*);
     return mjson_printf(
       fn, fndata,
-      "{ %Q: %lu }",
-      "xSteps", state->x_steps
+      "{ %Q: %g, %Q: %g }",
+      "xCurrentPositionInMm", state->x_current_position_in_mm,
+      "xNextPositionInMm", state->x_next_position_in_mm
     );
   }
-
-  unsigned long mm_to_steps(double distance_in_mm) {
-    static double steps_per_rev = 40000.0;
-    static double leadscrew_starts = 4.;
-    static double leadscrew_pitch = 2.;
-    static double mm_per_rev = leadscrew_starts * leadscrew_pitch;
-    static double steps_per_mm = steps_per_rev / mm_per_rev;
-    return distance_in_mm * steps_per_mm;
-  }
 }
-
-// tick
-// - send pulse
-// - prepare for next tick (acc/deceleration)
