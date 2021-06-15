@@ -119,8 +119,8 @@ namespace MotorsEffects {
     hw_timer.resume();
 
     auto isr_timer = context->isr_timer;
-    isr_timer->setInterval(5UL, &schedule, context);
-    isr_timer->setInterval(5UL, &progress, context);
+    isr_timer->setInterval(1UL, &schedule, context);
+    isr_timer->setInterval(1UL, &progress, context);
 
     auto store = context->store;
     store->subscribe([store](const BotModel::State state) {

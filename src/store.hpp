@@ -33,6 +33,12 @@ class BotStore {
     }
 
     void dispatch(BotModel::Action action) {
+      // if ring buffer is full, infinite loop (which will lapse watchdog timer)
+      if (queued_actions.isFull()) {
+        Serial.println("ERROR: action queue is full!");
+        while (true) {};
+      }
+
       // queue action to ring buffer.
       //   we do a special dance so all actions are processed safely
       //   in the main loop, even if dispatched in an interrupt.
