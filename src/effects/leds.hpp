@@ -5,10 +5,7 @@
 #include <effects/context.hpp>
 
 namespace LedsEffects {
-  void output(void *params) {
-    BotContext *context = (BotContext*) params;
-    auto store = context->store;
-    auto state = store->get_state();
+  void output(const BotModel::State state) {
     digitalWrite(LED_GREEN, state.leds.green);
     digitalWrite(LED_BLUE, state.leds.blue);
     digitalWrite(LED_RED, state.leds.red);
@@ -44,9 +41,11 @@ namespace LedsEffects {
     pinMode(LED_RED, OUTPUT);
 
     auto timer = context->isr_timer;
-    timer->setInterval(10L, output, context);
     timer->setInterval(1000L, green_toggle, context);
     timer->setInterval(2000L, blue_toggle, context);
     timer->setInterval(4000L, red_toggle, context);
+
+    auto store = context->store;
+    store->subscribe(output);
   }
 }
