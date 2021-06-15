@@ -28,7 +28,6 @@ class BotServer {
       events("/events") {};
 
     void begin(BotStore *_store) { 
-      Serial.println("\nStart AsyncWebServer on " + String(BOARD_NAME));
       Ethernet.begin(mac, ip);
 
       web_server.on("/", HTTP_ANY, std::bind(&BotServer::handle_index, this, std::placeholders::_1));
@@ -39,7 +38,7 @@ class BotServer {
 
       web_server.begin();
 
-      Serial.print(F("HTTP EthernetWebServer is @ IP : "));
+      Serial.print(F("HTTP Web Server is @ IP : "));
       Serial.println(Ethernet.localIP());
 
       store = _store;

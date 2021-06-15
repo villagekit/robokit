@@ -1,9 +1,6 @@
 #include <Arduino.h>
-#include <STM32TimerInterrupt.h>
-#include <STM32_ISR_Timer.h>
 
 #include <store.hpp>
-#include <timer.hpp>
 #include <server.hpp>
 #include <effects/bot.hpp>
 
@@ -16,13 +13,8 @@
 // pins
 // - https://github.com/stm32duino/Arduino_Core_STM32/blob/master/variants/STM32F7xx/F765Z(G-I)T_F767Z(G-I)T_F777ZIT/variant_NUCLEO_F767ZI.h
 
-BotTimer timer;
 BotServer server;
 BotStore store;
-BotContext context = {
-  &store,
-  &timer
-};
 
 void setup()
 {
@@ -30,15 +22,18 @@ void setup()
   while (!Serial);
 
   delay(1000);
-  
-  timer.setup();
-  BotEffects::setup(&context);
+
+  Serial.println();
+  Serial.print(F("Starting GridBot on ")); Serial.println(BOARD_NAME);
+  Serial.print(F("CPU Frequency = ")); Serial.print(F_CPU / 1000000); Serial.println(F(" MHz"));
+  Serial.println();
 
   server.begin(&store);
+  BotEffects::setup(&store);
 }
 
 void loop()
 {
   server.loop();
-  delay(10);
+  delay(1000);
 }
