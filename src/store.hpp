@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include <mpark/variant.hpp>
 #include <redux.hpp>
 #include <RingBufCPP.h>
 #include <SimplyAtomic.h>
@@ -9,20 +10,26 @@
 #include <models/bot.hpp>
 
 class BotStore {
-	typedef std::function<void(BotModel::State)> Subscriber;
+	typedef std::function<void(BotModel::State)> StateSubscriber;
 
   private:
     Store<BotModel::State, BotModel::Action> store;
     RingBufCPP<BotModel::Action, 20 * sizeof(BotModel::Action)> queued_actions;
     RingBufCPP<BotModel::Action, 20 * sizeof(BotModel::Action)> processing_actions;
-    std::vector<Subscriber> subscribers;
+    std::vector<StateSubscriber> state_subscribers;
 
-    void notify() {
+    void notify_state_subscribers() {
       auto state = get_state();
 
-      for (size_t i = 0; i < subscribers.size(); i++) {
-        subscribers[i](state);
+      for (size_t i = 0; i < state_subscribers.size(); i++) {
+        state_subscribers[i](state);
       }
+    }
+
+    void notify_action_subscribers(BotModel::Action action) {
+      size_t top_index = action.index();
+      auto model_action = mpark::get<BotModel::Action>(top_index);
+      // [Clock][Tick]
     }
 
   public:
@@ -45,9 +52,11 @@ class BotStore {
       queued_actions.add(action);
     }
 
-    void subscribe(Subscriber subscriber) {
-      subscribers.push_back(std::move(subscriber));
+    void on_state(StateSubscriber state_subscriber) {
+      state_subscribers.push_back(std::move(state_subscriber));
     }
+
+    void on_action()
 
     void loop() {    
       // copy queued actions to processing buffer
