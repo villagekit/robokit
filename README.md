@@ -1,5 +1,13 @@
 # gridbot-software
 
+```shell
+git submodule init
+git submodule update
+yarn
+yarn build
+```
+
+
 ## micro-controller
 
 ST Nucleo F767ZI
