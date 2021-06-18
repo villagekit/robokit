@@ -44,6 +44,9 @@ class Stepper
     volatile int64_t current_position_in_steps;
     volatile double current_step_period_in_microsecs;
 
+    volatile int32_t movement_steps_total;
+    volatile int32_t movement_steps_completed;
+
     volatile Direction current_direction;
     volatile Status current_status;
 
@@ -83,7 +86,8 @@ class Stepper
       ),
       acceleration_multiplier(
         acceleration_in_steps_per_sec_per_sec / pow(MICROSECS_IN_SEC, 2.)
-      ) {}
+      ),
+      current_position_in_steps(0) {}
 
     void setup() {
       pinMode(enable_pin, OUTPUT);
@@ -93,24 +97,103 @@ class Stepper
       timer.attachInterrupt(std::bind(&Stepper::step, this));
     }
 
-    Status get_next_status() {
+    bool is_move_completed() {
+      return movement_steps_completed == movement_steps_total;
+    }
+
+    void move_to_position_in_mm(double target_position_in_mm) {
+      auto should_move = set_movement(round(target_position_in_mm * steps_per_mm));
+      if (should_move) start_movement();
+    }
+
+    bool set_movement(int32_t target_position_in_steps) {
+      if (current_position_in_steps == target_position_in_steps) return false; // early skip
+
+      this->target_position_in_steps = target_position_in_steps;
+
+      movement_steps_completed = 0;
+      movement_steps_total = abs(target_position_in_steps - current_position_in_steps);
+
+      current_step_period_in_microsecs = base_step_period_in_microsecs;
+      current_status = Status::RAMP_UP;
+      current_direction = target_position_in_steps > current_position_in_steps
+        ? Direction::Clockwise
+        : Direction::CounterClockwise;
+
+      return true;
+    }
+
+    void start_movement() {
+      write_enable();
+      write_direction();
+      write_pulse();
+      increment_step();
+      schedule_step();
+    }
+
+    void stop_movement() {
+      current_status = Status::STOPPED;
+      timer.pause();
+      write_enable(false);
+    }
+
+    void schedule_step() {
+      const uint32_t interval = current_step_period_in_microsecs;
+      timer.setCount(0, MICROSEC_FORMAT);
+      timer.setOverflow(interval, MICROSEC_FORMAT);
+      timer.resume();
+    }
+
+    void step() {
+      if (current_status == Status::STOPPED) return;
+      
+      write_pulse();
+      increment_step();
+      calculate_next_step();
+
+      if (current_status == Status::STOPPED) {
+        stop_movement();
+      } else {
+        schedule_step();
+      }
+    }
+
+    void increment_step() {
+      movement_steps_completed++;
+      
+      switch (current_direction) {
+        case Direction::Clockwise:
+          current_position_in_steps++;
+          break;
+        case Direction::CounterClockwise:
+          current_position_in_steps--;
+          break;
+      }
+    }
+
+    void calculate_next_step() {
+      current_status = calculate_status();
+      current_step_period_in_microsecs = calculate_next_step_period_in_microsecs();
+    }
+
+    Status calculate_status() {
       switch (current_status) {
         case Status::STOPPED:
           return Status::STOPPED;
         case Status::RAMP_UP:
-          if (current_position_in_steps >= acceleration_distance_in_steps) {
+          if (movement_steps_completed > acceleration_distance_in_steps) {
             return Status::MAXING;
           }
           return Status::RAMP_UP;
         case Status::MAXING: {
-          auto steps_remaining = target_position_in_steps - current_position_in_steps;
-          if (steps_remaining - 1 <= acceleration_distance_in_steps) {
+          auto steps_remaining = movement_steps_total - movement_steps_completed;
+          if (steps_remaining <= acceleration_distance_in_steps) {
             return Status::RAMP_DOWN;
           }
           return Status::MAXING;
         }
         case Status::RAMP_DOWN:
-          if (current_position_in_steps + 1 >= target_position_in_steps) {
+          if (movement_steps_completed >= movement_steps_total) {
             return Status::STOPPED;
           }
           return Status::RAMP_DOWN;
@@ -118,12 +201,8 @@ class Stepper
     }
 
     // equation [23] in http://hwml.com/LeibRamp.htm
-    double get_next_step_period_in_microsecs() {
-      // this is bad, infinite loop to lapse watchdog timer
-      if (current_status == Status::STOPPED) {
-        Serial.println("ERROR: trying to calculate next step period while stopped");
-        while (true) {};
-      }
+    double calculate_next_step_period_in_microsecs() {
+      if (current_status == Status::STOPPED) return base_step_period_in_microsecs;
       if (current_status == Status::MAXING) return target_step_period_in_microsecs;
 
       double p = current_step_period_in_microsecs;
@@ -137,57 +216,6 @@ class Stepper
       return p * (1 + q + (3.0 / 2.0) * q * q);
     }
 
-    Direction get_direction_to_target_position_in_steps(int64_t target_position_in_steps) {
-      if (target_position_in_steps > current_position_in_steps) {
-        return Direction::Clockwise;
-      } else {
-        return Direction::CounterClockwise;
-      }
-    }
-
-
-    bool is_move_completed() {
-      return current_position_in_steps == target_position_in_steps;
-    }
-
-    void move_to_position_in_mm(double target_position_in_mm) {
-      target_position_in_steps = round(target_position_in_mm * steps_per_mm);
-      current_step_period_in_microsecs = base_step_period_in_microsecs;
-      current_status = Status::RAMP_UP;
-      current_direction = get_direction_to_target_position_in_steps(target_position_in_steps);
-      start_moving();
-    }
-
-    void start_moving() {
-      write_enable();
-      write_direction();
-      write_pulse();
-
-      // TODO try timer.setPwm()
-      const uint32_t interval = base_step_period_in_microsecs;
-      timer.setCount(0, MICROSEC_FORMAT);
-      timer.setOverflow(interval, MICROSEC_FORMAT);
-      timer.resume();
-    }
-
-    void step() {
-      auto next_step_period_in_microsecs = get_next_step_period_in_microsecs();
-      current_step_period_in_microsecs = next_step_period_in_microsecs;
-
-      auto next_status = get_next_status();
-      current_status = next_status;
-
-      if (next_status == Status::STOPPED) {
-        timer.pause();
-        write_enable(false);
-      } else {
-        const uint32_t interval = next_step_period_in_microsecs;
-        timer.setCount(0, MICROSEC_FORMAT);
-        timer.setOverflow(interval, MICROSEC_FORMAT);
-        timer.refresh();
-      }
-    }
-
     void write_enable(bool should_delay = true) {
       auto enabled_signal = current_status == Status::STOPPED ? LOW : HIGH;
       digitalWrite(enable_pin, enabled_signal);
@@ -199,7 +227,7 @@ class Stepper
     }
 
     void write_direction(bool should_delay = true) {
-      auto direction_signal = current_direction == Direction::CounterClockwise ? HIGH : LOW;
+      auto direction_signal = current_direction == Direction::Clockwise ? HIGH : LOW;
       digitalWrite(direction_pin, direction_signal);
 
       if (should_delay) {

@@ -24,7 +24,7 @@ Stepper stepper = Stepper(
 );
 
 std::vector<uint32_t> acceleration_steps {
-  NULL,
+  100000,
   87500,
   73237,
   61497,
@@ -90,35 +90,34 @@ void test_initial_calculations(void) {
   TEST_ASSERT_EQUAL_DOUBLE(5e-11, stepper.acceleration_multiplier);
 }
 
-void test_next_step(void) {
-  auto current_status = stepper.current_status;
-  auto step_index = stepper.current_position_in_steps;
+void test_step(void) {
+  TEST_ASSERT_EQUAL(stepper.movement_steps_completed, stepper.current_position_in_steps);
 
-  auto next_step_period_in_microsecs = stepper.get_next_step_period_in_microsecs();
-  auto next_status = stepper.get_next_status();
-  
+  auto current_status = stepper.current_status;
+  auto current_step_period_in_microsecs = stepper.current_step_period_in_microsecs;
+  auto step_index = stepper.movement_steps_completed;
+  auto steps_total = stepper.movement_steps_total;
+  auto acceleration_distance = stepper.acceleration_distance_in_steps;
 
   // in case it fails later, make sure to increment now 
-  stepper.current_position_in_steps++;
-  stepper.current_step_period_in_microsecs = next_step_period_in_microsecs;
-  stepper.current_status = next_status;
+  stepper.increment_step();
+  stepper.calculate_next_step();
 
-  if (step_index <= stepper.acceleration_distance_in_steps) {
+  if (step_index <= acceleration_distance) {
     TEST_ASSERT_EQUAL(Stepper::Status::RAMP_UP, current_status);
-    TEST_ASSERT_EQUAL_UINT32(acceleration_steps[step_index], next_step_period_in_microsecs);
-  } else if (
-    stepper.target_position_in_steps - step_index <= stepper.acceleration_distance_in_steps
-  ) {
+    TEST_ASSERT_EQUAL_UINT32(acceleration_steps[step_index], current_step_period_in_microsecs);
+  } else if (steps_total - step_index <= acceleration_distance) {
     TEST_ASSERT_EQUAL(Stepper::Status::RAMP_DOWN, current_status);
-    auto deceleration_index = deceleration_steps.size() - (stepper.target_position_in_steps - step_index);
-    TEST_ASSERT_EQUAL_UINT32(deceleration_steps[deceleration_index], next_step_period_in_microsecs);
+    auto deceleration_index = deceleration_steps.size() - (steps_total - step_index);
+    TEST_ASSERT_EQUAL_UINT32(deceleration_steps[deceleration_index], current_step_period_in_microsecs);
   } else {
     TEST_ASSERT_EQUAL(Stepper::Status::MAXING, current_status);
-    TEST_ASSERT_EQUAL_UINT32(stepper.target_step_period_in_microsecs, next_step_period_in_microsecs);
+    TEST_ASSERT_EQUAL_UINT32(stepper.target_step_period_in_microsecs, current_step_period_in_microsecs);
   }
 }
 
-void test_ending(void) {
+void test_end(void) {
+  TEST_ASSERT_EQUAL_UINT32(stepper.movement_steps_completed, stepper.movement_steps_total);
   TEST_ASSERT_EQUAL_UINT64(stepper.current_position_in_steps, stepper.target_position_in_steps);
   TEST_ASSERT_EQUAL(Stepper::Status::STOPPED, stepper.current_status);
 }
@@ -132,19 +131,15 @@ void setup() {
 
   RUN_TEST(test_initial_calculations);
 
-  stepper.target_position_in_steps = 100;
-  stepper.current_step_period_in_microsecs = stepper.base_step_period_in_microsecs;
-  stepper.current_direction = Stepper::Direction::Clockwise;
-  stepper.current_status = Stepper::Status::RAMP_UP;
-  stepper.current_position_in_steps = 1; // because first pulse happens at base step period
+  stepper.set_movement(100);
 }
 
 void loop() {
-  if (stepper.current_position_in_steps < stepper.target_position_in_steps) {
-    RUN_TEST(test_next_step);
+  if (stepper.movement_steps_completed < stepper.movement_steps_total) {
+    RUN_TEST(test_step);
     delay(10);
   } else {
-    RUN_TEST(test_ending);
+    RUN_TEST(test_end);
     UNITY_END(); // stop unit testing
   }
 }
