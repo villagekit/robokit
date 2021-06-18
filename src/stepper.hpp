@@ -8,41 +8,49 @@
 
 class Stepper
 {
-  using CompletionSubscriber = std::function<void(void)>;
-  enum class Status { STOPPED, STARTED };
-  enum class RampStatus { ACCELERATING, MAXING, DECELERATING };
-
-  private:
-    uint32_t enable_pin;
-    uint32_t direction_pin;
-    uint32_t pulse_pin;
-    double steps_per_rev;
-    double steps_per_mm;
-    double target_speed_in_steps_per_sec;
-    double acceleration_in_steps_per_sec_per_sec;
-
-    // leib ramp
-    double acceleration_distance_in_steps;
-    double base_step_period_in_microsecs;
-    double target_step_period_in_microsecs; // for assertions
-    double acceleration_multiplier;
-
-    long target_position_in_steps;
-    long current_position_in_steps;
-    double current_step_period_in_microsecs;
-
-    CompletionSubscriber completion_subscriber;
+  // using CompletionSubscriber = std::function<void(void)>;
 
   public:
-    const static double DEFAULT_STEPS_PER_REV = 40000.0;
-    const static double DEFAULT_LEADSCREW_STARTS = 4.;
-    const static double DEFAULT_LEADSCREW_PITCH = 2.;
-    const static double DEFAULT_TARGET_SPEED_IN_MM_PER_SEC = 1.;
-    const static double DEFAULT_ACCELERATION_IN_MM_PER_SEC_PER_SEC = 0.1;
+    enum class Status { STOPPED, RAMP_UP, MAXING, RAMP_DOWN };
+    enum class Direction { Clockwise, CounterClockwise };
+
+
+    constexpr static double DEFAULT_STEPS_PER_REV = 40000.0;
+    constexpr static double DEFAULT_LEADSCREW_STARTS = 4.;
+    constexpr static double DEFAULT_LEADSCREW_PITCH = 2.;
+    constexpr static double DEFAULT_TARGET_SPEED_IN_MM_PER_SEC = 1.;
+    constexpr static double DEFAULT_ACCELERATION_IN_MM_PER_SEC_PER_SEC = 0.1;
     
-    const static double MICROSECS_IN_SEC = 1000000.;
+    constexpr static double MICROSECS_IN_SEC = 1000000.;
+
+    HardwareTimer timer;
+
+    const uint32_t enable_pin;
+    const uint32_t direction_pin;
+    const uint32_t pulse_pin;
+    const double steps_per_rev;
+    const double mm_per_rev;
+    const double steps_per_mm;
+    const double target_speed_in_steps_per_sec;
+    const double acceleration_in_steps_per_sec_per_sec;
+
+    // leib ramp
+    const uint32_t acceleration_distance_in_steps;
+    const uint32_t base_step_period_in_microsecs;
+    const uint32_t target_step_period_in_microsecs;
+    const double acceleration_multiplier;
+
+    volatile int64_t target_position_in_steps;
+    volatile int64_t current_position_in_steps;
+    volatile double current_step_period_in_microsecs;
+
+    volatile Direction current_direction;
+    volatile Status current_status;
+
+    // CompletionSubscriber completion_subscriber;
 
     Stepper(
+      TIM_TypeDef *tim,
       uint32_t enable_pin,
       uint32_t direction_pin,
       uint32_t pulse_pin,
@@ -52,105 +60,158 @@ class Stepper
       double target_speed_in_mm_per_sec = DEFAULT_TARGET_SPEED_IN_MM_PER_SEC,
       double acceleration_in_mm_per_sec_per_sec = DEFAULT_ACCELERATION_IN_MM_PER_SEC_PER_SEC
     ):
+      timer(HardwareTimer(tim)),
       enable_pin(enable_pin),
       direction_pin(direction_pin),
       pulse_pin(pulse_pin),
       steps_per_rev(steps_per_rev),
-    {
-      double mm_per_rev = leadscrew_starts * leadscrew_pitch;
-      steps_per_mm = steps_per_rev / mm_per_rev;
+      mm_per_rev(leadscrew_starts * leadscrew_pitch),
+      steps_per_mm(steps_per_rev / mm_per_rev),
+      target_speed_in_steps_per_sec(target_speed_in_mm_per_sec * steps_per_mm),
+      acceleration_in_steps_per_sec_per_sec(acceleration_in_mm_per_sec_per_sec * steps_per_mm),
+      acceleration_distance_in_steps(
+        round(
+          pow(target_speed_in_steps_per_sec, 2)
+          / (2 * acceleration_in_steps_per_sec_per_sec)
+        )
+      ),
+      base_step_period_in_microsecs(
+        round(MICROSECS_IN_SEC / sqrt(2. * acceleration_in_steps_per_sec_per_sec))
+      ),
+      target_step_period_in_microsecs(
+        round(MICROSECS_IN_SEC / target_speed_in_steps_per_sec)
+      ),
+      acceleration_multiplier(
+        acceleration_in_steps_per_sec_per_sec / pow(MICROSECS_IN_SEC, 2.)
+      ) {}
 
-      target_speed_in_steps_per_sec = target_speed_in_mm_per_sec * steps_per_mm;
-      acceleration_in_steps_per_sec_per_sec = acceleration_in_mm_per_sec_per_sec * steps_per_mm;
+    void setup() {
+      pinMode(enable_pin, OUTPUT);
+      pinMode(direction_pin, OUTPUT);
+      pinMode(pulse_pin, OUTPUT);
 
-      double base_speed_in_steps_per_sec = 0; // since we only accelerate from stop.
-      acceleration_distance_in_steps =
-        (pow(target_speed_in_steps_per_sec, 2) - pow(base_speed_in_steps_per_sec, 2))
-          / (2 * acceleration_in_steps_per_sec_per_sec);
-      base_step_period_in_microsecs = MICROSECS_IN_SEC / sqrt(2. * acceleration_in_steps_per_sec_per_sec);
-      target_step_period_in_microsecs = MICROSECS_IN_SEC / target_speed_in_steps_per_sec;
-      acceleration_multiplier = MICROSECS_IN_SEC / pow(acceleration_in_steps_per_sec_per_sec, 2.);
+      timer.attachInterrupt(std::bind(&Stepper::step, this));
     }
 
-    RampStatus get_ramp_status() {
-      if (current_position_in_steps < acceleration_distance_in_steps) {
-        return RampStatus::ACCELERATING;
-      } else if (target_position_in_steps - current_position_in_steps < acceleration_distance_in_steps) {
-        return RampStatus::DECELERATING;
-      } else {
-        return RampStatus::MAXING;
+    Status get_next_status() {
+      switch (current_status) {
+        case Status::STOPPED:
+          return Status::STOPPED;
+        case Status::RAMP_UP:
+          if (current_position_in_steps >= acceleration_distance_in_steps) {
+            return Status::MAXING;
+          }
+          return Status::RAMP_UP;
+        case Status::MAXING: {
+          auto steps_remaining = target_position_in_steps - current_position_in_steps;
+          if (steps_remaining - 1 <= acceleration_distance_in_steps) {
+            return Status::RAMP_DOWN;
+          }
+          return Status::MAXING;
+        }
+        case Status::RAMP_DOWN:
+          if (current_position_in_steps + 1 >= target_position_in_steps) {
+            return Status::STOPPED;
+          }
+          return Status::RAMP_DOWN;
       }
     }
 
-    double get_next_step_period() {
+    // equation [23] in http://hwml.com/LeibRamp.htm
+    double get_next_step_period_in_microsecs() {
+      // this is bad, infinite loop to lapse watchdog timer
+      if (current_status == Status::STOPPED) {
+        Serial.println("ERROR: trying to calculate next step period while stopped");
+        while (true) {};
+      }
+      if (current_status == Status::MAXING) return target_step_period_in_microsecs;
 
+      double p = current_step_period_in_microsecs;
+
+      double m = current_status == Status::RAMP_UP
+        ? -acceleration_multiplier
+        : acceleration_multiplier;
+
+      double q = m * p * p;
+      
+      return p * (1 + q + (3.0 / 2.0) * q * q);
     }
 
-    /*
+    Direction get_direction_to_target_position_in_steps(int64_t target_position_in_steps) {
+      if (target_position_in_steps > current_position_in_steps) {
+        return Direction::Clockwise;
+      } else {
+        return Direction::CounterClockwise;
+      }
+    }
 
-    void connectToPins(byte stepPinNumber, byte directionPinNumber);
+
+    bool is_move_completed() {
+      return current_position_in_steps == target_position_in_steps;
+    }
+
+    void move_to_position_in_mm(double target_position_in_mm) {
+      target_position_in_steps = round(target_position_in_mm * steps_per_mm);
+      current_step_period_in_microsecs = base_step_period_in_microsecs;
+      current_status = Status::RAMP_UP;
+      current_direction = get_direction_to_target_position_in_steps(target_position_in_steps);
+      start_moving();
+    }
+
+    void start_moving() {
+      write_enable();
+      write_direction();
+      write_pulse();
+
+      // TODO try timer.setPwm()
+      const uint32_t interval = base_step_period_in_microsecs;
+      timer.setCount(0, MICROSEC_FORMAT);
+      timer.setOverflow(interval, MICROSEC_FORMAT);
+      timer.resume();
+    }
+
+    void step() {
+      auto next_step_period_in_microsecs = get_next_step_period_in_microsecs();
+      current_step_period_in_microsecs = next_step_period_in_microsecs;
+
+      auto next_status = get_next_status();
+      current_status = next_status;
+
+      if (next_status == Status::STOPPED) {
+        timer.pause();
+        write_enable(false);
+      } else {
+        const uint32_t interval = next_step_period_in_microsecs;
+        timer.setCount(0, MICROSEC_FORMAT);
+        timer.setOverflow(interval, MICROSEC_FORMAT);
+        timer.refresh();
+      }
+    }
+
+    void write_enable(bool should_delay = true) {
+      auto enabled_signal = current_status == Status::STOPPED ? LOW : HIGH;
+      digitalWrite(enable_pin, enabled_signal);
+
+      if (should_delay) {
+        // ENABLE must be ahead of DIRECTION by at least 5 microseconds
+        delayMicroseconds(5);
+      }
+    }
+
+    void write_direction(bool should_delay = true) {
+      auto direction_signal = current_direction == Direction::CounterClockwise ? HIGH : LOW;
+      digitalWrite(direction_pin, direction_signal);
+
+      if (should_delay) {
+        // DIRECTION must be ahead of PULSE by at least 6 microseconds
+        delayMicroseconds(6);
+      }
+    }
     
-    void setStepsPerMillimeter(float motorStepPerMillimeter);
-    float getCurrentPositionInMillimeters();
-    void setCurrentPositionInMillimeters(float currentPositionInMillimeter);
-    void setSpeedInMillimetersPerSecond(float speedInMillimetersPerSecond);
-    void setAccelerationInMillimetersPerSecondPerSecond(float accelerationInMillimetersPerSecondPerSecond);
-    bool moveToHomeInMillimeters(long directionTowardHome, float speedInMillimetersPerSecond, long maxDistanceToMoveInMillimeters, int homeLimitSwitchPin);
-    void moveRelativeInMillimeters(float distanceToMoveInMillimeters);
-    void setupRelativeMoveInMillimeters(float distanceToMoveInMillimeters);
-    void moveToPositionInMillimeters(float absolutePositionToMoveToInMillimeters);
-    void setupMoveInMillimeters(float absolutePositionToMoveToInMillimeters);
-    float getCurrentVelocityInMillimetersPerSecond();
-    
-
-    void setStepsPerRevolution(float motorStepPerRevolution);
-    float getCurrentPositionInRevolutions();
-    void setSpeedInRevolutionsPerSecond(float speedInRevolutionsPerSecond);
-    void setCurrentPositionInRevolutions(float currentPositionInRevolutions);
-    void setAccelerationInRevolutionsPerSecondPerSecond(float accelerationInRevolutionsPerSecondPerSecond);
-    bool moveToHomeInRevolutions(long directionTowardHome, float speedInRevolutionsPerSecond, long maxDistanceToMoveInRevolutions, int homeLimitSwitchPin);
-    void moveRelativeInRevolutions(float distanceToMoveInRevolutions);
-    void setupRelativeMoveInRevolutions(float distanceToMoveInRevolutions);
-    void moveToPositionInRevolutions(float absolutePositionToMoveToInRevolutions);
-    void setupMoveInRevolutions(float absolutePositionToMoveToInRevolutions);
-    float getCurrentVelocityInRevolutionsPerSecond();
-
-    void enableStepper(void);
-    void disableStepper(void);
-    void setCurrentPositionInSteps(long currentPositionInSteps);
-    long getCurrentPositionInSteps();
-    void setupStop();
-    void setSpeedInStepsPerSecond(float speedInStepsPerSecond);
-    void setAccelerationInStepsPerSecondPerSecond(float accelerationInStepsPerSecondPerSecond);
-    bool moveToHomeInSteps(long directionTowardHome, float speedInStepsPerSecond, long maxDistanceToMoveInSteps, int homeSwitchPin);
-    void moveRelativeInSteps(long distanceToMoveInSteps);
-    void setupRelativeMoveInSteps(long distanceToMoveInSteps);
-    void moveToPositionInSteps(long absolutePositionToMoveToInSteps);
-    void setupMoveInSteps(long absolutePositionToMoveToInSteps);
-    bool motionComplete();
-    float getCurrentVelocityInStepsPerSecond(); 
-    bool processMovement(void);
-
-  private:
-    //
-    // private member variables
-    //
-    uint32_t enablePin;
-    uint32_t stepPin;
-    uint32_t directionPin;
-    float desiredSpeed_InStepsPerSecond;
-    float acceleration_InStepsPerSecondPerSecond;
-    long targetPosition_InSteps;
-    float stepsPerMillimeter;
-    float stepsPerRevolution;
-    bool startNewMove;
-    float desiredStepPeriod_InUS;
-    long decelerationDistance_InSteps;
-    int direction_Scaler;
-    float ramp_InitialStepPeriod_InUS;
-    float ramp_NextStepPeriod_InUS;
-    unsigned long ramp_LastStepTime_InUS;
-    float acceleration_InStepsPerUSPerUS;
-    float currentStepPeriod_InUS;
-    long currentPosition_InSteps;
+    void write_pulse() {
+      digitalWrite(pulse_pin, LOW);
+      // PULSE width must be no less than 2.5 microseconds
+      delayMicroseconds(3);
+      digitalWrite(pulse_pin, HIGH);
+    }
 };
