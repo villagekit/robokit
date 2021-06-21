@@ -1,13 +1,17 @@
+#include <SimplyAtomic.h>
+#include <RingBufCPP.h>
+#define RB_ATOMIC_START ATOMIC() {
+#define RB_ATOMIC_END }
+
 #include <Arduino.h>
+#include <IWatchdog.h>
 
 #include <store.hpp>
 #include <server.hpp>
 #include <effects/bot.hpp>
 
-#if !( defined(STM32F0) || defined(STM32F1) || defined(STM32F2) || defined(STM32F3)  ||defined(STM32F4) || defined(STM32F7) || \
-       defined(STM32L0) || defined(STM32L1) || defined(STM32L4) || defined(STM32H7)  ||defined(STM32G0) || defined(STM32G4) || \
-       defined(STM32WB) || defined(STM32MP1) )
-  #error This code is designed to run on STM32F/L/H/G/WB/MP1 platform! Please check your Tools->Board setting.
+#if !(defined(STM32F7))
+  #error This code is designed to run on STM32F7 platform!
 #endif
 
 // pins
@@ -30,10 +34,15 @@ void setup()
 
   server.begin(&store);
   BotEffects::setup(&store);
+
+  // initialize watchdog with 2 millisecond timeout
+  IWatchdog.begin(2000UL);
 }
 
 void loop()
 {
-  server.loop();
-  delay(1000);
+  store.loop();
+  
+  // reset watchdog timeout
+  IWatchdog.reload();
 }

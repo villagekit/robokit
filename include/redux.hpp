@@ -27,7 +27,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-See also: 
 */
 
 #pragma once
@@ -44,7 +43,6 @@ class Store {
 		Store(Reducer, STATE_T);
 		void subscribe(Subscriber);
 		void dispatch(ACTION_T);
-		void dispatch(ACTION_T, bool);
 		STATE_T get_state();
 
 	private:
@@ -65,23 +63,12 @@ void Store<STATE_T, ACTION_T>::subscribe(Subscriber subscriber) {
 }
 
 template <typename STATE_T, typename ACTION_T>
-void Store<STATE_T, ACTION_T>::dispatch(ACTION_T action, bool should_notify) {
-	noInterrupts();
-
+void Store<STATE_T, ACTION_T>::dispatch(ACTION_T action) {
 	state = reducer(state, action);
 
-	interrupts();
-
-	if (should_notify) {
-		for(uint i = 0; i < subscribers.size(); i++) {
-			subscribers[i](state);
-		}
+	for(size_t i = 0; i < subscribers.size(); i++) {
+		subscribers[i](state);
 	}
-}
-
-template <typename STATE_T, typename ACTION_T>
-void Store<STATE_T, ACTION_T>::dispatch(ACTION_T action) {
-	dispatch(action, true);
 }
 
 template <typename STATE_T, typename ACTION_T>

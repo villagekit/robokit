@@ -41,17 +41,11 @@ class BotServer {
       Serial.print(F("HTTP Web Server is @ IP : "));
       Serial.println(Ethernet.localIP());
 
-      store = _store;
-      store->subscribe([this](BotModel::State state) {
-        this->has_state_changed = true;
-      });
+      // store->subscribe(std::bind(&BotServer::on_state_change, this));
     }
 
-    void loop() {
-      if (has_state_changed) {
-        send_state_json(&events);
-        has_state_changed = false;
-      }
+    void on_state_change() {
+      send_state_json(&events);
     }
 
     void send_state_json(AsyncEventSourceClient *client) {
