@@ -1,11 +1,18 @@
 // Inspired by:
 // - https://github.com/Stan-Reifel/SpeedyStepper
+//   - see https://github.com/Stan-Reifel/SpeedyStepper/blob/master/Documentation.md
 // - http://hwml.com/LeibRamp.htm
 
 #include <Arduino.h>
 
 #include <functional>
 
+/*
+Notes:
+- Once a motion starts, you cannot change the target position, speed, or
+    rate of acceleration until the motion has completed.
+  - The only exception is you can issue a "Stop" at any point in time.
+*/
 class Stepper
 {
   // using CompletionSubscriber = std::function<void(void)>;
@@ -44,8 +51,8 @@ class Stepper
     volatile int64_t current_position_in_steps;
     volatile double current_step_period_in_microsecs;
 
-    volatile int32_t movement_steps_total;
-    volatile int32_t movement_steps_completed;
+    volatile uint32_t movement_steps_total;
+    volatile uint32_t movement_steps_completed;
 
     volatile Direction current_direction;
     volatile Status current_status;
@@ -87,14 +94,19 @@ class Stepper
       acceleration_multiplier(
         acceleration_in_steps_per_sec_per_sec / pow(MICROSECS_IN_SEC, 2.)
       ),
-      current_position_in_steps(0) {}
+      current_position_in_steps(0) {
+        timer.setPreloadEnable(true);
+        timer.setCount(0, MICROSEC_FORMAT);
+        timer.setOverflow(base_step_period_in_microsecs, MICROSEC_FORMAT);
+        timer.attachInterrupt(std::bind(&Stepper::step, this));
+      }
 
     void setup() {
       pinMode(enable_pin, OUTPUT);
       pinMode(direction_pin, OUTPUT);
       pinMode(pulse_pin, OUTPUT);
 
-      timer.attachInterrupt(std::bind(&Stepper::step, this));
+      write_enable(false);
     }
 
     bool is_move_completed() {
@@ -106,7 +118,12 @@ class Stepper
       if (should_move) start_movement();
     }
 
-    bool set_movement(int32_t target_position_in_steps) {
+    void move_to_position_in_steps(int64_t target_position_in_steps) {
+      auto should_move = set_movement(target_position_in_steps);
+      if (should_move) start_movement();
+    }
+
+    bool set_movement(int64_t target_position_in_steps) {
       if (current_position_in_steps == target_position_in_steps) return false; // early skip
 
       this->target_position_in_steps = target_position_in_steps;
@@ -128,33 +145,54 @@ class Stepper
       write_direction();
       write_pulse();
       increment_step();
-      schedule_step();
+      schedule_step(true);
     }
 
+    // TODO: decelerate to a stop?
     void stop_movement() {
       current_status = Status::STOPPED;
       timer.pause();
+      timer.setCount(0, MICROSEC_FORMAT);
       write_enable(false);
     }
 
-    void schedule_step() {
+    // TODO maybe look at:
+    // - timer.setPWM()
+    // - OnePulseMode: https://github.com/stm32duino/Arduino_Core_STM32/pull/1212
+    void schedule_step(bool is_initial_step) {
       const uint32_t interval = current_step_period_in_microsecs;
-      timer.setCount(0, MICROSEC_FORMAT);
       timer.setOverflow(interval, MICROSEC_FORMAT);
-      timer.resume();
+
+      if (is_initial_step) {
+        timer.setCount(0, MICROSEC_FORMAT);
+        timer.resume();
+      }
     }
 
     void step() {
-      if (current_status == Status::STOPPED) return;
+      if (current_status == Status::STOPPED) {
+        return stop_movement();
+      }
+
+      auto previous_status = current_status;
       
       write_pulse();
       increment_step();
       calculate_next_step();
 
-      if (current_status == Status::STOPPED) {
-        stop_movement();
-      } else {
-        schedule_step();
+      switch (current_status) {
+        case Status::STOPPED:
+          stop_movement();
+          break;
+        case Status::MAXING:
+          if (previous_status == Status::RAMP_UP) {
+            schedule_step(false);
+          }
+          break;
+        case Status::RAMP_UP:
+        case Status::RAMP_DOWN:
+          schedule_step(false);
+          break;
       }
     }
 
@@ -213,7 +251,17 @@ class Stepper
 
       double q = m * p * p;
       
-      return p * (1 + q + (3.0 / 2.0) * q * q);
+      double next_step_period_in_microsecs = p * (1 + q + (3.0 / 2.0) * q * q);
+      
+      return next_step_period_in_microsecs;
+
+      /*
+      return constrain(
+        next_step_period_in_microsecs,
+        target_step_period_in_microsecs,
+        base_step_period_in_microsecs  
+      );
+      */
     }
 
     void write_enable(bool should_delay = true) {
