@@ -55,6 +55,7 @@ class Stepper
 
     volatile uint32_t movement_steps_total;
     volatile uint32_t movement_steps_completed;
+    volatile uint32_t movement_acceleration_steps;
 
     volatile Direction current_direction;
     volatile Status current_status;
@@ -103,6 +104,7 @@ class Stepper
       current_step_period_in_microsecs(base_step_period_in_microsecs),
       movement_steps_total(0),
       movement_steps_completed(0),
+      movement_acceleration_steps(0),
       current_direction(Direction::Clockwise),
       current_status(Status::STOPPED),
       is_paused(true)
@@ -142,6 +144,7 @@ class Stepper
 
       movement_steps_completed = 0;
       movement_steps_total = abs(target_position_in_steps - current_position_in_steps);
+      movement_acceleration_steps = min(acceleration_distance_in_steps, movement_steps_total / 2);
 
       current_step_period_in_microsecs = base_step_period_in_microsecs;
       current_status = Status::RAMP_UP;
@@ -241,27 +244,24 @@ class Stepper
     }
 
     Status calculate_status() {
-      switch (current_status) {
-        case Status::STOPPED:
-          return Status::STOPPED;
-        case Status::RAMP_UP:
-          if (movement_steps_completed > acceleration_distance_in_steps) {
-            return Status::MAXING;
-          }
-          return Status::RAMP_UP;
-        case Status::MAXING: {
-          auto steps_remaining = movement_steps_total - movement_steps_completed;
-          if (steps_remaining <= acceleration_distance_in_steps) {
-            return Status::RAMP_DOWN;
-          }
-          return Status::MAXING;
-        }
-        case Status::RAMP_DOWN:
-          if (movement_steps_completed >= movement_steps_total) {
-            return Status::STOPPED;
-          }
-          return Status::RAMP_DOWN;
+      if (current_status == Status::STOPPED) {
+        return Status::STOPPED;
       }
+      
+      if (movement_steps_completed >= movement_steps_total) {
+        return Status::STOPPED;
+      }
+
+      auto steps_remaining = movement_steps_total - movement_steps_completed;
+      if (steps_remaining <= movement_acceleration_steps) {
+        return Status::RAMP_DOWN;
+      }
+
+      if (movement_steps_completed > movement_acceleration_steps) {
+        return Status::MAXING;
+      }
+
+      return current_status;
     }
 
     // equation [23] in http://hwml.com/LeibRamp.htm
