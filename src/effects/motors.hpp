@@ -31,11 +31,11 @@ namespace MotorsEffects {
   void loop(BotStore *store) {
     if (x_motor.is_move_completed()) {
       // schedule next step
-      int64_t next_position_in_steps = x_motor.current_position_in_steps != 0 ? 0 : 1e4;
-      x_motor.move_to_position_in_steps(next_position_in_steps);
+      int64_t next_position_in_mm = x_motor.current_position_in_steps != 0 ? 0. : 2.;
+      x_motor.move_to_position_in_mm(next_position_in_mm);
       store->dispatch(MotorsModel::ActionSchedule {
         MotorsModel::MotorId::X,
-        next_position_in_steps
+        x_motor.target_position_in_steps
       });
     } else {
       store->dispatch(MotorsModel::ActionProgress {

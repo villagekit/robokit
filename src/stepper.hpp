@@ -3,9 +3,11 @@
 //   - see https://github.com/Stan-Reifel/SpeedyStepper/blob/master/Documentation.md
 // - http://hwml.com/LeibRamp.htm
 
+#include <functional>
+
 #include <Arduino.h>
 
-#include <functional>
+#include <SimplyAtomic.h>
 
 /*
 Notes:
@@ -57,6 +59,8 @@ class Stepper
     volatile Direction current_direction;
     volatile Status current_status;
 
+    volatile bool is_paused;
+
     // CompletionSubscriber completion_subscriber;
 
     Stepper(
@@ -94,11 +98,19 @@ class Stepper
       acceleration_multiplier(
         acceleration_in_steps_per_sec_per_sec / pow(MICROSECS_IN_SEC, 2.)
       ),
-      current_position_in_steps(0) {
-        timer.setPreloadEnable(true);
+      target_position_in_steps(0),
+      current_position_in_steps(0),
+      current_step_period_in_microsecs(base_step_period_in_microsecs),
+      movement_steps_total(0),
+      movement_steps_completed(0),
+      current_direction(Direction::Clockwise),
+      current_status(Status::STOPPED),
+      is_paused(true)
+       {
         timer.setCount(0, MICROSEC_FORMAT);
         timer.setOverflow(base_step_period_in_microsecs, MICROSEC_FORMAT);
         timer.attachInterrupt(std::bind(&Stepper::step, this));
+        timer.refresh();
       }
 
     void setup() {
@@ -148,47 +160,61 @@ class Stepper
       schedule_step(true);
     }
 
+    void pause_movement() {
+      ATOMIC() {
+        timer.pause();
+        is_paused = true;
+      }
+    }
+
+    void resume_movement() {
+      ATOMIC() {
+        timer.resume();
+        is_paused = false;
+      }
+    }
+
     // TODO: decelerate to a stop?
     void stop_movement() {
       current_status = Status::STOPPED;
-      timer.pause();
+      if (!is_paused) {
+        pause_movement();
+      }
       timer.setCount(0, MICROSEC_FORMAT);
       write_enable(false);
     }
 
-    // TODO maybe look at:
-    // - timer.setPWM()
-    // - OnePulseMode: https://github.com/stm32duino/Arduino_Core_STM32/pull/1212
     void schedule_step(bool is_initial_step) {
       const uint32_t interval = current_step_period_in_microsecs;
-      timer.setOverflow(interval, MICROSEC_FORMAT);
 
-      if (is_initial_step) {
-        timer.setCount(0, MICROSEC_FORMAT);
-        timer.resume();
-      }
+      timer.setCount(0, MICROSEC_FORMAT); // NOTE(mw): not sure if this is worthwhile
+      timer.setOverflow(interval, MICROSEC_FORMAT);
+      timer.refresh();
+
+      resume_movement();
     }
 
     void step() {
       if (current_status == Status::STOPPED) {
-        return stop_movement();
+        stop_movement();
+        return;
       }
+
+      pause_movement();
 
       auto previous_status = current_status;
       
-      write_pulse();
-      increment_step();
-      calculate_next_step();
+      ATOMIC() {
+        write_pulse();
+        increment_step();
+        calculate_next_step();
+      }
 
       switch (current_status) {
         case Status::STOPPED:
           stop_movement();
           break;
         case Status::MAXING:
-          if (previous_status == Status::RAMP_UP) {
-            schedule_step(false);
-          }
-          break;
         case Status::RAMP_UP:
         case Status::RAMP_DOWN:
           schedule_step(false);
@@ -253,15 +279,11 @@ class Stepper
       
       double next_step_period_in_microsecs = p * (1 + q + (3.0 / 2.0) * q * q);
       
-      return next_step_period_in_microsecs;
-
-      /*
       return constrain(
         next_step_period_in_microsecs,
         target_step_period_in_microsecs,
         base_step_period_in_microsecs  
       );
-      */
     }
 
     void write_enable(bool should_delay = true) {

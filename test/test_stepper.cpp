@@ -77,7 +77,7 @@ std::vector<uint32_t> deceleration_steps {
   56484,
   67651,
   88445,
-  143336
+  100000
 };
 
 void test_initial_calculations(void) {
