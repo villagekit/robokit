@@ -41,6 +41,7 @@ void setup()
 
 void loop()
 {
+  BotEffects::loop(&store);
   store.loop();
   
   // reset watchdog timeout

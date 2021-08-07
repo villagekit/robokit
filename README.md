@@ -40,3 +40,4 @@ ST Nucleo F767ZI
       - or disable the interrupts, read (and copy) the queue, then re-enable the interrupts
 - if trying to be very fast, avoid if branches
   - if branches will clear instruction pipeline
+- run command checks in main loop (is complete ?), either as a "loop" function or as subscriptions

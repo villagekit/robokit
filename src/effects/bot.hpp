@@ -39,4 +39,8 @@ namespace BotEffects {
     ClockEffects::setup(&context);
     MotorsEffects::setup(&context);
   }
+
+  void loop(BotStore *store) {
+    MotorsEffects::loop(store);
+  }
 }
