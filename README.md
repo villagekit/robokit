@@ -1,43 +1,67 @@
 # gridbot-software
 
+Micro-controller: [Nucleo-144 STM32-F767ZI](https://nz.element14.com/stmicroelectronics/nucleo-f767zi/dev-board-nucleo-32-mcu/dp/2546569)
+
+## Development
+
+### Setup
+
+#### Rust
+
+With [`rustup`](https://rustup.rs) installed, install the toolchain:
+
+( https://docs.rust-embedded.org/cortex-m-quickstart/cortex_m_quickstart/ )
+
 ```shell
-git submodule init
-git submodule update
-yarn
-yarn build
+rustup target add thumbv7em-none-eabi
 ```
 
+#### Binary utils
 
-## micro-controller
+```shell
+sudo apt install build-essential
+```
 
-ST Nucleo F767ZI
+```shell
+cargo install cargo-binutils
+```
 
-- [platform.io page](https://docs.platformio.org/en/latest/boards/ststm32/nucleo_f767zi.html)
-- [board documentation](https://www.st.com/en/evaluation-tools/nucleo-f767zi.html#documentation)
-- [chip documentation](https://www.st.com/en/microcontrollers-microprocessors/stm32f767zi.html#documentation)
+```shell
+rustup component add llvm-tools-preview
+```
 
-### dependencies
+> Alternatively, install GNU Binutils for ARM:
+>
+> ```
+> sudo apt install binutils-arm-none-eabi
+> ```
 
-- Platform.IO
-- follow ST-Link [driver instructions](https://docs.platformio.org/en/latest/plus/debug-tools/stlink.html)
-- [ST-Link helper](https://github.com/stlink-org/stlink/releases)
+#### Flash tools
 
-## notes
+```shell
+sudo apt install pkg-config libusb-1.0-0-dev libudev-dev
+```
 
-- timer interrupt error handling
-  - watchdog timer
-    - "if we don't reset the watchdog within X microseconds, something is broken!"
-    - https://github.com/stm32duino/Arduino_Core_STM32/tree/master/libraries/IWatchdog
-  - set a flag at the end of the timer interrupt
-    - if not 
-- timer interrupt queue
-  - timer interrupts queues events to the main loop, which processes them
-  - the less code you share between the isrs and the main loop, the better 
-    - sharing mutable state with isrs is a scary thing
-  - don't handroll the queue, find a good library that is specific for thread (isr) safe
-    - e.g. ringbuffer, (rust: bbqueue), atomic
-    - or use a standard queue library
-      - or disable the interrupts, read (and copy) the queue, then re-enable the interrupts
-- if trying to be very fast, avoid if branches
-  - if branches will clear instruction pipeline
-- run command checks in main loop (is complete ?), either as a "loop" function or as subscriptions
+```shell
+cargo install cargo-flash
+```
+
+> Alternatively, to flash onto the STM32, install [`stlink-tools`](https://github.com/stlink-org/stlink)
+>
+> ```shell
+> sudo apt install stlink-tools
+> ```
+
+### Build and Flash
+
+Build:
+
+```shell
+cargo build --release
+```
+
+Flash:
+
+```shell
+cargo flash --chip stm32f767zitx --release
+```
