@@ -52,6 +52,21 @@ cargo install cargo-flash
 > sudo apt install stlink-tools
 > ```
 
+### Dev tools
+
+```shell
+cargo install flip-link
+cargo install probe-run
+```
+
+### Run
+
+Run:
+
+```shell
+cargo run
+```
+
 ### Build and Flash
 
 Build:
@@ -64,4 +79,18 @@ Flash:
 
 ```shell
 cargo flash --chip stm32f767zitx --release
+```
+
+### Test
+
+Unit tests:
+
+```shell
+cargo test --lib
+```
+
+Integration tests:
+
+```shell
+cargo test --test integration
 ```

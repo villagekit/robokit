@@ -1,7 +1,7 @@
 #![no_main]
 #![no_std]
 
-use panic_halt as _;
+use gridbot as _;
 
 #[rtic::app(device = stm32f7xx_hal::pac, dispatchers = [USART1])]
 mod app {
@@ -30,20 +30,23 @@ mod app {
 
         let gpiob = ctx.device.GPIOB.split();
         let led = gpiob.pb0.into_push_pull_output();
+        tick::spawn().ok();
 
         let mono = ctx.device.TIM2.monotonic_us(&clocks);
-        tick::spawn().ok();
         (Shared {}, Local { led }, init::Monotonics(mono))
     }
 
     #[idle]
     fn idle(_: idle::Context) -> ! {
+        defmt::println!("Hello, world!");
+
         loop {}
     }
 
     #[task(local = [led])]
     fn tick(ctx: tick::Context) {
-        tick::spawn_after(1.secs()).ok();
         ctx.local.led.toggle();
+
+        tick::spawn_after(1.secs()).ok();
     }
 }
