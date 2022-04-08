@@ -7,7 +7,7 @@ use gridbot as _;
 mod app {
     use fugit::ExtU32;
     use stm32f7xx_hal::{
-        gpio::{Output, PB0},
+        gpio::{Output, PB0, PB14, PB7},
         pac,
         prelude::*,
         timer::monotonic::MonoTimerUs,
@@ -19,7 +19,9 @@ mod app {
 
     #[local]
     struct Local {
-        led: PB0<Output>,
+        green_led: PB0<Output>,
+        blue_led: PB7<Output>,
+        red_led: PB14<Output>,
         iwdg: watchdog::IndependentWatchdog,
     }
 
@@ -34,13 +36,26 @@ mod app {
         let mono = ctx.device.TIM2.monotonic_us(&clocks);
 
         let gpiob = ctx.device.GPIOB.split();
-        let led = gpiob.pb0.into_push_pull_output();
+        let green_led = gpiob.pb0.into_push_pull_output();
+        let blue_led = gpiob.pb7.into_push_pull_output();
+        let red_led = gpiob.pb14.into_push_pull_output();
 
         let iwdg = watchdog::IndependentWatchdog::new(ctx.device.IWDG);
 
-        tick::spawn().ok();
+        green_led_tick::spawn().ok();
+        blue_led_tick::spawn().ok();
+        red_led_tick::spawn().ok();
 
-        (Shared {}, Local { led, iwdg }, init::Monotonics(mono))
+        (
+            Shared {},
+            Local {
+                green_led,
+                blue_led,
+                red_led,
+                iwdg,
+            },
+            init::Monotonics(mono),
+        )
     }
 
     #[idle(local = [iwdg])]
@@ -56,10 +71,24 @@ mod app {
         }
     }
 
-    #[task(local = [led])]
-    fn tick(ctx: tick::Context) {
-        ctx.local.led.toggle();
+    #[task(local = [green_led])]
+    fn green_led_tick(ctx: green_led_tick::Context) {
+        ctx.local.green_led.toggle();
 
-        tick::spawn_after(1.secs()).ok();
+        green_led_tick::spawn_after(1.secs()).ok();
+    }
+
+    #[task(local = [blue_led])]
+    fn blue_led_tick(ctx: blue_led_tick::Context) {
+        ctx.local.blue_led.toggle();
+
+        blue_led_tick::spawn_after(2.secs()).ok();
+    }
+
+    #[task(local = [red_led])]
+    fn red_led_tick(ctx: red_led_tick::Context) {
+        ctx.local.red_led.toggle();
+
+        red_led_tick::spawn_after(4.secs()).ok();
     }
 }
