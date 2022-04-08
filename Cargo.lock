@@ -279,6 +279,7 @@ dependencies = [
  "defmt",
  "defmt-rtt",
  "defmt-test",
+ "fugit",
  "panic-probe",
  "stm32f7",
  "stm32f7xx-hal",
@@ -574,7 +575,7 @@ dependencies = [
 [[package]]
 name = "stm32f7xx-hal"
 version = "0.6.0"
-source = "git+https://github.com/stm32-rs/stm32f7xx-hal?rev=7099b07#7099b079685a15f60b80ad9d79e4c8e51bf6e992"
+source = "git+https://github.com/ahdinosaur/stm32f7xx-hal?rev=e5042a026#e5042a026dbcb6f480da486baa3635b465e343e9"
 dependencies = [
  "as-slice",
  "bare-metal 1.0.0",

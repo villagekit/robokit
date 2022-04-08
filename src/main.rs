@@ -5,11 +5,13 @@ use gridbot as _;
 
 #[rtic::app(device = stm32f7xx_hal::pac, dispatchers = [USART1])]
 mod app {
+    use fugit::ExtU32;
     use stm32f7xx_hal::{
         gpio::{Output, PB0},
         pac,
         prelude::*,
         timer::monotonic::MonoTimerUs,
+        watchdog,
     };
 
     #[shared]
@@ -18,6 +20,7 @@ mod app {
     #[local]
     struct Local {
         led: PB0<Output>,
+        iwdg: watchdog::IndependentWatchdog,
     }
 
     #[monotonic(binds = TIM2, default = true)]
@@ -28,19 +31,29 @@ mod app {
         let rcc = ctx.device.RCC.constrain();
         let clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
 
+        let mono = ctx.device.TIM2.monotonic_us(&clocks);
+
         let gpiob = ctx.device.GPIOB.split();
         let led = gpiob.pb0.into_push_pull_output();
+
+        let iwdg = watchdog::IndependentWatchdog::new(ctx.device.IWDG);
+
         tick::spawn().ok();
 
-        let mono = ctx.device.TIM2.monotonic_us(&clocks);
-        (Shared {}, Local { led }, init::Monotonics(mono))
+        (Shared {}, Local { led, iwdg }, init::Monotonics(mono))
     }
 
-    #[idle]
-    fn idle(_: idle::Context) -> ! {
+    #[idle(local = [iwdg])]
+    fn idle(ctx: idle::Context) -> ! {
         defmt::println!("Hello, world!");
 
-        loop {}
+        let iwdg = ctx.local.iwdg;
+
+        iwdg.start(2.millis());
+
+        loop {
+            iwdg.feed();
+        }
     }
 
     #[task(local = [led])]
