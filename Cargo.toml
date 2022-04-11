@@ -19,6 +19,7 @@ defmt = "0.3"
 defmt-rtt = "0.3"
 embedded-hal = "0.2"
 fugit = "0.3"
+fugit-timer = "0.1"
 nb = "1"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 stm32f7 = { version = "0.14", features = ["stm32f7x7", "rt"] }
