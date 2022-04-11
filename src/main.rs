@@ -6,7 +6,6 @@ use gridbot as _;
 #[rtic::app(device = stm32f7xx_hal::pac, dispatchers = [USART1])]
 mod app {
     use fugit::ExtU32;
-    use fugit_timer::Timer;
     use stm32f7xx_hal::{
         gpio::{Output, Pin, PushPull},
         pac,
@@ -39,18 +38,18 @@ mod app {
         let mono = ctx.device.TIM2.monotonic_us(&clocks);
 
         let gpiob = ctx.device.GPIOB.split();
-        let green_led = Led {
-            pin: gpiob.pb0.into_push_pull_output(),
-            timer: ctx.device.TIM3.counter_ms(&clocks),
-        };
-        let blue_led = Led {
-            pin: gpiob.pb7.into_push_pull_output(),
-            timer: ctx.device.TIM4.counter_ms(&clocks),
-        };
-        let red_led = Led {
-            pin: gpiob.pb14.into_push_pull_output(),
-            timer: ctx.device.TIM5.counter_ms(&clocks),
-        };
+        let green_led = Led::new(
+            gpiob.pb0.into_push_pull_output(),
+            ctx.device.TIM3.counter_ms(&clocks),
+        );
+        let blue_led = Led::new(
+            gpiob.pb7.into_push_pull_output(),
+            ctx.device.TIM4.counter_ms(&clocks),
+        );
+        let red_led = Led::new(
+            gpiob.pb14.into_push_pull_output(),
+            ctx.device.TIM5.counter_ms(&clocks),
+        );
 
         let iwdg = watchdog::IndependentWatchdog::new(ctx.device.IWDG);
 
@@ -84,9 +83,15 @@ mod app {
         let red_led = ctx.local.red_led;
 
         let commands = [
-            Command::GreenLed(LedBlink { duration: 1.secs() }),
-            Command::BlueLed(LedBlink { duration: 1.secs() }),
-            Command::RedLed(LedBlink { duration: 1.secs() }),
+            Command::GreenLed(LedBlink {
+                duration: 2000.millis(),
+            }),
+            Command::BlueLed(LedBlink {
+                duration: 2000.millis(),
+            }),
+            Command::RedLed(LedBlink {
+                duration: 2000.millis(),
+            }),
         ];
         let mut command_index = 0;
         let mut total_index = 0;

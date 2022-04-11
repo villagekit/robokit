@@ -18,13 +18,36 @@ pub trait Listen<Event> {
     fn listen(&mut self, event: Event);
 }
 
+pub enum LedStatus {
+    Start,
+    Wait,
+    Done,
+}
+
 pub struct Led<P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,
 {
-    pub pin: P,
-    pub timer: T,
+    pin: P,
+    timer: T,
+    status: LedStatus,
+    duration: Option<MillisDuration>,
+}
+
+impl<P, T> Led<P, T>
+where
+    P: OutputPin,
+    T: Timer<1_000>,
+{
+    pub fn new(pin: P, timer: T) -> Self {
+        Led {
+            pin,
+            timer,
+            status: LedStatus::Start,
+            duration: None,
+        }
+    }
 }
 
 pub struct LedBlink {
@@ -37,12 +60,8 @@ where
     T: Timer<1_000>,
 {
     fn command(&mut self, message: &LedBlink) -> () {
-        defmt::println!("HIGH!");
-
-        self.timer.start(message.duration).unwrap();
-
-        // TODO handle error
-        self.pin.set_high().ok();
+        self.status = LedStatus::Start;
+        self.duration = Some(message.duration);
     }
 }
 
@@ -54,15 +73,30 @@ where
     type Error = Void;
 
     fn wait(&mut self) -> nb::Result<(), Self::Error> {
-        match self.timer.wait() {
-            Err(nb::Error::Other(_err)) => {
-                panic!("Unexpected fugit error");
-            }
-            Err(nb::Error::WouldBlock) => Err(nb::Error::WouldBlock),
-            Ok(()) => {
-                defmt::println!("LOW!");
+        // TODO handle errors
+        match self.status {
+            LedStatus::Start => {
+                defmt::println!("START!");
 
-                // TODO handle error
+                self.timer.start(self.duration.unwrap()).unwrap();
+                self.pin.set_high().ok();
+                self.status = LedStatus::Wait;
+
+                Err(nb::Error::WouldBlock)
+            }
+            LedStatus::Wait => match self.timer.wait() {
+                Err(nb::Error::Other(_err)) => {
+                    panic!("Unexpected timer.wait() error");
+                }
+                Err(nb::Error::WouldBlock) => Err(nb::Error::WouldBlock),
+                Ok(()) => {
+                    self.status = LedStatus::Done;
+                    Err(nb::Error::WouldBlock)
+                }
+            },
+            LedStatus::Done => {
+                defmt::println!("DONE!");
+
                 self.pin.set_low().ok();
 
                 Ok(())
