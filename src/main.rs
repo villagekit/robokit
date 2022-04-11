@@ -1,36 +1,52 @@
-#![no_std]
 #![no_main]
-
-use stm32f7xx_hal as hal;
+#![no_std]
 
 use gridbot;
 
-// How often our blinky task wakes up (1/2 our blink frequency).
-const PERIOD: core::time::Duration = core::time::Duration::from_millis(500);
-
-#[cortex_m_rt::entry]
-fn main() -> ! {
-    let mut cp = cortex_m::Peripherals::take().unwrap();
-    let p = hal::pac::Peripherals::take().unwrap();
-
-    let rcc = ctx.device.RCC.constrain();
-    let clocks = rcc.cfgr.sysclk(16.MHz()).freeze();
-
-    let gpiob = p.GPIOB.split();
-    let led = gpiob.pb0.into_push_pull_output();
-
-    let blink = async {
-        let mut gate = lilos::exec::PeriodicGate::new(PERIOD);
-
-        loop {
-            led.toggle();
-            gate.next_time().await;
-            led.toggle();
-            gate.next_time().await;
-        }
+#[rtic::app(device = stm32f7xx_hal::pac, dispatchers = [USART1])]
+mod app {
+    use stm32f7xx_hal::{
+        gpio::{Output, PB0},
+        pac,
+        prelude::*,
+        timer::monotonic::MonoTimerUs,
     };
-    pin_utils::pin_mut!(blink);
 
-    lilos::time::initialize_sys_tick(&mut cp.SYST, 16_000_000);
-    lilos::exec::run_tasks(&mut [blink], lilos::exec::ALL_TASKS)
+    #[shared]
+    struct Shared {}
+
+    #[local]
+    struct Local {
+        led: PB0<Output>,
+    }
+
+    #[monotonic(binds = TIM2, default = true)]
+    type MicrosecMono = MonoTimerUs<pac::TIM2>;
+
+    #[init]
+    fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
+        let rcc = ctx.device.RCC.constrain();
+        let clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
+
+        let gpiob = ctx.device.GPIOB.split();
+        let led = gpiob.pb0.into_push_pull_output();
+        tick::spawn().ok();
+
+        let mono = ctx.device.TIM2.monotonic_us(&clocks);
+        (Shared {}, Local { led }, init::Monotonics(mono))
+    }
+
+    #[idle]
+    fn idle(_: idle::Context) -> ! {
+        defmt::println!("Hello, world!");
+
+        loop {}
+    }
+
+    #[task(local = [led])]
+    fn tick(ctx: tick::Context) {
+        ctx.local.led.toggle();
+
+        tick::spawn_after(1.secs()).ok();
+    }
 }

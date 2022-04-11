@@ -14,12 +14,10 @@ harness = false
 [dependencies]
 cortex-m = "0.7"
 cortex-m-rt = { version = "0.7", features = ["device"] }
+cortex-m-rtic = "1.0"
 defmt = "0.3"
 defmt-rtt = "0.3"
-futures = { version = "0.3.19", default-features = false, features = ["async-await"] }
-lilos = { git = "https://github.com/cbiffle/lilos", rev = "fbf47b6" }
 panic-probe = { version = "0.3", features = ["print-defmt"] }
-pin-utils = "0.1.0"
 stm32f7 = { version = "0.14", features = ["stm32f7x7", "rt"] }
 stm32f7xx-hal = { git = "https://github.com/stm32-rs/stm32f7xx-hal", rev = "7099b07", features = ["stm32f767", "rtic"] }
 
