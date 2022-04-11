@@ -1,7 +1,7 @@
 #![no_main]
 #![no_std]
 
-use gridbot as _;
+use gridbot;
 
 #[rtic::app(device = stm32f7xx_hal::pac, dispatchers = [USART1])]
 mod app {

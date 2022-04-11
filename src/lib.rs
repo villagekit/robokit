@@ -1,6 +1,8 @@
 #![no_main]
 #![no_std]
 
+pub mod actuator;
+
 use defmt_rtt as _; // global logger
 
 use stm32f7xx_hal as _; // memory layout
