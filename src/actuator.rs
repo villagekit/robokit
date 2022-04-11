@@ -1,46 +1,29 @@
-use core::task::Poll;
+use core::future::Future;
 
-use stm32f7xx_hal::gpio::{Output, Pin};
+use lilos::exec::sleep_for;
 
-pub trait Future {
-    type Context;
-    type Error;
+use stm32f7xx_hal::gpio::{Output, Pin, PushPull};
 
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>>;
-}
-
-pub trait Command<Message, Future> {
-    fn command(&mut self, message: Message) -> Future;
+pub trait Command<Message> {
+    fn command(&mut self, message: Message) -> Future<()>;
 }
 
 pub trait Listen<Event> {
     fn listen(&mut self, event: Event);
 }
 
-pub struct Led<P>
-where
-    P: Pin,
-{
-    pin: P<Output>,
-    delay: Delay
+pub struct Led {
+    pin: Pin<Output<PushPull>>,
 }
 
 pub struct LedBlink {
     duration: u32,
 }
 
-pub struct LedBlinkFuture {
-    blink: LedBlink
-}
-
-pub struct LedError {}
-
-impl Future for LedBlinkFuture {
-    type Error = LedError;
-
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        if (self.blink.duration)
+impl Command<LedBlink> for Led {
+    async fn command(&mut self, message: LedBlink) -> Future<()> {
+        self.pin.set_high();
+        sleep_for(message.duration).await;
+        self.pin.set_low();
     }
 }
-
-impl<Pin> Command<LedBlink,  for Led<Pin> {}
