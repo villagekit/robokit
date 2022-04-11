@@ -1,0 +1,67 @@
+[package]
+name = "gridbot"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+harness = false
+
+# needed for each integration test
+[[test]]
+name = "integration"
+harness = false
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = { version = "0.7", features = ["device"] }
+cortex-m-rtic = "1.0"
+defmt = "0.3"
+defmt-rtt = "0.3"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+stm32f7 = { version = "0.14", features = ["stm32f7x7", "rt"] }
+stm32f7xx-hal = { git = "https://github.com/stm32-rs/stm32f7xx-hal", rev = "7099b07", features = ["stm32f767", "rtic"] }
+
+[dev-dependencies]
+defmt-test = "0.3"
+
+# cargo build/run
+[profile.dev]
+codegen-units = 1
+debug = 2
+debug-assertions = true # <-
+incremental = false
+opt-level = 3 # <-
+overflow-checks = true # <-
+
+# cargo test
+[profile.test]
+codegen-units = 1
+debug = 2
+debug-assertions = true # <-
+incremental = false
+opt-level = 3 # <-
+overflow-checks = true # <-
+
+# cargo build/run --release
+[profile.release]
+codegen-units = 1
+debug = 2
+debug-assertions = false # <-
+incremental = false
+# NOTE disabled to work around issue rust-lang/rust#90357
+# the bug results in log messages not having location information
+# (the line printed below the log message that contains the file-line location)
+# lto = 'fat'
+opt-level = 3 # <-
+overflow-checks = false # <-
+
+# cargo test --release
+[profile.bench]
+codegen-units = 1
+debug = 2
+debug-assertions = false # <-
+incremental = false
+# see comment in the profile.release section
+lto = 'false'
+opt-level = 3 # <-
+overflow-checks = false # <-
