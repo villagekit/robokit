@@ -84,13 +84,13 @@ mod app {
 
         let commands = [
             Command::GreenLed(LedBlink {
-                duration: 2000.millis(),
+                duration: 500.millis(),
             }),
             Command::BlueLed(LedBlink {
-                duration: 2000.millis(),
+                duration: 500.millis(),
             }),
             Command::RedLed(LedBlink {
-                duration: 2000.millis(),
+                duration: 500.millis(),
             }),
         ];
         let mut command_index = 0;

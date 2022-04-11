@@ -97,6 +97,10 @@ where
             LedStatus::Done => {
                 defmt::println!("DONE!");
 
+                // if the timer isn't cancelled, it's periodic
+                // and will automatically return on next call.
+                self.timer.cancel().unwrap();
+
                 self.pin.set_low().ok();
 
                 Ok(())
