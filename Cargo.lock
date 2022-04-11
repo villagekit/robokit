@@ -279,10 +279,13 @@ dependencies = [
  "defmt",
  "defmt-rtt",
  "defmt-test",
+ "embedded-hal",
  "fugit",
+ "nb 1.0.0",
  "panic-probe",
  "stm32f7",
  "stm32f7xx-hal",
+ "void",
 ]
 
 [[package]]
