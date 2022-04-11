@@ -1,12 +1,12 @@
-use core::task::Poll;
+use embedded_hal::{digital::v2::OutputPin, timer::CountDown};
+use fugit::HertzU32 as Hertz;
+use nb;
+use void;
 
-use stm32f7xx_hal::gpio::{Output, Pin};
-
-pub trait Future {
-    type Context;
+pub trait Waitable {
     type Error;
 
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>>;
+    fn wait(&mut self) -> nb::Result<(), Self::Error>;
 }
 
 pub trait Command<Message, Future> {
@@ -17,30 +17,55 @@ pub trait Listen<Event> {
     fn listen(&mut self, event: Event);
 }
 
-pub struct Led<P>
+pub struct Led<P, T>
 where
-    P: Pin,
+    P: OutputPin,
+    T: CountDown,
 {
-    pin: P<Output>,
-    delay: Delay
+    pin: P,
+    timer: T,
 }
 
 pub struct LedBlink {
-    duration: u32,
+    duration: Hertz,
 }
 
-pub struct LedBlinkFuture {
-    blink: LedBlink
+pub struct LedBlinkFuture<P, T>
+where
+    P: OutputPin,
+    T: CountDown,
+{
+    pin: P,
+    timer: T,
 }
 
 pub struct LedError {}
 
-impl Future for LedBlinkFuture {
-    type Error = LedError;
+impl<P, T> Waitable for LedBlinkFuture<P, T>
+where
+    P: OutputPin,
+    T: CountDown,
+{
+    type Error = void::Void;
 
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        if (self.blink.duration)
+    fn wait(&mut self) -> nb::Result<(), Self::Error> {
+        self.pin.set_high().ok();
+
+        self.timer.wait()
     }
 }
 
-impl<Pin> Command<LedBlink,  for Led<Pin> {}
+impl<P, T> Command<LedBlink, LedBlinkFuture<P, T>> for Led<P, T>
+where
+    P: OutputPin,
+    T: CountDown<Time = Hertz>,
+{
+    fn command(&mut self, message: LedBlink) -> LedBlinkFuture<P, T> {
+        self.timer.start(message.duration);
+
+        LedBlinkFuture {
+            pin: self.pin,
+            timer: self.timer,
+        }
+    }
+}
