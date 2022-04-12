@@ -4,7 +4,7 @@ use embedded_hal::digital::v2::OutputPin;
 use fugit::MillisDurationU32 as MillisDuration;
 use fugit_timer::Timer;
 
-use crate::actuator::{Activity, ActivityError, Actuator};
+use crate::actuator::{Actuator, Error, Future};
 
 pub struct Led<P, T>
 where
@@ -25,17 +25,20 @@ where
     }
 }
 
-pub struct LedBlinkAction {
+pub struct LedBlinkMessage {
     pub duration: MillisDuration,
 }
 
-impl<'a, P, T> Actuator<LedBlinkAction, LedBlinkActivity<'a, P, T>> for Led<P, T>
+impl<'a, P, T> Actuator<'a> for Led<P, T>
 where
     P: 'a + OutputPin,
     T: 'a + Timer<1_000>,
 {
-    fn act(&mut self, action: &LedBlinkAction) -> LedBlinkActivity<'a, P, T> {
-        LedBlinkActivity {
+    type Message = LedBlinkMessage;
+    type Future = LedBlinkFuture<'a, P, T>;
+
+    fn command(&'a mut self, action: &Self::Message) -> Self::Future {
+        LedBlinkFuture {
             pin: &mut self.pin,
             timer: &mut self.timer,
             status: LedBlinkStatus::Start,
@@ -50,23 +53,23 @@ pub enum LedBlinkStatus {
     Done,
 }
 
-pub struct LedBlinkActivity<'a, P, T>
+pub struct LedBlinkFuture<'a, P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,
 {
-    pin: &'a P,
-    timer: &'a T,
+    pin: &'a mut P,
+    timer: &'a mut T,
     status: LedBlinkStatus,
     duration: MillisDuration,
 }
 
-impl<'a, P, T> Activity for LedBlinkActivity<'a, P, T>
+impl<'a, P, T> Future for LedBlinkFuture<'a, P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,
 {
-    fn poll(&mut self) -> Poll<Result<(), ActivityError>> {
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
         // TODO handle errors
         match self.status {
             LedBlinkStatus::Start => {

@@ -1,17 +1,17 @@
 // use crate::util::ref_mut::RefMut;
 
-pub trait Actuator<Action, Output>
-where
-    Output: Activity,
-{
-    fn act(&mut self, action: &Action) -> Output;
+pub trait Actuator<'a> {
+    type Message;
+    type Future: Future + 'a;
+
+    fn command(&'a mut self, message: &Self::Message) -> Self::Future;
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum ActivityError {}
+pub enum Error {}
 
-pub trait Activity {
-    fn poll(&mut self) -> core::task::Poll<Result<(), ActivityError>>;
+pub trait Future {
+    fn poll(&mut self) -> core::task::Poll<Result<(), Error>>;
 }
 
 pub trait Listen<Event> {

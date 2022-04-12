@@ -300,6 +300,7 @@ dependencies = [
  "embedded-hal",
  "fugit",
  "fugit-timer",
+ "heapless",
  "nb 1.0.0",
  "panic-probe",
  "stm32f7",

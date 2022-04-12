@@ -9,7 +9,9 @@ mod app {
     extern crate alloc;
 
     use alloc::boxed::Box;
+    //use alloc::rc::Rc;
     use alloc_cortex_m::CortexMHeap;
+    //use core::cell::RefCell;
     use core::task::Poll;
     use fugit::ExtU32;
     use stm32f7xx_hal::{
@@ -21,8 +23,8 @@ mod app {
     };
 
     use gridbot::{
-        actuator::{Activity, Actuator},
-        actuators::led::{Led, LedBlinkAction},
+        actuator::{Actuator, Future},
+        actuators::led::{Led, LedBlinkMessage},
     };
 
     #[global_allocator]
@@ -86,9 +88,9 @@ mod app {
     }
 
     enum Command {
-        GreenLed(LedBlinkAction),
-        BlueLed(LedBlinkAction),
-        RedLed(LedBlinkAction),
+        GreenLed(LedBlinkMessage),
+        BlueLed(LedBlinkMessage),
+        RedLed(LedBlinkMessage),
     }
 
     #[idle(local = [green_led, blue_led, red_led, iwdg])]
@@ -103,13 +105,13 @@ mod app {
         let red_led = ctx.local.red_led;
 
         let commands = [
-            Command::GreenLed(LedBlinkAction {
+            Command::GreenLed(LedBlinkMessage {
                 duration: 1000.millis(),
             }),
-            Command::BlueLed(LedBlinkAction {
+            Command::BlueLed(LedBlinkMessage {
                 duration: 2000.millis(),
             }),
-            Command::RedLed(LedBlinkAction {
+            Command::RedLed(LedBlinkMessage {
                 duration: 500.millis(),
             }),
         ];
@@ -118,14 +120,14 @@ mod app {
         loop {
             let command = &commands[command_index];
 
-            let mut activity: Box<dyn Activity> = match command {
-                Command::GreenLed(message) => Box::new(green_led.act(message)),
-                Command::BlueLed(message) => Box::new(blue_led.act(message)),
-                Command::RedLed(message) => Box::new(red_led.act(message)),
+            let mut future: Box<dyn Future> = match command {
+                Command::GreenLed(message) => Box::new(green_led.command(message)),
+                Command::BlueLed(message) => Box::new(blue_led.command(message)),
+                Command::RedLed(message) => Box::new(red_led.command(message)),
             };
 
             loop {
-                match activity.poll() {
+                match future.poll() {
                     Poll::Ready(Err(_err)) => {
                         panic!("Unexpected error!");
                     }
