@@ -9,9 +9,7 @@ mod app {
     extern crate alloc;
 
     use alloc::boxed::Box;
-    //use alloc::rc::Rc;
     use alloc_cortex_m::CortexMHeap;
-    //use core::cell::RefCell;
     use core::task::Poll;
     use fugit::ExtU32;
     use stm32f7xx_hal::{
@@ -25,6 +23,7 @@ mod app {
     use gridbot::{
         actuator::{Actuator, Future},
         actuators::led::{Led, LedBlinkMessage},
+        command::Command,
     };
 
     #[global_allocator]
@@ -87,12 +86,6 @@ mod app {
         )
     }
 
-    enum Command {
-        GreenLed(LedBlinkMessage),
-        BlueLed(LedBlinkMessage),
-        RedLed(LedBlinkMessage),
-    }
-
     #[idle(local = [green_led, blue_led, red_led, iwdg])]
     fn idle(ctx: idle::Context) -> ! {
         defmt::println!("Hello, world!");
@@ -128,8 +121,8 @@ mod app {
 
             loop {
                 match future.poll() {
-                    Poll::Ready(Err(_err)) => {
-                        panic!("Unexpected error!");
+                    Poll::Ready(Err(err)) => {
+                        panic!("Unexpected error: {:?}", err);
                     }
                     Poll::Ready(Ok(())) => {
                         break;

@@ -13,14 +13,13 @@ harness = false
 
 [dependencies]
 alloc-cortex-m = "0.4"
-anyhow = { version = "1.0", default-features = false }
 cortex-m = "0.7"
 cortex-m-rt = { version = "0.7", features = ["device"] }
 cortex-m-rtic = "1.0"
 defmt = "0.3"
 defmt-rtt = "0.3"
 embedded-hal = "0.2"
-heapless = "0.7"
+# heapless = "0.7"
 fugit = "0.3"
 fugit-timer = "0.1"
 nb = "1"

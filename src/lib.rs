@@ -4,7 +4,8 @@
 
 pub mod actuator;
 pub mod actuators;
-pub mod util;
+pub mod command;
+pub mod error;
 
 use core::alloc::Layout;
 

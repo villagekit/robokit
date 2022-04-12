@@ -4,7 +4,8 @@ use embedded_hal::digital::v2::OutputPin;
 use fugit::MillisDurationU32 as MillisDuration;
 use fugit_timer::Timer;
 
-use crate::actuator::{Actuator, Error, Future};
+use crate::actuator::{Actuator, Future};
+use crate::error::Error;
 
 pub struct Led<P, T>
 where
@@ -73,28 +74,34 @@ where
         // TODO handle errors
         match self.status {
             LedBlinkStatus::Start => {
-                self.timer.start(self.duration).unwrap();
-                self.pin.set_high().ok();
+                // start timer
+                self.timer
+                    .start(self.duration)
+                    .map_err(|_err| Error::Timer)?;
+
+                // turn led on
+                self.pin.set_high().map_err(|_err| Error::Pin)?;
+
+                // update status
                 self.status = LedBlinkStatus::Wait;
 
                 Poll::Pending
             }
             LedBlinkStatus::Wait => match self.timer.wait() {
-                Err(nb::Error::Other(_err)) => {
-                    panic!("Unexpected timer.wait() error");
-                }
+                Err(nb::Error::Other(_err)) => Poll::Ready(Err(Error::Timer)),
                 Err(nb::Error::WouldBlock) => Poll::Pending,
                 Ok(()) => {
                     self.status = LedBlinkStatus::Done;
+
                     Poll::Pending
                 }
             },
             LedBlinkStatus::Done => {
                 // if the timer isn't cancelled, it's periodic
                 // and will automatically return on next call.
-                self.timer.cancel().unwrap();
+                self.timer.cancel().map_err(|_err| Error::Timer)?;
 
-                self.pin.set_low().ok();
+                self.pin.set_low().map_err(|_err| Error::Pin)?;
 
                 Poll::Ready(Ok(()))
             }
