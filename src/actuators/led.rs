@@ -5,7 +5,6 @@ use fugit::MillisDurationU32 as MillisDuration;
 use fugit_timer::Timer;
 
 use crate::actuator::{Activity, ActivityError, Actuator};
-use crate::util::ref_mut::RefMut;
 
 pub struct Led<P, T>
 where
@@ -30,17 +29,15 @@ pub struct LedBlinkAction {
     pub duration: MillisDuration,
 }
 
-impl<P, T> Actuator for Led<P, T>
+impl<'a, P, T> Actuator<LedBlinkAction, LedBlinkActivity<'a, P, T>> for Led<P, T>
 where
-    P: OutputPin,
-    T: Timer<1_000>,
+    P: 'a + OutputPin,
+    T: 'a + Timer<1_000>,
 {
-    type Action = LedBlinkAction;
-    type Output = LedBlinkActivity<RefMut<Led<P, T>>>;
-
-    fn act(&mut self, action: &LedBlinkAction) -> Self::Output {
+    fn act(&mut self, action: &LedBlinkAction) -> LedBlinkActivity<'a, P, T> {
         LedBlinkActivity {
-            led: RefMut(self),
+            pin: &mut self.pin,
+            timer: &mut self.timer,
             status: LedBlinkStatus::Start,
             duration: action.duration,
         }
@@ -53,24 +50,33 @@ pub enum LedBlinkStatus {
     Done,
 }
 
-pub struct LedBlinkActivity<L> {
-    led: L,
+pub struct LedBlinkActivity<'a, P, T>
+where
+    P: OutputPin,
+    T: Timer<1_000>,
+{
+    pin: &'a P,
+    timer: &'a T,
     status: LedBlinkStatus,
     duration: MillisDuration,
 }
 
-impl<L> Activity for LedBlinkActivity<L> {
-    fn poll(mut self) -> Poll<Result<(), ActivityError>> {
+impl<'a, P, T> Activity for LedBlinkActivity<'a, P, T>
+where
+    P: OutputPin,
+    T: Timer<1_000>,
+{
+    fn poll(&mut self) -> Poll<Result<(), ActivityError>> {
         // TODO handle errors
         match self.status {
             LedBlinkStatus::Start => {
-                self.led.timer.start(self.duration).unwrap();
-                self.led.pin.set_high().ok();
+                self.timer.start(self.duration).unwrap();
+                self.pin.set_high().ok();
                 self.status = LedBlinkStatus::Wait;
 
                 Poll::Pending
             }
-            LedBlinkStatus::Wait => match self.led.timer.wait() {
+            LedBlinkStatus::Wait => match self.timer.wait() {
                 Err(nb::Error::Other(_err)) => {
                     panic!("Unexpected timer.wait() error");
                 }
@@ -83,9 +89,9 @@ impl<L> Activity for LedBlinkActivity<L> {
             LedBlinkStatus::Done => {
                 // if the timer isn't cancelled, it's periodic
                 // and will automatically return on next call.
-                self.led.timer.cancel().unwrap();
+                self.timer.cancel().unwrap();
 
-                self.led.pin.set_low().ok();
+                self.pin.set_low().ok();
 
                 Poll::Ready(Ok(()))
             }
