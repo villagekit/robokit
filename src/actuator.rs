@@ -1,110 +1,42 @@
-use embedded_hal::digital::v2::OutputPin;
-use fugit::MillisDurationU32 as MillisDuration;
-use fugit_timer::Timer;
-use nb;
-use void::Void;
+use crate::util::ref_mut::RefMut;
 
-pub trait Commandable<Message> {
-    fn command(&mut self, message: &Message) -> ();
+pub trait Actuator {
+    type Action;
+    type Output: Activity;
+
+    fn act(self, action: &Self::Action) -> Self::Output;
 }
 
-pub trait Waitable {
-    type Error: core::fmt::Debug;
+#[derive(Debug, Eq, PartialEq)]
+pub enum ActivityError {}
 
-    fn wait(&mut self) -> nb::Result<(), Self::Error>;
+pub trait Activity {
+    fn poll(self) -> core::task::Poll<Result<(), ActivityError>>;
 }
 
 pub trait Listen<Event> {
     fn listen(&mut self, event: Event);
 }
 
-pub enum LedStatus {
-    Start,
-    Wait,
-    Done,
-}
+// ref muts
 
-pub struct Led<P, T>
+impl<'r, T> Actuator for RefMut<'r, T>
 where
-    P: OutputPin,
-    T: Timer<1_000>,
+    T: Actuator,
 {
-    pin: P,
-    timer: T,
-    status: LedStatus,
-    duration: Option<MillisDuration>,
-}
+    type Action = T::Action;
+    type Output = T::Output;
 
-impl<P, T> Led<P, T>
-where
-    P: OutputPin,
-    T: Timer<1_000>,
-{
-    pub fn new(pin: P, timer: T) -> Self {
-        Led {
-            pin,
-            timer,
-            status: LedStatus::Start,
-            duration: None,
-        }
+    fn act(&mut self, action: &Self::Action) -> Self::Output {
+        self.0.act(self, action)
     }
 }
 
-pub struct LedBlink {
-    pub duration: MillisDuration,
-}
-
-impl<P, T> Commandable<LedBlink> for Led<P, T>
+impl<'r, T> Activity for RefMut<'r, T>
 where
-    P: OutputPin,
-    T: Timer<1_000>,
+    T: Activity,
 {
-    fn command(&mut self, message: &LedBlink) -> () {
-        self.status = LedStatus::Start;
-        self.duration = Some(message.duration);
-    }
-}
-
-impl<P, T> Waitable for Led<P, T>
-where
-    P: OutputPin,
-    T: Timer<1_000>,
-{
-    type Error = Void;
-
-    fn wait(&mut self) -> nb::Result<(), Self::Error> {
-        // TODO handle errors
-        match self.status {
-            LedStatus::Start => {
-                defmt::println!("START!");
-
-                self.timer.start(self.duration.unwrap()).unwrap();
-                self.pin.set_high().ok();
-                self.status = LedStatus::Wait;
-
-                Err(nb::Error::WouldBlock)
-            }
-            LedStatus::Wait => match self.timer.wait() {
-                Err(nb::Error::Other(_err)) => {
-                    panic!("Unexpected timer.wait() error");
-                }
-                Err(nb::Error::WouldBlock) => Err(nb::Error::WouldBlock),
-                Ok(()) => {
-                    self.status = LedStatus::Done;
-                    Err(nb::Error::WouldBlock)
-                }
-            },
-            LedStatus::Done => {
-                defmt::println!("DONE!");
-
-                // if the timer isn't cancelled, it's periodic
-                // and will automatically return on next call.
-                self.timer.cancel().unwrap();
-
-                self.pin.set_low().ok();
-
-                Ok(())
-            }
-        }
+    fn poll(&mut self) -> core::task::Poll<Result<(), ActivityError>> {
+        self.0.poll()
     }
 }

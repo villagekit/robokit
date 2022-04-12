@@ -1,10 +1,16 @@
 #![no_main]
 #![no_std]
+#![feature(alloc_error_handler)]
 
 use gridbot as _;
 
 #[rtic::app(device = stm32f7xx_hal::pac, dispatchers = [USART1])]
 mod app {
+    extern crate alloc;
+
+    use alloc::boxed::Box;
+    use alloc_cortex_m::CortexMHeap;
+    use core::task::Poll;
     use fugit::ExtU32;
     use stm32f7xx_hal::{
         gpio::{Output, Pin, PushPull},
@@ -14,7 +20,13 @@ mod app {
         watchdog,
     };
 
-    use gridbot::actuator::{Commandable, Led, LedBlink, Waitable};
+    use gridbot::{
+        actuator::{Activity, Actuator},
+        actuators::led::{Led, LedBlinkAction},
+    };
+
+    #[global_allocator]
+    static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
 
     #[shared]
     struct Shared {}
@@ -32,6 +44,14 @@ mod app {
 
     #[init]
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
+        // Initialize the allocator BEFORE you use it
+        {
+            use core::mem::MaybeUninit;
+            const HEAP_SIZE: usize = 1024;
+            static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+            unsafe { ALLOCATOR.init(HEAP.as_ptr() as usize, HEAP_SIZE) }
+        }
+
         let rcc = ctx.device.RCC.constrain();
         let clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
 
@@ -66,9 +86,9 @@ mod app {
     }
 
     enum Command {
-        GreenLed(LedBlink),
-        BlueLed(LedBlink),
-        RedLed(LedBlink),
+        GreenLed(LedBlinkAction),
+        BlueLed(LedBlinkAction),
+        RedLed(LedBlinkAction),
     }
 
     #[idle(local = [green_led, blue_led, red_led, iwdg])]
@@ -83,56 +103,42 @@ mod app {
         let red_led = ctx.local.red_led;
 
         let commands = [
-            Command::GreenLed(LedBlink {
-                duration: 500.millis(),
+            Command::GreenLed(LedBlinkAction {
+                duration: 1000.millis(),
             }),
-            Command::BlueLed(LedBlink {
-                duration: 500.millis(),
+            Command::BlueLed(LedBlinkAction {
+                duration: 2000.millis(),
             }),
-            Command::RedLed(LedBlink {
+            Command::RedLed(LedBlinkAction {
                 duration: 500.millis(),
             }),
         ];
         let mut command_index = 0;
-        let mut total_index = 0;
 
         loop {
             let command = &commands[command_index];
 
-            defmt::println!("Total index: {}", total_index);
-            defmt::println!("Command index: {}", command_index);
-
-            let waitable: &mut dyn Waitable<Error = void::Void> = match command {
-                Command::GreenLed(message) => {
-                    green_led.command(message);
-                    green_led
-                }
-                Command::BlueLed(message) => {
-                    blue_led.command(message);
-                    blue_led
-                }
-                Command::RedLed(message) => {
-                    red_led.command(message);
-                    red_led
-                }
+            let mut activity: Box<dyn Activity> = match command {
+                Command::GreenLed(message) => Box::new(green_led.act(message)),
+                Command::BlueLed(message) => Box::new(blue_led.act(message)),
+                Command::RedLed(message) => Box::new(red_led.act(message)),
             };
 
             loop {
-                match waitable.wait() {
-                    Err(nb::Error::Other(err)) => {
-                        panic!("Unexpected error: {}", err);
+                match activity.poll() {
+                    Poll::Ready(Err(_err)) => {
+                        panic!("Unexpected error!");
                     }
-                    Err(nb::Error::WouldBlock) => {}
-                    Ok(_value) => {
+                    Poll::Ready(Ok(())) => {
                         break;
                     }
+                    Poll::Pending => {}
                 }
 
                 iwdg.feed();
             }
 
             command_index = (command_index + 1) % commands.len();
-            total_index += 1;
         }
     }
 }
