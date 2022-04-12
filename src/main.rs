@@ -6,24 +6,14 @@ use gridbot as _;
 
 #[rtic::app(device = stm32f7xx_hal::pac, dispatchers = [USART1])]
 mod app {
-    extern crate alloc;
-
-    use alloc::boxed::Box;
     use alloc_cortex_m::CortexMHeap;
     use core::task::Poll;
     use fugit::ExtU32;
-    use stm32f7xx_hal::{
-        gpio::{Output, Pin, PushPull},
-        pac,
-        prelude::*,
-        timer::{counter::CounterMs, monotonic::MonoTimerUs, TimerExt},
-        watchdog,
-    };
+    use stm32f7xx_hal::{pac, prelude::*, timer::monotonic::MonoTimerUs, watchdog};
 
     use gridbot::{
-        actuator::{Actuator, Future},
-        actuators::led::{Led, LedBlinkMessage},
-        command::Command,
+        actuators::led::LedBlinkMessage,
+        command::{Command, CommandActuators, CommandActuatorsResources},
     };
 
     #[global_allocator]
@@ -34,9 +24,7 @@ mod app {
 
     #[local]
     struct Local {
-        green_led: Led<Pin<'B', 0, Output<PushPull>>, CounterMs<pac::TIM3>>,
-        blue_led: Led<Pin<'B', 7, Output<PushPull>>, CounterMs<pac::TIM4>>,
-        red_led: Led<Pin<'B', 14, Output<PushPull>>, CounterMs<pac::TIM5>>,
+        actuators: CommandActuators,
         iwdg: watchdog::IndependentWatchdog,
     }
 
@@ -58,44 +46,27 @@ mod app {
 
         let mono = ctx.device.TIM2.monotonic_us(&clocks);
 
-        let gpiob = ctx.device.GPIOB.split();
-        let green_led = Led::new(
-            gpiob.pb0.into_push_pull_output(),
-            ctx.device.TIM3.counter_ms(&clocks),
-        );
-        let blue_led = Led::new(
-            gpiob.pb7.into_push_pull_output(),
-            ctx.device.TIM4.counter_ms(&clocks),
-        );
-        let red_led = Led::new(
-            gpiob.pb14.into_push_pull_output(),
-            ctx.device.TIM5.counter_ms(&clocks),
-        );
+        let actuators = CommandActuators::new(CommandActuatorsResources {
+            GPIOB: ctx.device.GPIOB,
+            TIM3: ctx.device.TIM3,
+            TIM4: ctx.device.TIM4,
+            TIM5: ctx.device.TIM5,
+            clocks: &clocks,
+        });
 
         let iwdg = watchdog::IndependentWatchdog::new(ctx.device.IWDG);
 
-        (
-            Shared {},
-            Local {
-                iwdg,
-                green_led,
-                blue_led,
-                red_led,
-            },
-            init::Monotonics(mono),
-        )
+        (Shared {}, Local { iwdg, actuators }, init::Monotonics(mono))
     }
 
-    #[idle(local = [green_led, blue_led, red_led, iwdg])]
+    #[idle(local = [actuators, iwdg])]
     fn idle(ctx: idle::Context) -> ! {
         defmt::println!("Hello, world!");
 
         let iwdg = ctx.local.iwdg;
         iwdg.start(2.millis());
 
-        let green_led = ctx.local.green_led;
-        let blue_led = ctx.local.blue_led;
-        let red_led = ctx.local.red_led;
+        let actuators = ctx.local.actuators;
 
         let commands = [
             Command::GreenLed(LedBlinkMessage {
@@ -113,11 +84,7 @@ mod app {
         loop {
             let command = &commands[command_index];
 
-            let mut future: Box<dyn Future> = match command {
-                Command::GreenLed(message) => Box::new(green_led.command(message)),
-                Command::BlueLed(message) => Box::new(blue_led.command(message)),
-                Command::RedLed(message) => Box::new(red_led.command(message)),
-            };
+            let mut future = actuators.run(command);
 
             loop {
                 match future.poll() {
