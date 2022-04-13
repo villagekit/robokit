@@ -12,7 +12,7 @@ mod app {
     use stm32f7xx_hal::{pac, prelude::*, timer::monotonic::MonoTimerUs, watchdog};
 
     use gridbot::{
-        actor::{ActorFuture, ActorReceive},
+        actor::{ActorPoll, ActorReceive},
         actuators::led::LedBlinkMessage,
         command::{Command, CommandCenter, CommandCenterResources},
     };
@@ -25,7 +25,7 @@ mod app {
 
     #[local]
     struct Local {
-        command_center: CommandCenter<'static>,
+        command_center: CommandCenter,
         iwdg: watchdog::IndependentWatchdog,
     }
 

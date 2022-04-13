@@ -2,12 +2,12 @@ use core::task::Poll;
 
 use crate::error::Error;
 
-pub trait ActorReceive<'a> {
+pub trait ActorReceive {
     type Message;
 
-    fn receive(&'a mut self, message: &Self::Message);
+    fn receive(&mut self, message: &Self::Message);
 }
 
-pub trait ActorFuture<'a> {
-    fn poll(&'a mut self) -> Poll<Result<(), Error>>;
+pub trait ActorPoll {
+    fn poll(&mut self) -> Poll<Result<(), Error>>;
 }

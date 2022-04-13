@@ -7,7 +7,7 @@ use stm32f7xx_hal::{
     timer::{counter::CounterMs, TimerExt},
 };
 
-use crate::actor::{ActorFuture, ActorReceive};
+use crate::actor::{ActorPoll, ActorReceive};
 use crate::actuators::led::{Led, LedBlinkMessage};
 use crate::error::Error;
 
@@ -32,18 +32,18 @@ pub struct CommandCenterResources<'a> {
     pub clocks: &'a Clocks,
 }
 
-pub struct CommandCenterActors<'a> {
-    pub green_led: Led<'a, Pin<'B', 0, Output<PushPull>>, CounterMs<pac::TIM3>>,
-    pub blue_led: Led<'a, Pin<'B', 7, Output<PushPull>>, CounterMs<pac::TIM4>>,
-    pub red_led: Led<'a, Pin<'B', 14, Output<PushPull>>, CounterMs<pac::TIM5>>,
+pub struct CommandCenterActors {
+    pub green_led: Led<Pin<'B', 0, Output<PushPull>>, CounterMs<pac::TIM3>>,
+    pub blue_led: Led<Pin<'B', 7, Output<PushPull>>, CounterMs<pac::TIM4>>,
+    pub red_led: Led<Pin<'B', 14, Output<PushPull>>, CounterMs<pac::TIM5>>,
 }
 
-pub struct CommandCenter<'a> {
-    pub actors: CommandCenterActors<'a>,
+pub struct CommandCenter {
+    pub actors: CommandCenterActors,
     pub current_actor: Option<CommandActor>,
 }
 
-impl<'a> CommandCenter<'a> {
+impl CommandCenter {
     pub fn new(resources: CommandCenterResources) -> Self {
         let gpiob = resources.GPIOB.split();
 
@@ -71,10 +71,10 @@ impl<'a> CommandCenter<'a> {
     }
 }
 
-impl<'a> ActorReceive<'a> for CommandCenter<'a> {
+impl ActorReceive for CommandCenter {
     type Message = Command;
 
-    fn receive(&'a mut self, command: &Self::Message) {
+    fn receive(&mut self, command: &Self::Message) {
         match command {
             Command::GreenLed(message) => {
                 self.actors.green_led.receive(message);
@@ -93,8 +93,8 @@ impl<'a> ActorReceive<'a> for CommandCenter<'a> {
     }
 }
 
-impl<'a> ActorFuture<'a> for CommandCenter<'a> {
-    fn poll(&'a mut self) -> Poll<Result<(), Error>> {
+impl ActorPoll for CommandCenter {
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
         match self.current_actor {
             None => Poll::Ready(Err(Error::Other)),
             Some(CommandActor::GreenLed) => self.actors.green_led.poll(),

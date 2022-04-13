@@ -4,20 +4,33 @@ use embedded_hal::digital::v2::OutputPin;
 use fugit::MillisDurationU32 as MillisDuration;
 use fugit_timer::Timer;
 
-use crate::actor::{ActorFuture, ActorReceive};
+use crate::actor::{ActorPoll, ActorReceive};
 use crate::error::Error;
 
-pub struct Led<'a, P, T>
+#[derive(Clone, Copy)]
+pub enum LedBlinkStatus {
+    Start,
+    Wait,
+    Done,
+}
+
+#[derive(Clone, Copy)]
+pub struct LedBlinkState {
+    status: LedBlinkStatus,
+    duration: MillisDuration,
+}
+
+pub struct Led<P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,
 {
     pin: P,
     timer: T,
-    future: Option<LedBlinkFuture<'a, P, T>>,
+    state: Option<LedBlinkState>,
 }
 
-impl<'a, P, T> Led<'a, P, T>
+impl<P, T> Led<P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,
@@ -26,7 +39,7 @@ where
         Led {
             pin,
             timer,
-            future: None,
+            state: None,
         }
     }
 }
@@ -35,93 +48,70 @@ pub struct LedBlinkMessage {
     pub duration: MillisDuration,
 }
 
-impl<'a, P, T> ActorReceive<'a> for Led<'a, P, T>
-where
-    P: 'a + OutputPin,
-    T: 'a + Timer<1_000>,
-{
-    type Message = LedBlinkMessage;
-
-    fn receive(&'a mut self, action: &Self::Message) {
-        self.future = Some(LedBlinkFuture {
-            pin: &mut self.pin,
-            timer: &mut self.timer,
-            status: LedBlinkStatus::Start,
-            duration: action.duration,
-        })
-    }
-}
-
-impl<'a, P, T> ActorFuture<'a> for Led<'a, P, T>
-where
-    P: 'a + OutputPin,
-    T: 'a + Timer<1_000>,
-{
-    fn poll(&'a mut self) -> Poll<Result<(), Error>> {
-        match self.future.as_mut() {
-            None => Poll::Ready(Err(Error::Other)),
-            Some(future) => future.poll(),
-        }
-    }
-}
-
-pub enum LedBlinkStatus {
-    Start,
-    Wait,
-    Done,
-}
-
-pub struct LedBlinkFuture<'a, P, T>
+impl<P, T> ActorReceive for Led<P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,
 {
-    pin: &'a mut P,
-    timer: &'a mut T,
-    status: LedBlinkStatus,
-    duration: MillisDuration,
+    type Message = LedBlinkMessage;
+
+    fn receive(&mut self, action: &Self::Message) {
+        self.state = Some(LedBlinkState {
+            status: LedBlinkStatus::Start,
+            duration: action.duration,
+        });
+    }
 }
 
-impl<'a, P, T> ActorFuture<'a> for LedBlinkFuture<'a, P, T>
+impl<P, T> ActorPoll for Led<P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,
 {
     fn poll(&mut self) -> Poll<Result<(), Error>> {
-        // TODO handle errors
-        match self.status {
-            LedBlinkStatus::Start => {
-                // start timer
-                self.timer
-                    .start(self.duration)
-                    .map_err(|_err| Error::Timer)?;
+        if let Some(state) = self.state {
+            match state.status {
+                LedBlinkStatus::Start => {
+                    // start timer
+                    self.timer
+                        .start(state.duration)
+                        .map_err(|_err| Error::Timer)?;
 
-                // turn led on
-                self.pin.set_high().map_err(|_err| Error::Pin)?;
+                    // turn led on
+                    self.pin.set_high().map_err(|_err| Error::Pin)?;
 
-                // update status
-                self.status = LedBlinkStatus::Wait;
-
-                Poll::Pending
-            }
-            LedBlinkStatus::Wait => match self.timer.wait() {
-                Err(nb::Error::Other(_err)) => Poll::Ready(Err(Error::Timer)),
-                Err(nb::Error::WouldBlock) => Poll::Pending,
-                Ok(()) => {
-                    self.status = LedBlinkStatus::Done;
+                    // update state
+                    self.state = Some(LedBlinkState {
+                        status: LedBlinkStatus::Wait,
+                        duration: state.duration,
+                    });
 
                     Poll::Pending
                 }
-            },
-            LedBlinkStatus::Done => {
-                // if the timer isn't cancelled, it's periodic
-                // and will automatically return on next call.
-                self.timer.cancel().map_err(|_err| Error::Timer)?;
+                LedBlinkStatus::Wait => match self.timer.wait() {
+                    Err(nb::Error::Other(_err)) => Poll::Ready(Err(Error::Timer)),
+                    Err(nb::Error::WouldBlock) => Poll::Pending,
+                    Ok(()) => {
+                        self.state = Some(LedBlinkState {
+                            status: LedBlinkStatus::Done,
+                            duration: state.duration,
+                        });
 
-                self.pin.set_low().map_err(|_err| Error::Pin)?;
+                        Poll::Pending
+                    }
+                },
+                LedBlinkStatus::Done => {
+                    // if the timer isn't cancelled, it's periodic
+                    // and will automatically return on next call.
+                    self.timer.cancel().map_err(|_err| Error::Timer)?;
 
-                Poll::Ready(Ok(()))
+                    self.pin.set_low().map_err(|_err| Error::Pin)?;
+
+                    Poll::Ready(Ok(()))
+                }
             }
+        } else {
+            Poll::Ready(Err(Error::Other))
         }
     }
 }
