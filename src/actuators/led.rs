@@ -1,5 +1,5 @@
 use core::task::Poll;
-
+use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
 use fugit::MillisDurationU32 as MillisDuration;
 use fugit_timer::Timer;
@@ -43,6 +43,7 @@ where
     }
 }
 
+#[derive(Format)]
 pub struct LedBlinkMessage {
     pub duration: MillisDuration,
 }

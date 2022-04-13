@@ -1,4 +1,5 @@
 use core::task::Poll;
+use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
 use fugit_timer::Timer;
 use stm32f7xx_hal::{
@@ -12,6 +13,7 @@ use stm32f7xx_hal::{
 use crate::actor::{ActorPoll, ActorReceive};
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 
+#[derive(Format)]
 pub enum Command {
     GreenLed(LedBlinkMessage),
     BlueLed(LedBlinkMessage),

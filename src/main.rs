@@ -29,6 +29,8 @@ mod app {
 
     #[init]
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
+        defmt::println!("Init!");
+
         let rcc = ctx.device.RCC.constrain();
         let clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
 
@@ -56,8 +58,6 @@ mod app {
 
     #[idle(local = [command_center, iwdg])]
     fn idle(ctx: idle::Context) -> ! {
-        defmt::println!("Hello, world!");
-
         let iwdg = ctx.local.iwdg;
         iwdg.start(2.millis());
 
@@ -78,6 +78,8 @@ mod app {
 
         loop {
             let command = &commands[command_index];
+
+            defmt::println!("Command: {}", command);
 
             command_center.receive(command);
 
