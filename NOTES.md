@@ -1,2 +1,0 @@
-- instead of a generic Box<dyn Future>, i could wrap each Future returned in a special-purpose enum, as i know the type at the time of creation.
-  - would be more code, but no Box, and would handle associated types (errors) and such better.
