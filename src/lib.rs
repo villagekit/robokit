@@ -1,13 +1,10 @@
 #![no_main]
 #![no_std]
-#![feature(alloc_error_handler)]
 
 pub mod actor;
 pub mod actuators;
 pub mod command;
 pub mod error;
-
-use core::alloc::Layout;
 
 use defmt_rtt as _; // global logger
 
@@ -27,11 +24,6 @@ pub fn exit() -> ! {
     loop {
         cortex_m::asm::bkpt();
     }
-}
-
-#[alloc_error_handler]
-fn oom(_: Layout) -> ! {
-    loop {}
 }
 
 // defmt-test 0.3.0 has the limitation that this `#[tests]` attribute can only be used

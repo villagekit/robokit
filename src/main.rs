@@ -1,12 +1,10 @@
 #![no_main]
 #![no_std]
-#![feature(alloc_error_handler)]
 
 use gridbot as _;
 
 #[rtic::app(device = stm32f7xx_hal::pac, dispatchers = [USART1])]
 mod app {
-    use alloc_cortex_m::CortexMHeap;
     use core::task::Poll;
     use fugit::ExtU32;
     use stm32f7xx_hal::{pac, prelude::*, timer::monotonic::MonoTimerUs, watchdog};
@@ -16,9 +14,6 @@ mod app {
         actuators::led::LedBlinkMessage,
         command::{Command, CommandCenter, CommandCenterResources},
     };
-
-    #[global_allocator]
-    static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
 
     #[shared]
     struct Shared {}
@@ -34,14 +29,6 @@ mod app {
 
     #[init]
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
-        // Initialize the allocator BEFORE you use it
-        {
-            use core::mem::MaybeUninit;
-            const HEAP_SIZE: usize = 1024;
-            static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
-            unsafe { ALLOCATOR.init(HEAP.as_ptr() as usize, HEAP_SIZE) }
-        }
-
         let rcc = ctx.device.RCC.constrain();
         let clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
 

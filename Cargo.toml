@@ -12,21 +12,18 @@ name = "integration"
 harness = false
 
 [dependencies]
-alloc-cortex-m = "0.4"
 cortex-m = "0.7"
 cortex-m-rt = { version = "0.7", features = ["device"] }
 cortex-m-rtic = "1.0"
 defmt = "0.3"
 defmt-rtt = "0.3"
 embedded-hal = "0.2"
-# heapless = "0.7"
 fugit = "0.3"
 fugit-timer = "0.1"
 nb = "1"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 stm32f7 = { version = "0.14", features = ["stm32f7x7", "rt"] }
 stm32f7xx-hal = { git = "https://github.com/ahdinosaur/stm32f7xx-hal", rev = "139072bc6", features = ["stm32f767", "rtic"] }
-void = { version = "1", default-features = false }
 
 [dev-dependencies]
 defmt-test = "0.3"
