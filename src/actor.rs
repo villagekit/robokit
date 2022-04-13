@@ -1,14 +1,13 @@
 use core::task::Poll;
-use enum_dispatch::enum_dispatch;
 
 use crate::error::Error;
 
-#[enum_dispatch]
-pub trait ActorReceive<Message> {
-    fn receive(&mut self, message: &Message);
+pub trait ActorReceive<'a> {
+    type Message;
+
+    fn receive(&'a mut self, message: &Self::Message);
 }
 
-#[enum_dispatch]
-pub trait ActorFuture {
-    fn poll(&mut self) -> Poll<Result<(), Error>>;
+pub trait ActorFuture<'a> {
+    fn poll(&'a mut self) -> Poll<Result<(), Error>>;
 }

@@ -35,12 +35,14 @@ pub struct LedBlinkMessage {
     pub duration: MillisDuration,
 }
 
-impl<'a, P, T> ActorReceive<LedBlinkMessage> for Led<'a, P, T>
+impl<'a, P, T> ActorReceive<'a> for Led<'a, P, T>
 where
     P: 'a + OutputPin,
     T: 'a + Timer<1_000>,
 {
-    fn receive(&'a mut self, action: &LedBlinkMessage) {
+    type Message = LedBlinkMessage;
+
+    fn receive(&'a mut self, action: &Self::Message) {
         self.future = Some(LedBlinkFuture {
             pin: &mut self.pin,
             timer: &mut self.timer,
@@ -50,13 +52,16 @@ where
     }
 }
 
-impl<'a, P, T> ActorFuture for Led<'a, P, T>
+impl<'a, P, T> ActorFuture<'a> for Led<'a, P, T>
 where
     P: 'a + OutputPin,
     T: 'a + Timer<1_000>,
 {
     fn poll(&'a mut self) -> Poll<Result<(), Error>> {
-        self.future.poll()
+        match self.future.as_mut() {
+            None => Poll::Ready(Err(Error::Other)),
+            Some(future) => future.poll(),
+        }
     }
 }
 
@@ -77,7 +82,7 @@ where
     duration: MillisDuration,
 }
 
-impl<'a, P, T> ActorFuture for LedBlinkFuture<'a, P, T>
+impl<'a, P, T> ActorFuture<'a> for LedBlinkFuture<'a, P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,

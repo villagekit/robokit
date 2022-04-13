@@ -12,8 +12,9 @@ mod app {
     use stm32f7xx_hal::{pac, prelude::*, timer::monotonic::MonoTimerUs, watchdog};
 
     use gridbot::{
+        actor::{ActorFuture, ActorReceive},
         actuators::led::LedBlinkMessage,
-        command::{Command, CommandActuators, CommandActuatorsResources},
+        command::{Command, CommandCenter, CommandCenterResources},
     };
 
     #[global_allocator]
@@ -24,7 +25,7 @@ mod app {
 
     #[local]
     struct Local {
-        actuators: CommandActuators,
+        command_center: CommandCenter<'static>,
         iwdg: watchdog::IndependentWatchdog,
     }
 
@@ -46,7 +47,7 @@ mod app {
 
         let mono = ctx.device.TIM2.monotonic_us(&clocks);
 
-        let actuators = CommandActuators::new(CommandActuatorsResources {
+        let command_center = CommandCenter::new(CommandCenterResources {
             GPIOB: ctx.device.GPIOB,
             TIM3: ctx.device.TIM3,
             TIM4: ctx.device.TIM4,
@@ -56,17 +57,24 @@ mod app {
 
         let iwdg = watchdog::IndependentWatchdog::new(ctx.device.IWDG);
 
-        (Shared {}, Local { iwdg, actuators }, init::Monotonics(mono))
+        (
+            Shared {},
+            Local {
+                iwdg,
+                command_center,
+            },
+            init::Monotonics(mono),
+        )
     }
 
-    #[idle(local = [actuators, iwdg])]
+    #[idle(local = [command_center, iwdg])]
     fn idle(ctx: idle::Context) -> ! {
         defmt::println!("Hello, world!");
 
         let iwdg = ctx.local.iwdg;
         iwdg.start(2.millis());
 
-        let actuators = ctx.local.actuators;
+        let command_center = ctx.local.command_center;
 
         let commands = [
             Command::GreenLed(LedBlinkMessage {
@@ -84,10 +92,10 @@ mod app {
         loop {
             let command = &commands[command_index];
 
-            let mut future = actuators.run(command);
+            command_center.receive(command);
 
             loop {
-                match future.poll() {
+                match command_center.poll() {
                     Poll::Ready(Err(err)) => {
                         panic!("Unexpected error: {:?}", err);
                     }

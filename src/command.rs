@@ -1,9 +1,4 @@
-// extern crate alloc;
-
-// use alloc::boxed::Box;
-use embedded_hal::digital::v2::OutputPin;
-use enum_dispatch::enum_dispatch;
-use fugit_timer::Timer;
+use core::task::Poll;
 use stm32f7xx_hal::{
     gpio::{Output, Pin, PushPull},
     pac,
@@ -14,6 +9,7 @@ use stm32f7xx_hal::{
 
 use crate::actor::{ActorFuture, ActorReceive};
 use crate::actuators::led::{Led, LedBlinkMessage};
+use crate::error::Error;
 
 pub enum Command {
     GreenLed(LedBlinkMessage),
@@ -21,8 +17,14 @@ pub enum Command {
     RedLed(LedBlinkMessage),
 }
 
+pub enum CommandActor {
+    GreenLed,
+    BlueLed,
+    RedLed,
+}
+
 #[allow(non_snake_case)]
-pub struct CommandActorsResources<'a> {
+pub struct CommandCenterResources<'a> {
     pub GPIOB: pac::GPIOB,
     pub TIM3: pac::TIM3,
     pub TIM4: pac::TIM4,
@@ -30,30 +32,19 @@ pub struct CommandActorsResources<'a> {
     pub clocks: &'a Clocks,
 }
 
-#[enum_dispatch(Actor)]
-pub enum AnyActor<'a, LedPin, LedTimer>
-where
-    LedPin: OutputPin,
-    LedTimer: Timer<1_000>,
-{
-    Led(Led<'a, LedPin, LedTimer>),
+pub struct CommandCenterActors<'a> {
+    pub green_led: Led<'a, Pin<'B', 0, Output<PushPull>>, CounterMs<pac::TIM3>>,
+    pub blue_led: Led<'a, Pin<'B', 7, Output<PushPull>>, CounterMs<pac::TIM4>>,
+    pub red_led: Led<'a, Pin<'B', 14, Output<PushPull>>, CounterMs<pac::TIM5>>,
 }
 
-// TODO
-// or a new approach, what if this becomes a CommandCenter state machine
-// when a new command comes in, this sets the current actor.
-// so only that actor is polled.
-// and this way, objects don't have to come and go.
-// even better, if this itself is an actor!
-
-pub struct CommandActors<'a> {
-    pub green_led: AnyActor<'a, Pin<'B', 0, Output<PushPull>>, CounterMs<pac::TIM3>>,
-    pub blue_led: AnyActor<'a, Pin<'B', 7, Output<PushPull>>, CounterMs<pac::TIM4>>,
-    pub red_led: AnyActor<'a, Pin<'B', 14, Output<PushPull>>, CounterMs<pac::TIM5>>,
+pub struct CommandCenter<'a> {
+    pub actors: CommandCenterActors<'a>,
+    pub current_actor: Option<CommandActor>,
 }
 
-impl<'a> CommandActors<'a> {
-    pub fn new(resources: CommandActorsResources) -> Self {
+impl<'a> CommandCenter<'a> {
+    pub fn new(resources: CommandCenterResources) -> Self {
         let gpiob = resources.GPIOB.split();
 
         let green_led = Led::new(
@@ -70,27 +61,45 @@ impl<'a> CommandActors<'a> {
         );
 
         Self {
-            green_led: AnyActor::Led(green_led),
-            blue_led: AnyActor::Led(blue_led),
-            red_led: AnyActor::Led(red_led),
+            current_actor: None,
+            actors: CommandCenterActors {
+                green_led,
+                blue_led,
+                red_led,
+            },
         }
     }
+}
 
-    pub fn run(&'a mut self, command: &Command) -> AnyActor< {
+impl<'a> ActorReceive<'a> for CommandCenter<'a> {
+    type Message = Command;
+
+    fn receive(&'a mut self, command: &Self::Message) {
         match command {
             Command::GreenLed(message) => {
-                self.green_led.receive(command);
-                self.green_led
+                self.actors.green_led.receive(message);
+                self.current_actor = Some(CommandActor::GreenLed);
             }
 
             Command::BlueLed(message) => {
-                self.blue_led.receive(command);
-                self.blue_led
+                self.actors.blue_led.receive(message);
+                self.current_actor = Some(CommandActor::BlueLed);
             }
             Command::RedLed(message) => {
-                self.red_led.receive(command);
-                self.red_led
+                self.actors.red_led.receive(message);
+                self.current_actor = Some(CommandActor::RedLed);
             }
+        }
+    }
+}
+
+impl<'a> ActorFuture<'a> for CommandCenter<'a> {
+    fn poll(&'a mut self) -> Poll<Result<(), Error>> {
+        match self.current_actor {
+            None => Poll::Ready(Err(Error::Other)),
+            Some(CommandActor::GreenLed) => self.actors.green_led.poll(),
+            Some(CommandActor::BlueLed) => self.actors.blue_led.poll(),
+            Some(CommandActor::RedLed) => self.actors.red_led.poll(),
         }
     }
 }

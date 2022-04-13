@@ -252,18 +252,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "enum_dispatch"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0eb359f1476bf611266ac1f5355bc14aeca37b299d0ebccc038ee7058891c9cb"
-dependencies = [
- "once_cell",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "fugit"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -303,7 +291,6 @@ dependencies = [
  "defmt-rtt",
  "defmt-test",
  "embedded-hal",
- "enum_dispatch",
  "fugit",
  "fugit-timer",
  "nb 1.0.0",
@@ -413,12 +400,6 @@ checksum = "aba1801fb138d8e85e11d0fc70baf4fe1cdfffda7c6cd34a854905df588e5ed0"
 dependencies = [
  "libc",
 ]
-
-[[package]]
-name = "once_cell"
-version = "1.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
 
 [[package]]
 name = "panic-probe"
