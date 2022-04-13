@@ -1,15 +1,16 @@
 use core::task::Poll;
+use embedded_hal::digital::v2::OutputPin;
+use fugit_timer::Timer;
 use stm32f7xx_hal::{
     gpio::{Output, Pin, PushPull},
     pac,
     prelude::*,
     rcc::Clocks,
-    timer::{counter::CounterMs, TimerExt},
+    timer::{counter::CounterMs, /*Error as TimerError,*/ TimerExt},
 };
 
 use crate::actor::{ActorPoll, ActorReceive};
-use crate::actuators::led::{Led, LedBlinkMessage};
-use crate::error::Error;
+use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 
 pub enum Command {
     GreenLed(LedBlinkMessage),
@@ -32,10 +33,24 @@ pub struct CommandCenterResources<'a> {
     pub clocks: &'a Clocks,
 }
 
+type GreenLedPin = Pin<'B', 0, Output<PushPull>>;
+type GreenLedTimer = CounterMs<pac::TIM3>;
+type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
+type BlueLedTimer = CounterMs<pac::TIM4>;
+type RedLedPin = Pin<'B', 14, Output<PushPull>>;
+type RedLedTimer = CounterMs<pac::TIM5>;
+
 pub struct CommandCenterActors {
-    pub green_led: Led<Pin<'B', 0, Output<PushPull>>, CounterMs<pac::TIM3>>,
-    pub blue_led: Led<Pin<'B', 7, Output<PushPull>>, CounterMs<pac::TIM4>>,
-    pub red_led: Led<Pin<'B', 14, Output<PushPull>>, CounterMs<pac::TIM5>>,
+    pub green_led: Led<GreenLedPin, GreenLedTimer>,
+    pub blue_led: Led<BlueLedPin, BlueLedTimer>,
+    pub red_led: Led<RedLedPin, RedLedTimer>,
+}
+
+#[derive(Debug)]
+pub enum CommandError {
+    GreenLed(LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<1_000>>::Error>),
+    BlueLed(LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<1_000>>::Error>),
+    RedLed(LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<1_000>>::Error>),
 }
 
 pub struct CommandCenter {
@@ -94,12 +109,26 @@ impl ActorReceive for CommandCenter {
 }
 
 impl ActorPoll for CommandCenter {
-    fn poll(&mut self) -> Poll<Result<(), Error>> {
+    type Error = CommandError;
+
+    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         match self.current_actor {
-            None => Poll::Ready(Err(Error::Other)),
-            Some(CommandActor::GreenLed) => self.actors.green_led.poll(),
-            Some(CommandActor::BlueLed) => self.actors.blue_led.poll(),
-            Some(CommandActor::RedLed) => self.actors.red_led.poll(),
+            None => Poll::Ready(Ok(())),
+            Some(CommandActor::GreenLed) => self
+                .actors
+                .green_led
+                .poll()
+                .map_err(|err| CommandError::GreenLed(err)),
+            Some(CommandActor::BlueLed) => self
+                .actors
+                .blue_led
+                .poll()
+                .map_err(|err| CommandError::BlueLed(err)),
+            Some(CommandActor::RedLed) => self
+                .actors
+                .red_led
+                .poll()
+                .map_err(|err| CommandError::RedLed(err)),
         }
     }
 }

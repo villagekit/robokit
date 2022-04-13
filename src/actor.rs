@@ -1,7 +1,5 @@
 use core::task::Poll;
 
-use crate::error::Error;
-
 pub trait ActorReceive {
     type Message;
 
@@ -9,5 +7,7 @@ pub trait ActorReceive {
 }
 
 pub trait ActorPoll {
-    fn poll(&mut self) -> Poll<Result<(), Error>>;
+    type Error;
+
+    fn poll(&mut self) -> Poll<Result<(), Self::Error>>;
 }

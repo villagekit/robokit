@@ -5,7 +5,6 @@ use fugit::MillisDurationU32 as MillisDuration;
 use fugit_timer::Timer;
 
 use crate::actor::{ActorPoll, ActorReceive};
-use crate::error::Error;
 
 #[derive(Clone, Copy)]
 pub enum LedBlinkStatus {
@@ -63,22 +62,30 @@ where
     }
 }
 
+#[derive(Debug)]
+pub enum LedError<PinError, TimerError> {
+    Pin(PinError),
+    Timer(TimerError),
+}
+
 impl<P, T> ActorPoll for Led<P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,
 {
-    fn poll(&mut self) -> Poll<Result<(), Error>> {
+    type Error = LedError<P::Error, T::Error>;
+
+    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         if let Some(state) = self.state {
             match state.status {
                 LedBlinkStatus::Start => {
                     // start timer
                     self.timer
                         .start(state.duration)
-                        .map_err(|_err| Error::Timer)?;
+                        .map_err(|err| LedError::Timer(err))?;
 
                     // turn led on
-                    self.pin.set_high().map_err(|_err| Error::Pin)?;
+                    self.pin.set_high().map_err(|err| LedError::Pin(err))?;
 
                     // update state
                     self.state = Some(LedBlinkState {
@@ -89,7 +96,7 @@ where
                     Poll::Pending
                 }
                 LedBlinkStatus::Wait => match self.timer.wait() {
-                    Err(nb::Error::Other(_err)) => Poll::Ready(Err(Error::Timer)),
+                    Err(nb::Error::Other(err)) => Poll::Ready(Err(LedError::Timer(err))),
                     Err(nb::Error::WouldBlock) => Poll::Pending,
                     Ok(()) => {
                         self.state = Some(LedBlinkState {
@@ -103,15 +110,17 @@ where
                 LedBlinkStatus::Done => {
                     // if the timer isn't cancelled, it's periodic
                     // and will automatically return on next call.
-                    self.timer.cancel().map_err(|_err| Error::Timer)?;
+                    self.timer.cancel().map_err(|err| LedError::Timer(err))?;
 
-                    self.pin.set_low().map_err(|_err| Error::Pin)?;
+                    self.pin.set_low().map_err(|err| LedError::Pin(err))?;
+
+                    self.state = None;
 
                     Poll::Ready(Ok(()))
                 }
             }
         } else {
-            Poll::Ready(Err(Error::Other))
+            Poll::Ready(Ok(()))
         }
     }
 }
