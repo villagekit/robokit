@@ -1,6 +1,9 @@
-extern crate alloc;
+// extern crate alloc;
 
-use alloc::boxed::Box;
+// use alloc::boxed::Box;
+use embedded_hal::digital::v2::OutputPin;
+use enum_dispatch::enum_dispatch;
+use fugit_timer::Timer;
 use stm32f7xx_hal::{
     gpio::{Output, Pin, PushPull},
     pac,
@@ -9,7 +12,7 @@ use stm32f7xx_hal::{
     timer::{counter::CounterMs, TimerExt},
 };
 
-use crate::actuator::{Actuator, Future};
+use crate::actor::{ActorFuture, ActorReceive};
 use crate::actuators::led::{Led, LedBlinkMessage};
 
 pub enum Command {
@@ -19,7 +22,7 @@ pub enum Command {
 }
 
 #[allow(non_snake_case)]
-pub struct CommandActuatorsResources<'a> {
+pub struct CommandActorsResources<'a> {
     pub GPIOB: pac::GPIOB,
     pub TIM3: pac::TIM3,
     pub TIM4: pac::TIM4,
@@ -27,14 +30,30 @@ pub struct CommandActuatorsResources<'a> {
     pub clocks: &'a Clocks,
 }
 
-pub struct CommandActuators {
-    pub green_led: Led<Pin<'B', 0, Output<PushPull>>, CounterMs<pac::TIM3>>,
-    pub blue_led: Led<Pin<'B', 7, Output<PushPull>>, CounterMs<pac::TIM4>>,
-    pub red_led: Led<Pin<'B', 14, Output<PushPull>>, CounterMs<pac::TIM5>>,
+#[enum_dispatch(Actor)]
+pub enum AnyActor<'a, LedPin, LedTimer>
+where
+    LedPin: OutputPin,
+    LedTimer: Timer<1_000>,
+{
+    Led(Led<'a, LedPin, LedTimer>),
 }
 
-impl<'a> CommandActuators {
-    pub fn new(resources: CommandActuatorsResources) -> Self {
+// TODO
+// or a new approach, what if this becomes a CommandCenter state machine
+// when a new command comes in, this sets the current actor.
+// so only that actor is polled.
+// and this way, objects don't have to come and go.
+// even better, if this itself is an actor!
+
+pub struct CommandActors<'a> {
+    pub green_led: AnyActor<'a, Pin<'B', 0, Output<PushPull>>, CounterMs<pac::TIM3>>,
+    pub blue_led: AnyActor<'a, Pin<'B', 7, Output<PushPull>>, CounterMs<pac::TIM4>>,
+    pub red_led: AnyActor<'a, Pin<'B', 14, Output<PushPull>>, CounterMs<pac::TIM5>>,
+}
+
+impl<'a> CommandActors<'a> {
+    pub fn new(resources: CommandActorsResources) -> Self {
         let gpiob = resources.GPIOB.split();
 
         let green_led = Led::new(
@@ -51,17 +70,27 @@ impl<'a> CommandActuators {
         );
 
         Self {
-            green_led,
-            blue_led,
-            red_led,
+            green_led: AnyActor::Led(green_led),
+            blue_led: AnyActor::Led(blue_led),
+            red_led: AnyActor::Led(red_led),
         }
     }
 
-    pub fn run(&'a mut self, command: &Command) -> Box<dyn Future + 'a> {
+    pub fn run(&'a mut self, command: &Command) -> AnyActor< {
         match command {
-            Command::GreenLed(message) => Box::new(self.green_led.command(message)),
-            Command::BlueLed(message) => Box::new(self.blue_led.command(message)),
-            Command::RedLed(message) => Box::new(self.red_led.command(message)),
+            Command::GreenLed(message) => {
+                self.green_led.receive(command);
+                self.green_led
+            }
+
+            Command::BlueLed(message) => {
+                self.blue_led.receive(command);
+                self.blue_led
+            }
+            Command::RedLed(message) => {
+                self.red_led.receive(command);
+                self.red_led
+            }
         }
     }
 }

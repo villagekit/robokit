@@ -2,7 +2,7 @@
 #![no_std]
 #![feature(alloc_error_handler)]
 
-pub mod actuator;
+pub mod actor;
 pub mod actuators;
 pub mod command;
 pub mod error;

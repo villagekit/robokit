@@ -4,25 +4,30 @@ use embedded_hal::digital::v2::OutputPin;
 use fugit::MillisDurationU32 as MillisDuration;
 use fugit_timer::Timer;
 
-use crate::actuator::{Actuator, Future};
+use crate::actor::{ActorFuture, ActorReceive};
 use crate::error::Error;
 
-pub struct Led<P, T>
+pub struct Led<'a, P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,
 {
     pin: P,
     timer: T,
+    future: Option<LedBlinkFuture<'a, P, T>>,
 }
 
-impl<P, T> Led<P, T>
+impl<'a, P, T> Led<'a, P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,
 {
     pub fn new(pin: P, timer: T) -> Self {
-        Led { pin, timer }
+        Led {
+            pin,
+            timer,
+            future: None,
+        }
     }
 }
 
@@ -30,21 +35,28 @@ pub struct LedBlinkMessage {
     pub duration: MillisDuration,
 }
 
-impl<'a, P, T> Actuator<'a> for Led<P, T>
+impl<'a, P, T> ActorReceive<LedBlinkMessage> for Led<'a, P, T>
 where
     P: 'a + OutputPin,
     T: 'a + Timer<1_000>,
 {
-    type Message = LedBlinkMessage;
-    type Future = LedBlinkFuture<'a, P, T>;
-
-    fn command(&'a mut self, action: &Self::Message) -> Self::Future {
-        LedBlinkFuture {
+    fn receive(&'a mut self, action: &LedBlinkMessage) {
+        self.future = Some(LedBlinkFuture {
             pin: &mut self.pin,
             timer: &mut self.timer,
             status: LedBlinkStatus::Start,
             duration: action.duration,
-        }
+        })
+    }
+}
+
+impl<'a, P, T> ActorFuture for Led<'a, P, T>
+where
+    P: 'a + OutputPin,
+    T: 'a + Timer<1_000>,
+{
+    fn poll(&'a mut self) -> Poll<Result<(), Error>> {
+        self.future.poll()
     }
 }
 
@@ -65,7 +77,7 @@ where
     duration: MillisDuration,
 }
 
-impl<'a, P, T> Future for LedBlinkFuture<'a, P, T>
+impl<'a, P, T> ActorFuture for LedBlinkFuture<'a, P, T>
 where
     P: OutputPin,
     T: Timer<1_000>,
