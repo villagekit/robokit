@@ -5,11 +5,14 @@ use gridbot as _;
 
 #[rtic::app(device = stm32f7xx_hal::pac, dispatchers = [USART1])]
 mod app {
-    use stm32f7xx_hal::{
-        gpio::{Output, PB0},
-        pac,
-        prelude::*,
-        timer::monotonic::MonoTimerUs,
+    use core::task::Poll;
+    use fugit::ExtU32;
+    use stm32f7xx_hal::{pac, prelude::*, timer::monotonic::MonoTimerUs, watchdog};
+
+    use gridbot::{
+        actor::{ActorPoll, ActorReceive},
+        actuators::led::LedBlinkMessage,
+        command::{Command, CommandCenter, CommandCenterResources},
     };
 
     #[shared]
@@ -17,7 +20,8 @@ mod app {
 
     #[local]
     struct Local {
-        led: PB0<Output>,
+        command_center: CommandCenter,
+        iwdg: watchdog::IndependentWatchdog,
     }
 
     #[monotonic(binds = TIM2, default = true)]
@@ -25,28 +29,75 @@ mod app {
 
     #[init]
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
+        defmt::println!("Init!");
+
         let rcc = ctx.device.RCC.constrain();
         let clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
 
-        let gpiob = ctx.device.GPIOB.split();
-        let led = gpiob.pb0.into_push_pull_output();
-        tick::spawn().ok();
-
         let mono = ctx.device.TIM2.monotonic_us(&clocks);
-        (Shared {}, Local { led }, init::Monotonics(mono))
+
+        let command_center = CommandCenter::new(CommandCenterResources {
+            GPIOB: ctx.device.GPIOB,
+            TIM3: ctx.device.TIM3,
+            TIM4: ctx.device.TIM4,
+            TIM5: ctx.device.TIM5,
+            clocks: &clocks,
+        });
+
+        let iwdg = watchdog::IndependentWatchdog::new(ctx.device.IWDG);
+
+        (
+            Shared {},
+            Local {
+                iwdg,
+                command_center,
+            },
+            init::Monotonics(mono),
+        )
     }
 
-    #[idle]
-    fn idle(_: idle::Context) -> ! {
-        defmt::println!("Hello, world!");
+    #[idle(local = [command_center, iwdg])]
+    fn idle(ctx: idle::Context) -> ! {
+        let iwdg = ctx.local.iwdg;
+        iwdg.start(2.millis());
 
-        loop {}
-    }
+        let command_center = ctx.local.command_center;
 
-    #[task(local = [led])]
-    fn tick(ctx: tick::Context) {
-        ctx.local.led.toggle();
+        let commands = [
+            Command::GreenLed(LedBlinkMessage {
+                duration: 1000.millis(),
+            }),
+            Command::BlueLed(LedBlinkMessage {
+                duration: 2000.millis(),
+            }),
+            Command::RedLed(LedBlinkMessage {
+                duration: 500.millis(),
+            }),
+        ];
+        let mut command_index = 0;
 
-        tick::spawn_after(1.secs()).ok();
+        loop {
+            let command = &commands[command_index];
+
+            defmt::println!("Command: {}", command);
+
+            command_center.receive(command);
+
+            loop {
+                match command_center.poll() {
+                    Poll::Ready(Err(err)) => {
+                        panic!("Unexpected error: {:?}", err);
+                    }
+                    Poll::Ready(Ok(())) => {
+                        break;
+                    }
+                    Poll::Pending => {}
+                }
+
+                iwdg.feed();
+            }
+
+            command_index = (command_index + 1) % commands.len();
+        }
     }
 }

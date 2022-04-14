@@ -247,6 +247,7 @@ version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6d8595783d5ca52f0e9830036b3d24f359fae0fcc6bb5fde41f2dd82997cb58"
 dependencies = [
+ "defmt",
  "gcd",
 ]
 
@@ -279,6 +280,10 @@ dependencies = [
  "defmt",
  "defmt-rtt",
  "defmt-test",
+ "embedded-hal",
+ "fugit",
+ "fugit-timer",
+ "nb 1.0.0",
  "panic-probe",
  "stm32f7",
  "stm32f7xx-hal",
@@ -574,7 +579,7 @@ dependencies = [
 [[package]]
 name = "stm32f7xx-hal"
 version = "0.6.0"
-source = "git+https://github.com/stm32-rs/stm32f7xx-hal?rev=7099b07#7099b079685a15f60b80ad9d79e4c8e51bf6e992"
+source = "git+https://github.com/ahdinosaur/stm32f7xx-hal?rev=139072bc6#139072bc6cf5f21ccdfc908fc43fdc6f80e471e3"
 dependencies = [
  "as-slice",
  "bare-metal 1.0.0",
