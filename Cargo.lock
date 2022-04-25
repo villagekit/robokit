@@ -720,7 +720,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 [[package]]
 name = "stepper"
 version = "0.5.0"
-source = "git+https://github.com/ahdinosaur/stepper?rev=875fa3c#875fa3ce9aee163d8e13d8690c2517eb2a22fcd3"
+source = "git+https://github.com/ahdinosaur/stepper?rev=98b7f26#98b7f26d789acda18d182f2e2a447099f5effc20"
 dependencies = [
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0-alpha.6",

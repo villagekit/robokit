@@ -24,7 +24,7 @@ fugit-timer = "0.1"
 nb = "1"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 ramp-maker = { version = "0.2", features = ["libm"] }
-stepper = { git = "https://github.com/ahdinosaur/stepper", rev = "875fa3c", features = ["dq542ma"] }
+stepper = { git = "https://github.com/ahdinosaur/stepper", rev = "98b7f26", features = ["dq542ma"] }
 stm32f7 = { version = "0.14", features = ["stm32f7x7", "rt"] }
 stm32f7xx-hal = { git = "https://github.com/ahdinosaur/stm32f7xx-hal", rev = "139072bc6", features = ["stm32f767", "rtic"] }
 void = { version = "1", default-features = false }
