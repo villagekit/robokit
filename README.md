@@ -2,6 +2,10 @@
 
 Micro-controller: [Nucleo-144 STM32-F767ZI](https://nz.element14.com/stmicroelectronics/nucleo-f767zi/dev-board-nucleo-32-mcu/dp/2546569)
 
+## Notes
+
+- Pins: https://github.com/stm32duino/Arduino_Core_STM32/blob/main/variants/STM32F7xx/F765Z(G-I)T_F767Z(G-I)T_F777ZIT/variant_NUCLEO_F767ZI.h
+
 ## Development
 
 ### Setup

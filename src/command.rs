@@ -7,31 +7,40 @@ use stm32f7xx_hal::{
     pac,
     prelude::*,
     rcc::Clocks,
-    timer::{counter::CounterMs, /*Error as TimerError,*/ TimerExt},
+    timer::{
+        counter::{CounterMs, CounterUs},
+        /*Error as TimerError,*/ TimerExt,
+    },
 };
 
 use crate::actor::{ActorPoll, ActorReceive};
+use crate::actuators::axis::{Axis, AxisError, AxisMoveMessage};
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
+use crate::timer::EmbeddedTimeCounter;
 
 #[derive(Format)]
 pub enum Command {
     GreenLed(LedBlinkMessage),
     BlueLed(LedBlinkMessage),
     RedLed(LedBlinkMessage),
+    XAxis(AxisMoveMessage),
 }
 
 pub enum CommandActor {
     GreenLed,
     BlueLed,
     RedLed,
+    XAxis,
 }
 
 #[allow(non_snake_case)]
 pub struct CommandCenterResources<'a> {
     pub GPIOB: pac::GPIOB,
+    pub GPIOG: pac::GPIOG,
     pub TIM3: pac::TIM3,
     pub TIM4: pac::TIM4,
     pub TIM5: pac::TIM5,
+    pub TIM6: pac::TIM6,
     pub clocks: &'a Clocks,
 }
 
@@ -41,11 +50,15 @@ type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
 type BlueLedTimer = CounterMs<pac::TIM4>;
 type RedLedPin = Pin<'B', 14, Output<PushPull>>;
 type RedLedTimer = CounterMs<pac::TIM5>;
+type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
+type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
+type XAxisTimer = EmbeddedTimeCounter<CounterUs<pac::TIM6>, 1_000_000>;
 
 pub struct CommandCenterActors {
     pub green_led: Led<GreenLedPin, GreenLedTimer>,
     pub blue_led: Led<BlueLedPin, BlueLedTimer>,
     pub red_led: Led<RedLedPin, RedLedTimer>,
+    pub x_axis: Axis<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>,
 }
 
 #[derive(Debug)]

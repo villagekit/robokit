@@ -43,7 +43,7 @@ where
     PinStep: OutputPin,
     <PinStep as OutputPin>::Error: Debug,
     T: CountDown,
-    <T as CountDown>::Time: Duration + TimeInt + From<Nanoseconds>,
+    <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
 {
     stepper: Stepper<Driver<PinDir, PinStep, T, FREQ>>,
     steps_per_millimeter: f64,
@@ -61,7 +61,7 @@ where
     PinStep: OutputPin,
     <PinStep as OutputPin>::Error: Debug,
     T: CountDown,
-    <T as CountDown>::Time: Duration + TimeInt + From<Nanoseconds>,
+    <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
 {
     pub fn new(
         dir: PinDir,
@@ -108,7 +108,7 @@ impl<Time, const FREQ: u32> DelayToTicks<Time, FREQ> {
 
 impl<Time, const FREQ: u32> motion_control::DelayToTicks<f64> for DelayToTicks<Time, FREQ>
 where
-    Time: Duration + From<Nanoseconds>,
+    Time: From<Nanoseconds>,
 {
     type Ticks = compat::Ticks<Time, FREQ>;
     type Error = core::convert::Infallible;
@@ -131,7 +131,7 @@ where
     PinStep: OutputPin,
     <PinStep as OutputPin>::Error: Debug,
     T: CountDown,
-    <T as CountDown>::Time: Duration + TimeInt + From<Nanoseconds>,
+    <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
 {
     type Message = AxisMoveMessage;
 
@@ -169,7 +169,7 @@ where
     PinStep: OutputPin,
     <PinStep as OutputPin>::Error: Debug,
     T: CountDown,
-    <T as CountDown>::Time: Duration + TimeInt + From<Nanoseconds>,
+    <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
 {
     type Error = AxisError<Driver<PinDir, PinStep, T, FREQ>>;
 

@@ -22,6 +22,7 @@ embedded-time = "0.12"
 fugit = { version = "0.3", features = ["defmt"] }
 fugit-timer = "0.1"
 nb = "1"
+num = { version = "0.3", default-features = false }
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 ramp-maker = { version = "0.2", features = ["libm"] }
 stepper = { git = "https://github.com/ahdinosaur/stepper", rev = "98b7f26", features = ["dq542ma"] }

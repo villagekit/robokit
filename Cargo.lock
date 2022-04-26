@@ -339,6 +339,7 @@ dependencies = [
  "fugit",
  "fugit-timer",
  "nb 1.0.0",
+ "num",
  "panic-probe",
  "ramp-maker",
  "stepper",
