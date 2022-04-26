@@ -12,9 +12,8 @@ use stepper::{
         TimeInt,
     },
     motion_control::{self, SoftwareMotionControl},
-    traits::{EnableDirectionControl, EnableMotionControl, EnableStepControl, MotionControl},
-    util::ref_mut::RefMut,
-    Direction, Error as StepperError, MoveToFuture, Stepper,
+    traits::MotionControl,
+    Direction, Stepper,
 };
 
 use crate::actor::{ActorPoll, ActorReceive};
@@ -26,6 +25,17 @@ type Driver<PinDir, PinStep, T, const FREQ: u32> = SoftwareMotionControl<
     DelayToTicks<<T as CountDown>::Time, FREQ>,
 >;
 
+// https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
+pub enum AxisState<Velocity> {
+    Idle,
+    Initial {
+        max_velocity: Velocity,
+        target_step: i32,
+    },
+    Moving,
+    Finished,
+}
+
 pub struct Axis<PinDir, PinStep, T, const FREQ: u32>
 where
     PinDir: OutputPin,
@@ -36,8 +46,8 @@ where
     <T as CountDown>::Time: Duration + TimeInt + From<Nanoseconds>,
 {
     stepper: Stepper<Driver<PinDir, PinStep, T, FREQ>>,
-    move_to_future: Option<MoveToFuture<RefMut<Driver<PinDir, PinStep, T, FREQ>>>>,
-    real_position: f64,
+    steps_per_millimeter: f64,
+    state: AxisState<<Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Velocity>,
     logical_position: f64,
     pin_dir: PhantomData<PinDir>,
     pin_step: PhantomData<PinStep>,
@@ -53,14 +63,18 @@ where
     T: CountDown,
     <T as CountDown>::Time: Duration + TimeInt + From<Nanoseconds>,
 {
-    pub fn new(dir: PinDir, step: PinStep, timer: T) -> Self {
-        let target_accel = 0.001_f64; // steps / tick^2; 1000 steps / s^2
-
-        let profile = ramp_maker::Trapezoidal::new(target_accel);
+    pub fn new(
+        dir: PinDir,
+        step: PinStep,
+        timer: T,
+        max_accel: f64,
+        steps_per_millimeter: f64,
+    ) -> Self {
+        let profile = ramp_maker::Trapezoidal::new(max_accel);
 
         let compat_dir = compat::Pin(dir);
         let compat_step = compat::Pin(step);
-        let compat_timer = compat::Timer(timer);
+        let mut compat_timer = compat::Timer(timer);
 
         let stepper = Stepper::from_driver(drivers::dq542ma::DQ542MA::new())
             .enable_direction_control(compat_dir, Direction::Forward, &mut compat_timer)
@@ -70,13 +84,17 @@ where
 
         Axis {
             stepper: stepper,
-            move_to_future: None,
-            real_position: 0.,
+            steps_per_millimeter,
+            state: AxisState::Idle,
             logical_position: 0.,
             pin_dir: PhantomData,
             pin_step: PhantomData,
             timer: PhantomData,
         }
+    }
+
+    pub fn get_real_position(&mut self) -> f64 {
+        (self.stepper.driver_mut().current_step() as f64) / self.steps_per_millimeter
     }
 }
 
@@ -102,6 +120,7 @@ where
 
 #[derive(Format)]
 pub struct AxisMoveMessage {
+    pub max_velocity: f64,
     pub distance_in_millimeters: f64,
 }
 
@@ -117,23 +136,32 @@ where
     type Message = AxisMoveMessage;
 
     fn receive(&mut self, action: &Self::Message) {
-        // TODO
-        // convert millimeters to steps
-        // update next logical position
-        // calculate steps to move from current actual position to next logical position
+        let max_velocity = action.max_velocity;
+        let distance_in_millimeters = action.distance_in_millimeters;
 
-        let max_speed = 0.001_f64; // steps / tick; 1000 steps / s
-        let target_step = 10;
-        self.move_to_future = Some(self.stepper.move_to_position(max_speed, target_step));
+        let next_logical_position = self.logical_position + distance_in_millimeters;
+        let real_position_difference = next_logical_position - self.get_real_position();
+        let step_difference: i32 = (real_position_difference * self.steps_per_millimeter) as i32;
+        let target_step = self.stepper.driver_mut().current_step() + step_difference;
+
+        self.state = AxisState::Initial {
+            max_velocity,
+            target_step,
+        };
     }
 }
 
 #[derive(Debug)]
-pub enum AxisError {
-    Stepper,
-    Unknown,
+pub enum AxisError<Driver>
+where
+    Driver: MotionControl,
+    <Driver as MotionControl>::Error: Debug,
+{
+    Driver(<Driver as MotionControl>::Error),
+    Programmer,
 }
 
+// https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html#
 impl<PinDir, PinStep, T, const FREQ: u32> ActorPoll for Axis<PinDir, PinStep, T, FREQ>
 where
     PinDir: OutputPin,
@@ -143,13 +171,36 @@ where
     T: CountDown,
     <T as CountDown>::Time: Duration + TimeInt + From<Nanoseconds>,
 {
-    type Error = AxisError;
+    type Error = AxisError<Driver<PinDir, PinStep, T, FREQ>>;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        if let Some(move_to_future) = self.move_to_future {
-            move_to_future.poll().map_err(|_err| AxisError::Stepper)
-        } else {
-            Poll::Ready(Err(AxisError::Unknown))
+        match self.state {
+            AxisState::Idle => Poll::Ready(Err(AxisError::Programmer)),
+            AxisState::Initial {
+                max_velocity,
+                target_step,
+            } => {
+                self.stepper
+                    .driver_mut()
+                    .move_to_position(max_velocity, target_step)
+                    .map_err(|err| AxisError::Driver(err))?;
+                self.state = AxisState::Moving;
+                Poll::Pending
+            }
+            AxisState::Moving => {
+                let still_moving = self
+                    .stepper
+                    .driver_mut()
+                    .update()
+                    .map_err(|err| AxisError::Driver(err))?;
+                if still_moving {
+                    Poll::Pending
+                } else {
+                    self.state = AxisState::Finished;
+                    Poll::Ready(Ok(()))
+                }
+            }
+            AxisState::Finished => Poll::Ready(Ok(())),
         }
     }
 }
