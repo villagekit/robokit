@@ -14,7 +14,7 @@ use stm32f7xx_hal::{
 };
 
 use crate::actor::{ActorPoll, ActorReceive};
-use crate::actuators::axis::{Axis, AxisError, AxisMoveMessage, Driver};
+use crate::actuators::axis::{Axis, AxisError, AxisMoveMessage, DriverError};
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 use crate::timer::EmbeddedTimeCounter;
 
@@ -53,7 +53,8 @@ type RedLedTimer = CounterMs<pac::TIM5>;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
 type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
 type XAxisTimer = EmbeddedTimeCounter<CounterUs<pac::TIM6>>;
-type XAxisDriver = Driver<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
+// type XAxisDriver = Driver<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
+type XAxisDriverError = DriverError<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
 
 pub struct CommandCenterActors {
     pub green_led: Led<GreenLedPin, GreenLedTimer>,
@@ -67,7 +68,7 @@ pub enum CommandError {
     GreenLed(LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<1_000>>::Error>),
     BlueLed(LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<1_000>>::Error>),
     RedLed(LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<1_000>>::Error>),
-    XAxis(AxisError<XAxisDriver>),
+    XAxis(AxisError<XAxisDriverError>),
 }
 
 pub struct CommandCenter {
@@ -78,6 +79,7 @@ pub struct CommandCenter {
 impl CommandCenter {
     pub fn new(resources: CommandCenterResources) -> Self {
         let gpiob = resources.GPIOB.split();
+        let gpiog = resources.GPIOG.split();
 
         let green_led = Led::new(
             gpiob.pb0.into_push_pull_output(),
@@ -92,12 +94,21 @@ impl CommandCenter {
             resources.TIM5.counter_ms(resources.clocks),
         );
 
+        let x_axis = Axis::new(
+            gpiog.pg9.into_push_pull_output(),
+            gpiog.pg14.into_push_pull_output(),
+            EmbeddedTimeCounter(resources.TIM6.counter_us(resources.clocks)),
+            0.001_f64,
+            1_000_f64,
+        );
+
         Self {
             current_actor: None,
             actors: CommandCenterActors {
                 green_led,
                 blue_led,
                 red_led,
+                x_axis,
             },
         }
     }
@@ -120,6 +131,10 @@ impl ActorReceive for CommandCenter {
             Command::RedLed(message) => {
                 self.actors.red_led.receive(message);
                 self.current_actor = Some(CommandActor::RedLed);
+            }
+            Command::XAxis(message) => {
+                self.actors.x_axis.receive(message);
+                self.current_actor = Some(CommandActor::XAxis);
             }
         }
     }
@@ -146,6 +161,11 @@ impl ActorPoll for CommandCenter {
                 .red_led
                 .poll()
                 .map_err(|err| CommandError::RedLed(err)),
+            Some(CommandActor::XAxis) => self
+                .actors
+                .x_axis
+                .poll()
+                .map_err(|err| CommandError::XAxis(err)),
         }
     }
 }

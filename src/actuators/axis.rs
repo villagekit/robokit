@@ -21,6 +21,8 @@ pub type Driver<PinDir, PinStep, T, const FREQ: u32> = SoftwareMotionControl<
     ramp_maker::Trapezoidal<f64>,
     DelayToTicks<<T as CountDown>::Time, FREQ>,
 >;
+pub type DriverError<PinDir, PinStep, T, const FREQ: u32> =
+    <Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error;
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
 pub enum AxisState<Velocity> {
@@ -40,6 +42,7 @@ where
     <PinStep as OutputPin>::Error: Debug,
     T: CountDown,
     <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
+    <Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error: Debug,
 {
     stepper: Stepper<Driver<PinDir, PinStep, T, FREQ>>,
     steps_per_millimeter: f64,
@@ -58,6 +61,7 @@ where
     <PinStep as OutputPin>::Error: Debug,
     T: CountDown,
     <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
+    <Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error: Debug,
 {
     pub fn new(
         dir: PinDir,
@@ -128,6 +132,7 @@ where
     <PinStep as OutputPin>::Error: Debug,
     T: CountDown,
     <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
+    <Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error: Debug,
 {
     type Message = AxisMoveMessage;
 
@@ -164,7 +169,7 @@ where
     <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
     <Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error: Debug,
 {
-    type Error = AxisError<<Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error>;
+    type Error = AxisError<DriverError<PinDir, PinStep, T, FREQ>>;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         match self.state {
