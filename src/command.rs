@@ -14,7 +14,7 @@ use stm32f7xx_hal::{
 };
 
 use crate::actor::{ActorPoll, ActorReceive};
-use crate::actuators::axis::{Axis, AxisError, AxisMoveMessage};
+use crate::actuators::axis::{Axis, AxisError, AxisMoveMessage, Driver};
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 use crate::timer::EmbeddedTimeCounter;
 
@@ -52,7 +52,8 @@ type RedLedPin = Pin<'B', 14, Output<PushPull>>;
 type RedLedTimer = CounterMs<pac::TIM5>;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
 type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
-type XAxisTimer = EmbeddedTimeCounter<CounterUs<pac::TIM6>, 1_000_000>;
+type XAxisTimer = EmbeddedTimeCounter<CounterUs<pac::TIM6>>;
+type XAxisDriver = Driver<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
 
 pub struct CommandCenterActors {
     pub green_led: Led<GreenLedPin, GreenLedTimer>,
@@ -66,6 +67,7 @@ pub enum CommandError {
     GreenLed(LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<1_000>>::Error>),
     BlueLed(LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<1_000>>::Error>),
     RedLed(LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<1_000>>::Error>),
+    XAxis(AxisError<XAxisDriver>),
 }
 
 pub struct CommandCenter {

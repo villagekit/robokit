@@ -7,10 +7,7 @@ use embedded_hal::timer::CountDown;
 use ramp_maker;
 use stepper::{
     compat, drivers,
-    embedded_time::{
-        duration::{Duration, Nanoseconds},
-        TimeInt,
-    },
+    embedded_time::{duration::Nanoseconds, TimeInt},
     motion_control::{self, SoftwareMotionControl},
     traits::MotionControl,
     Direction, Stepper,
@@ -18,7 +15,7 @@ use stepper::{
 
 use crate::actor::{ActorPoll, ActorReceive};
 
-type Driver<PinDir, PinStep, T, const FREQ: u32> = SoftwareMotionControl<
+pub type Driver<PinDir, PinStep, T, const FREQ: u32> = SoftwareMotionControl<
     drivers::dq542ma::DQ542MA<(), compat::Pin<PinStep>, compat::Pin<PinDir>>,
     compat::Timer<T, FREQ>,
     ramp_maker::Trapezoidal<f64>,
@@ -33,7 +30,6 @@ pub enum AxisState<Velocity> {
         target_step: i32,
     },
     Moving,
-    Finished,
 }
 
 pub struct Axis<PinDir, PinStep, T, const FREQ: u32>
@@ -152,12 +148,8 @@ where
 }
 
 #[derive(Debug)]
-pub enum AxisError<Driver>
-where
-    Driver: MotionControl,
-    <Driver as MotionControl>::Error: Debug,
-{
-    Driver(<Driver as MotionControl>::Error),
+pub enum AxisError<DriverError: Debug> {
+    Driver(DriverError),
     Programmer,
 }
 
@@ -170,12 +162,13 @@ where
     <PinStep as OutputPin>::Error: Debug,
     T: CountDown,
     <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
+    <Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error: Debug,
 {
-    type Error = AxisError<Driver<PinDir, PinStep, T, FREQ>>;
+    type Error = AxisError<<Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error>;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         match self.state {
-            AxisState::Idle => Poll::Ready(Err(AxisError::Programmer)),
+            AxisState::Idle => Poll::Ready(Ok(())),
             AxisState::Initial {
                 max_velocity,
                 target_step,
@@ -196,11 +189,10 @@ where
                 if still_moving {
                     Poll::Pending
                 } else {
-                    self.state = AxisState::Finished;
+                    self.state = AxisState::Idle;
                     Poll::Ready(Ok(()))
                 }
             }
-            AxisState::Finished => Poll::Ready(Ok(())),
         }
     }
 }
