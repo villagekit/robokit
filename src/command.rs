@@ -14,7 +14,9 @@ use stm32f7xx_hal::{
 };
 
 use crate::actor::{ActorPoll, ActorReceive};
-use crate::actuators::axis::{Axis, AxisError, AxisMoveMessage, DriverError};
+use crate::actuators::axis::{
+    Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisMoveMessage,
+};
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 use crate::timer::EmbeddedTimeCounter;
 
@@ -53,14 +55,14 @@ type RedLedTimer = CounterMs<pac::TIM5>;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
 type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
 type XAxisTimer = EmbeddedTimeCounter<CounterUs<pac::TIM6>>;
-// type XAxisDriver = Driver<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
-type XAxisDriverError = DriverError<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
+type XAxisDriver = AxisDriverDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
+type XAxisDriverError = AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
 
 pub struct CommandCenterActors {
     pub green_led: Led<GreenLedPin, GreenLedTimer>,
     pub blue_led: Led<BlueLedPin, BlueLedTimer>,
     pub red_led: Led<RedLedPin, RedLedTimer>,
-    pub x_axis: Axis<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>,
+    pub x_axis: Axis<XAxisDriver>,
 }
 
 #[derive(Debug)]
@@ -94,7 +96,7 @@ impl CommandCenter {
             resources.TIM5.counter_ms(resources.clocks),
         );
 
-        let x_axis = Axis::new(
+        let x_axis = Axis::new_dq542ma(
             gpiog.pg9.into_push_pull_output(),
             gpiog.pg14.into_push_pull_output(),
             EmbeddedTimeCounter(resources.TIM6.counter_us(resources.clocks)),

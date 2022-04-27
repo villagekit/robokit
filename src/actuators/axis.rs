@@ -4,25 +4,32 @@ use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::timer::CountDown;
-use ramp_maker;
 use stepper::{
     compat, drivers,
     embedded_time::{duration::Nanoseconds, TimeInt},
     motion_control::{self, SoftwareMotionControl},
-    traits::MotionControl,
+    ramp_maker,
+    traits::{MotionControl, SetDirection, Step},
     Direction, Stepper,
 };
 
 use crate::actor::{ActorPoll, ActorReceive};
 
-pub type Driver<PinDir, PinStep, T, const FREQ: u32> = SoftwareMotionControl<
-    drivers::dq542ma::DQ542MA<(), compat::Pin<PinStep>, compat::Pin<PinDir>>,
-    compat::Timer<T, FREQ>,
-    ramp_maker::Trapezoidal<f64>,
-    DelayToTicks<<T as CountDown>::Time, FREQ>,
+pub type AxisMotionProfile = ramp_maker::Trapezoidal<f64>;
+pub type AxisMotionControl<Driver, Timer, const FREQ: u32> = SoftwareMotionControl<
+    Driver,
+    compat::Timer<Timer, FREQ>,
+    AxisMotionProfile,
+    DelayToTicks<<Timer as CountDown>::Time, FREQ>,
 >;
-pub type DriverError<PinDir, PinStep, T, const FREQ: u32> =
-    <Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error;
+
+pub type AxisDriverDQ542MA<PinDir, PinStep, T, const FREQ: u32> = AxisMotionControl<
+    drivers::dq542ma::DQ542MA<(), compat::Pin<PinStep>, compat::Pin<PinDir>>,
+    T,
+    FREQ,
+>;
+pub type AxisDriverErrorDQ542MA<PinDir, PinStep, T, const FREQ: u32> =
+    <AxisDriverDQ542MA<PinDir, PinStep, T, FREQ> as MotionControl>::Error;
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
 pub enum AxisState<Velocity> {
@@ -34,26 +41,17 @@ pub enum AxisState<Velocity> {
     Moving,
 }
 
-pub struct Axis<PinDir, PinStep, T, const FREQ: u32>
+pub struct Axis<Driver>
 where
-    PinDir: OutputPin,
-    <PinDir as OutputPin>::Error: Debug,
-    PinStep: OutputPin,
-    <PinStep as OutputPin>::Error: Debug,
-    T: CountDown,
-    <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
-    <Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error: Debug,
+    Driver: MotionControl,
 {
-    stepper: Stepper<Driver<PinDir, PinStep, T, FREQ>>,
+    stepper: Stepper<Driver>,
     steps_per_millimeter: f64,
-    state: AxisState<<Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Velocity>,
+    state: AxisState<<Driver as MotionControl>::Velocity>,
     logical_position: f64,
-    pin_dir: PhantomData<PinDir>,
-    pin_step: PhantomData<PinStep>,
-    timer: PhantomData<T>,
 }
 
-impl<PinDir, PinStep, T, const FREQ: u32> Axis<PinDir, PinStep, T, FREQ>
+impl<PinDir, PinStep, T, const FREQ: u32> Axis<AxisDriverDQ542MA<PinDir, PinStep, T, FREQ>>
 where
     PinDir: OutputPin,
     <PinDir as OutputPin>::Error: Debug,
@@ -61,9 +59,9 @@ where
     <PinStep as OutputPin>::Error: Debug,
     T: CountDown,
     <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
-    <Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error: Debug,
+    <AxisDriverDQ542MA<PinDir, PinStep, T, FREQ> as MotionControl>::Error: Debug,
 {
-    pub fn new(
+    pub fn new_dq542ma(
         dir: PinDir,
         step: PinStep,
         timer: T,
@@ -87,12 +85,16 @@ where
             steps_per_millimeter,
             state: AxisState::Idle,
             logical_position: 0.,
-            pin_dir: PhantomData,
-            pin_step: PhantomData,
-            timer: PhantomData,
         }
     }
+}
 
+impl<Driver, Timer, const FREQ: u32> Axis<AxisMotionControl<Driver, Timer, FREQ>>
+where
+    Driver: SetDirection + Step,
+    Timer: CountDown,
+    Timer::Time: TimeInt + From<Nanoseconds>,
+{
     pub fn get_real_position(&mut self) -> f64 {
         (self.stepper.driver_mut().current_step() as f64) / self.steps_per_millimeter
     }
@@ -124,15 +126,11 @@ pub struct AxisMoveMessage {
     pub distance_in_millimeters: f64,
 }
 
-impl<PinDir, PinStep, T, const FREQ: u32> ActorReceive for Axis<PinDir, PinStep, T, FREQ>
+impl<Driver, Timer, const FREQ: u32> ActorReceive for Axis<AxisMotionControl<Driver, Timer, FREQ>>
 where
-    PinDir: OutputPin,
-    <PinDir as OutputPin>::Error: Debug,
-    PinStep: OutputPin,
-    <PinStep as OutputPin>::Error: Debug,
-    T: CountDown,
-    <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
-    <Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error: Debug,
+    Driver: SetDirection + Step,
+    Timer: CountDown,
+    Timer::Time: TimeInt + From<Nanoseconds>,
 {
     type Message = AxisMoveMessage;
 
@@ -159,17 +157,12 @@ pub enum AxisError<DriverError: Debug> {
 }
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html#
-impl<PinDir, PinStep, T, const FREQ: u32> ActorPoll for Axis<PinDir, PinStep, T, FREQ>
+impl<Driver> ActorPoll for Axis<Driver>
 where
-    PinDir: OutputPin,
-    <PinDir as OutputPin>::Error: Debug,
-    PinStep: OutputPin,
-    <PinStep as OutputPin>::Error: Debug,
-    T: CountDown,
-    <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
-    <Driver<PinDir, PinStep, T, FREQ> as MotionControl>::Error: Debug,
+    Driver: MotionControl,
+    <Driver as MotionControl>::Error: Debug,
 {
-    type Error = AxisError<DriverError<PinDir, PinStep, T, FREQ>>;
+    type Error = AxisError<<Driver as MotionControl>::Error>;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         match self.state {
