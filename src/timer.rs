@@ -1,6 +1,7 @@
 use core::convert::From;
 use core::fmt;
 use core::ops::{Add, Div, Mul, Rem, Sub};
+use defmt;
 use embedded_hal::timer::CountDown;
 use embedded_time::{duration::Nanoseconds, fixed_point::FixedPoint, fraction::Fraction, TimeInt};
 use fugit::MicrosDurationU32;
@@ -26,9 +27,11 @@ where
     where
         T: Into<Self::Time>,
     {
-        self.0
-            .start(MicrosDurationU32::from_ticks(timeout.into().0))
-            .unwrap()
+        let time = timeout.into();
+
+        defmt::println!("timeout: {}", &time);
+
+        self.0.start(MicrosDurationU32::from_ticks(time.0)).unwrap()
     }
 
     fn wait(&mut self) -> nb::Result<(), Void> {
@@ -216,6 +219,12 @@ impl Div<Fraction> for EmbeddedTimeCounterTime {
 impl fmt::Display for EmbeddedTimeCounterTime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+impl defmt::Format for EmbeddedTimeCounterTime {
+    fn format(&self, f: defmt::Formatter) {
+        self.0.format(f)
     }
 }
 

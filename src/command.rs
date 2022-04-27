@@ -40,21 +40,21 @@ pub struct CommandCenterResources<'a> {
     pub GPIOB: pac::GPIOB,
     pub GPIOG: pac::GPIOG,
     pub TIM3: pac::TIM3,
-    pub TIM4: pac::TIM4,
-    pub TIM5: pac::TIM5,
-    pub TIM6: pac::TIM6,
+    pub TIM9: pac::TIM9,
+    pub TIM10: pac::TIM10,
+    pub TIM11: pac::TIM11,
     pub clocks: &'a Clocks,
 }
 
 type GreenLedPin = Pin<'B', 0, Output<PushPull>>;
-type GreenLedTimer = CounterMs<pac::TIM3>;
+type GreenLedTimer = CounterMs<pac::TIM9>;
 type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
-type BlueLedTimer = CounterMs<pac::TIM4>;
+type BlueLedTimer = CounterMs<pac::TIM10>;
 type RedLedPin = Pin<'B', 14, Output<PushPull>>;
-type RedLedTimer = CounterMs<pac::TIM5>;
+type RedLedTimer = CounterMs<pac::TIM11>;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
 type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
-type XAxisTimer = EmbeddedTimeCounter<CounterUs<pac::TIM6>>;
+type XAxisTimer = EmbeddedTimeCounter<CounterUs<pac::TIM3>>;
 type XAxisDriver = AxisDriverDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
 type XAxisDriverError = AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
 
@@ -85,21 +85,21 @@ impl CommandCenter {
 
         let green_led = Led::new(
             gpiob.pb0.into_push_pull_output(),
-            resources.TIM3.counter_ms(resources.clocks),
+            resources.TIM9.counter_ms(resources.clocks),
         );
         let blue_led = Led::new(
             gpiob.pb7.into_push_pull_output(),
-            resources.TIM4.counter_ms(resources.clocks),
+            resources.TIM10.counter_ms(resources.clocks),
         );
         let red_led = Led::new(
             gpiob.pb14.into_push_pull_output(),
-            resources.TIM5.counter_ms(resources.clocks),
+            resources.TIM11.counter_ms(resources.clocks),
         );
 
         let x_axis = Axis::new_dq542ma(
             gpiog.pg9.into_push_pull_output(),
             gpiog.pg14.into_push_pull_output(),
-            EmbeddedTimeCounter(resources.TIM6.counter_us(resources.clocks)),
+            EmbeddedTimeCounter(resources.TIM3.counter_us(resources.clocks)),
             0.001_f64,
             1_000_f64,
         );

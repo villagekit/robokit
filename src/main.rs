@@ -11,6 +11,7 @@ mod app {
 
     use gridbot::{
         actor::{ActorPoll, ActorReceive},
+        actuators::axis::AxisMoveMessage,
         actuators::led::LedBlinkMessage,
         command::{Command, CommandCenter, CommandCenterResources},
     };
@@ -40,9 +41,9 @@ mod app {
             GPIOB: ctx.device.GPIOB,
             GPIOG: ctx.device.GPIOG,
             TIM3: ctx.device.TIM3,
-            TIM4: ctx.device.TIM4,
-            TIM5: ctx.device.TIM5,
-            TIM6: ctx.device.TIM6,
+            TIM9: ctx.device.TIM9,
+            TIM10: ctx.device.TIM10,
+            TIM11: ctx.device.TIM11,
             clocks: &clocks,
         });
 
@@ -69,11 +70,27 @@ mod app {
             Command::GreenLed(LedBlinkMessage {
                 duration: 1000.millis(),
             }),
+            Command::XAxis(AxisMoveMessage {
+                max_velocity_in_millimeters_per_sec: 1_f64,
+                distance_in_millimeters: 40_f64,
+            }),
             Command::BlueLed(LedBlinkMessage {
-                duration: 2000.millis(),
+                duration: 1000.millis(),
+            }),
+            Command::XAxis(AxisMoveMessage {
+                max_velocity_in_millimeters_per_sec: 1_f64,
+                distance_in_millimeters: -40_f64,
             }),
             Command::RedLed(LedBlinkMessage {
-                duration: 500.millis(),
+                duration: 1000.millis(),
+            }),
+            Command::XAxis(AxisMoveMessage {
+                max_velocity_in_millimeters_per_sec: 2_f64,
+                distance_in_millimeters: 40_f64,
+            }),
+            Command::XAxis(AxisMoveMessage {
+                max_velocity_in_millimeters_per_sec: 2_f64,
+                distance_in_millimeters: -40_f64,
             }),
         ];
         let mut command_index = 0;

@@ -35,7 +35,7 @@ pub type AxisDriverErrorDQ542MA<PinDir, PinStep, T, const FREQ: u32> =
 pub enum AxisState<Velocity> {
     Idle,
     Initial {
-        max_velocity: Velocity,
+        max_velocity_in_steps_per_sec: Velocity,
         target_step: i32,
     },
     Moving,
@@ -65,10 +65,12 @@ where
         dir: PinDir,
         step: PinStep,
         timer: T,
-        max_accel: f64,
+        max_acceleration_in_millimeters_per_sec_per_sec: f64,
         steps_per_millimeter: f64,
     ) -> Self {
-        let profile = ramp_maker::Trapezoidal::new(max_accel);
+        let max_acceleration_in_steps_per_sec_per_sec =
+            max_acceleration_in_millimeters_per_sec_per_sec * steps_per_millimeter;
+        let profile = ramp_maker::Trapezoidal::new(max_acceleration_in_steps_per_sec_per_sec);
 
         let compat_dir = compat::Pin(dir);
         let compat_step = compat::Pin(step);
@@ -122,7 +124,7 @@ where
 
 #[derive(Format)]
 pub struct AxisMoveMessage {
-    pub max_velocity: f64,
+    pub max_velocity_in_millimeters_per_sec: f64,
     pub distance_in_millimeters: f64,
 }
 
@@ -135,7 +137,9 @@ where
     type Message = AxisMoveMessage;
 
     fn receive(&mut self, action: &Self::Message) {
-        let max_velocity = action.max_velocity;
+        let max_velocity_in_steps_per_sec =
+            action.max_velocity_in_millimeters_per_sec * self.steps_per_millimeter;
+
         let distance_in_millimeters = action.distance_in_millimeters;
 
         let next_logical_position = self.logical_position + distance_in_millimeters;
@@ -144,7 +148,7 @@ where
         let target_step = self.stepper.driver_mut().current_step() + step_difference;
 
         self.state = AxisState::Initial {
-            max_velocity,
+            max_velocity_in_steps_per_sec,
             target_step,
         };
     }
@@ -168,12 +172,12 @@ where
         match self.state {
             AxisState::Idle => Poll::Ready(Ok(())),
             AxisState::Initial {
-                max_velocity,
+                max_velocity_in_steps_per_sec,
                 target_step,
             } => {
                 self.stepper
                     .driver_mut()
-                    .move_to_position(max_velocity, target_step)
+                    .move_to_position(max_velocity_in_steps_per_sec, target_step)
                     .map_err(|err| AxisError::Driver(err))?;
                 self.state = AxisState::Moving;
                 Poll::Pending
