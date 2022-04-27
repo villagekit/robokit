@@ -18,7 +18,6 @@ use crate::actuators::axis::{
     Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisMoveMessage,
 };
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
-use crate::timer::EmbeddedTimeCounter;
 
 #[derive(Format)]
 pub enum Command {
@@ -54,7 +53,7 @@ type RedLedPin = Pin<'B', 14, Output<PushPull>>;
 type RedLedTimer = CounterMs<pac::TIM11>;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
 type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
-type XAxisTimer = EmbeddedTimeCounter<CounterUs<pac::TIM3>>;
+type XAxisTimer = CounterUs<pac::TIM3>;
 type XAxisDriver = AxisDriverDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
 type XAxisDriverError = AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
 
@@ -99,7 +98,7 @@ impl CommandCenter {
         let x_axis = Axis::new_dq542ma(
             gpiog.pg9.into_push_pull_output(),
             gpiog.pg14.into_push_pull_output(),
-            EmbeddedTimeCounter(resources.TIM3.counter_us(resources.clocks)),
+            resources.TIM3.counter_us(resources.clocks),
             0.001_f64,
             1_000_f64,
         );

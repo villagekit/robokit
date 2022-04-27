@@ -3,10 +3,10 @@ use core::marker::PhantomData;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
-use embedded_hal::timer::CountDown;
+use fugit::TimerDurationU32;
+use fugit_timer::Timer as FugitTimer;
 use stepper::{
     compat, drivers,
-    embedded_time::{duration::Nanoseconds, TimeInt},
     motion_control::{self, SoftwareMotionControl},
     ramp_maker,
     traits::{MotionControl, SetDirection, Step},
@@ -14,22 +14,23 @@ use stepper::{
 };
 
 use crate::actor::{ActorPoll, ActorReceive};
+use crate::timer::{StepperTicks, StepperTimer};
 
 pub type AxisMotionProfile = ramp_maker::Trapezoidal<f64>;
 pub type AxisMotionControl<Driver, Timer, const FREQ: u32> = SoftwareMotionControl<
     Driver,
-    compat::Timer<Timer, FREQ>,
+    StepperTimer<Timer, FREQ>,
     AxisMotionProfile,
-    DelayToTicks<<Timer as CountDown>::Time, FREQ>,
+    DelayToTicks<TimerDurationU32<FREQ>, FREQ>,
 >;
 
-pub type AxisDriverDQ542MA<PinDir, PinStep, T, const FREQ: u32> = AxisMotionControl<
+pub type AxisDriverDQ542MA<PinDir, PinStep, Timer, const FREQ: u32> = AxisMotionControl<
     drivers::dq542ma::DQ542MA<(), compat::Pin<PinStep>, compat::Pin<PinDir>>,
-    T,
+    Timer,
     FREQ,
 >;
-pub type AxisDriverErrorDQ542MA<PinDir, PinStep, T, const FREQ: u32> =
-    <AxisDriverDQ542MA<PinDir, PinStep, T, FREQ> as MotionControl>::Error;
+pub type AxisDriverErrorDQ542MA<PinDir, PinStep, Timer, const FREQ: u32> =
+    <AxisDriverDQ542MA<PinDir, PinStep, Timer, FREQ> as MotionControl>::Error;
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
 pub enum AxisState<Velocity> {
@@ -51,20 +52,19 @@ where
     logical_position: f64,
 }
 
-impl<PinDir, PinStep, T, const FREQ: u32> Axis<AxisDriverDQ542MA<PinDir, PinStep, T, FREQ>>
+impl<PinDir, PinStep, Timer, const FREQ: u32> Axis<AxisDriverDQ542MA<PinDir, PinStep, Timer, FREQ>>
 where
     PinDir: OutputPin,
     <PinDir as OutputPin>::Error: Debug,
     PinStep: OutputPin,
     <PinStep as OutputPin>::Error: Debug,
-    T: CountDown,
-    <T as CountDown>::Time: TimeInt + From<Nanoseconds>,
-    <AxisDriverDQ542MA<PinDir, PinStep, T, FREQ> as MotionControl>::Error: Debug,
+    Timer: FugitTimer<FREQ>,
+    <AxisDriverDQ542MA<PinDir, PinStep, Timer, FREQ> as MotionControl>::Error: Debug,
 {
     pub fn new_dq542ma(
         dir: PinDir,
         step: PinStep,
-        timer: T,
+        timer: Timer,
         max_acceleration_in_millimeters_per_sec_per_sec: f64,
         steps_per_millimeter: f64,
     ) -> Self {
@@ -74,7 +74,7 @@ where
 
         let compat_dir = compat::Pin(dir);
         let compat_step = compat::Pin(step);
-        let mut compat_timer = compat::Timer(timer);
+        let mut compat_timer = StepperTimer(timer);
 
         let stepper = Stepper::from_driver(drivers::dq542ma::DQ542MA::new())
             .enable_direction_control(compat_dir, Direction::Forward, &mut compat_timer)
@@ -94,8 +94,7 @@ where
 impl<Driver, Timer, const FREQ: u32> Axis<AxisMotionControl<Driver, Timer, FREQ>>
 where
     Driver: SetDirection + Step,
-    Timer: CountDown,
-    Timer::Time: TimeInt + From<Nanoseconds>,
+    Timer: FugitTimer<FREQ>,
 {
     pub fn get_real_position(&mut self) -> f64 {
         (self.stepper.driver_mut().current_step() as f64) / self.steps_per_millimeter
@@ -110,15 +109,15 @@ impl<Time, const FREQ: u32> DelayToTicks<Time, FREQ> {
     }
 }
 
-impl<Time, const FREQ: u32> motion_control::DelayToTicks<f64> for DelayToTicks<Time, FREQ>
-where
-    Time: From<Nanoseconds>,
-{
-    type Ticks = compat::Ticks<Time, FREQ>;
+impl<Time, const FREQ: u32> motion_control::DelayToTicks<f64> for DelayToTicks<Time, FREQ> {
+    type Ticks = StepperTicks<FREQ>;
     type Error = core::convert::Infallible;
 
     fn delay_to_ticks(&self, delay: f64) -> Result<Self::Ticks, Self::Error> {
-        Ok(compat::Ticks(Nanoseconds(delay as u32).into()))
+        defmt::println!("delay: {}", delay);
+        Ok(StepperTicks::<FREQ>(TimerDurationU32::<FREQ>::from_ticks(
+            delay as u32,
+        )))
     }
 }
 
@@ -131,8 +130,7 @@ pub struct AxisMoveMessage {
 impl<Driver, Timer, const FREQ: u32> ActorReceive for Axis<AxisMotionControl<Driver, Timer, FREQ>>
 where
     Driver: SetDirection + Step,
-    Timer: CountDown,
-    Timer::Time: TimeInt + From<Nanoseconds>,
+    Timer: FugitTimer<FREQ>,
 {
     type Message = AxisMoveMessage;
 
