@@ -49,13 +49,8 @@ macro_rules! impl_embedded_time_conversions {
                 fn try_from(duration: embedded_time::duration::$duration)
                     -> Result<Self, Self::Error>
                 {
-                    // defmt::println!("freq: {}", FREQ);
-                    // defmt::println!("duration: {}", duration.integer());
-                    /*
-                    let ticks =
-                        duration.to_generic::<u32>(Fraction::new(1, FREQ))?;
-                    */
                     let mut ticks = duration.into_ticks::<u32>(Fraction::new(1, FREQ))?;
+                    // if below minimum, set to minimum: 2 ticks
                     if ticks < 2 {
                         ticks = 2;
                     }

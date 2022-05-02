@@ -101,12 +101,14 @@ impl CommandCenter {
             <pac::TIM3 as BusTimerClock>::timer_clock(resources.clocks)
         );
 
+        let max_acceleration_in_millimeters_per_sec_per_sec = 0.001_f64;
+        let steps_per_millimeter = 1_000_f64;
         let x_axis = Axis::new_dq542ma(
             gpiog.pg9.into_push_pull_output(),
             gpiog.pg14.into_push_pull_output(),
             resources.TIM3.counter(resources.clocks),
-            0.001_f64,
-            1_000_f64,
+            max_acceleration_in_millimeters_per_sec_per_sec,
+            steps_per_millimeter,
         );
 
         Self {

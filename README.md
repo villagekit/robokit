@@ -4,7 +4,9 @@ Micro-controller: [Nucleo-144 STM32-F767ZI](https://nz.element14.com/stmicroelec
 
 ## Notes
 
-- Pins: https://github.com/stm32duino/Arduino_Core_STM32/blob/main/variants/STM32F7xx/F765Z(G-I)T_F767Z(G-I)T_F777ZIT/variant_NUCLEO_F767ZI.h
+- Pins:
+  - https://github.com/stm32duino/Arduino_Core_STM32/blob/main/variants/STM32F7xx/F765Z(G-I)T_F767Z(G-I)T_F777ZIT/variant_NUCLEO_F767ZI.h
+  - https://os.mbed.com/platforms/ST-Nucleo-F767ZI/
 
 ## Development
 

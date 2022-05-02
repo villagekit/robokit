@@ -172,6 +172,7 @@ where
                 max_velocity_in_steps_per_sec,
                 target_step,
             } => {
+                defmt::println!("moving: {}", target_step);
                 self.stepper
                     .driver_mut()
                     .move_to_position(max_velocity_in_steps_per_sec, target_step)
