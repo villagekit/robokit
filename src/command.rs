@@ -6,9 +6,9 @@ use stm32f7xx_hal::{
     gpio::{Output, Pin, PushPull},
     pac,
     prelude::*,
-    rcc::Clocks,
+    rcc::{BusTimerClock, Clocks},
     timer::{
-        counter::{CounterMs, CounterUs},
+        counter::{Counter, CounterMs},
         /*Error as TimerError,*/ TimerExt,
     },
 };
@@ -51,11 +51,12 @@ type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
 type BlueLedTimer = CounterMs<pac::TIM10>;
 type RedLedPin = Pin<'B', 14, Output<PushPull>>;
 type RedLedTimer = CounterMs<pac::TIM11>;
+const X_AXIS_FREQ: u32 = 1_000_000;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
 type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
-type XAxisTimer = CounterUs<pac::TIM3>;
-type XAxisDriver = AxisDriverDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
-type XAxisDriverError = AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, 1_000_000>;
+type XAxisTimer = Counter<pac::TIM3, X_AXIS_FREQ>;
+type XAxisDriver = AxisDriverDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_FREQ>;
+type XAxisDriverError = AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_FREQ>;
 
 pub struct CommandCenterActors {
     pub green_led: Led<GreenLedPin, GreenLedTimer>,
@@ -95,10 +96,15 @@ impl CommandCenter {
             resources.TIM11.counter_ms(resources.clocks),
         );
 
+        defmt::println!(
+            "TIM3 clock: {}",
+            <pac::TIM3 as BusTimerClock>::timer_clock(resources.clocks)
+        );
+
         let x_axis = Axis::new_dq542ma(
             gpiog.pg9.into_push_pull_output(),
             gpiog.pg14.into_push_pull_output(),
-            resources.TIM3.counter_us(resources.clocks),
+            resources.TIM3.counter(resources.clocks),
             0.001_f64,
             1_000_f64,
         );

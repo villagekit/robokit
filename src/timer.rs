@@ -21,7 +21,6 @@ where
         Ticks: Into<Self::Time>,
     {
         let ticks = ticks.into();
-        defmt::println!("ticks: {}", ticks);
         self.0.start(ticks.0).unwrap();
         Ok(())
     }
@@ -50,12 +49,17 @@ macro_rules! impl_embedded_time_conversions {
                 fn try_from(duration: embedded_time::duration::$duration)
                     -> Result<Self, Self::Error>
                 {
-                    defmt::println!("freq: {}", FREQ);
-                    defmt::println!("duration: {}", duration.integer());
+                    // defmt::println!("freq: {}", FREQ);
+                    // defmt::println!("duration: {}", duration.integer());
+                    /*
                     let ticks =
                         duration.to_generic::<u32>(Fraction::new(1, FREQ))?;
-                    defmt::println!("try ticks: {}", ticks.integer());
-                    Ok(Self(TimerDuration::<u32, FREQ>::from_ticks(ticks.integer())))
+                    */
+                    let mut ticks = duration.into_ticks::<u32>(Fraction::new(1, FREQ))?;
+                    if ticks < 2 {
+                        ticks = 2;
+                    }
+                    Ok(Self(TimerDuration::<u32, FREQ>::from_ticks(ticks)))
                 }
             }
         )*
@@ -70,6 +74,31 @@ impl_embedded_time_conversions!(
     Minutes,
     Hours,
 );
+
+/*
+impl<const FREQ: u32> TryFrom<Nanoseconds> for StepperTicks<FREQ> {
+    type Error = ConversionError;
+
+    fn try_from(duration: Nanoseconds) -> Result<Self, Self::Error> {
+        defmt::println!("max: {}", u32::MAX);
+        let fugit_duration = NanosDurationU32::from_ticks(duration.integer());
+        defmt::println!("fugit: {}", fugit_duration);
+        let timer_duration: TimerDuration<u32, FREQ> = fugit_duration.convert();
+        defmt::println!("timer: {}", timer_duration);
+        Ok(Self(timer_duration))
+    }
+}
+
+impl<const FREQ: u32> TryFrom<Nanoseconds> for StepperTicks<FREQ> {
+    type Error = ConversionError;
+
+    fn try_from(duration: Nanoseconds) -> Result<Self, Self::Error> {
+        let nanos = duration.integer();
+        let micros = nanos * 1_000_u32;
+        Ok(Self(TimerDuration::<u32, FREQ>::from_ticks(micros)))
+    }
+}
+*/
 
 impl<const FREQ: u32> ops::Sub for StepperTicks<FREQ> {
     type Output = Self;

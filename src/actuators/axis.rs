@@ -114,7 +114,6 @@ impl<Time, const FREQ: u32> motion_control::DelayToTicks<f64> for DelayToTicks<T
     type Error = core::convert::Infallible;
 
     fn delay_to_ticks(&self, delay: f64) -> Result<Self::Ticks, Self::Error> {
-        defmt::println!("delay: {}", delay);
         Ok(StepperTicks::<FREQ>(TimerDurationU32::<FREQ>::from_ticks(
             delay as u32,
         )))
