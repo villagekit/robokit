@@ -79,11 +79,11 @@ mod app {
             }),
             */
             Command::XAxis(AxisMoveMessage {
-                max_velocity_in_millimeters_per_sec: 10_f64,
+                max_velocity_in_millimeters_per_sec: 20_f64,
                 distance_in_millimeters: 40_f64,
             }),
             Command::XAxis(AxisMoveMessage {
-                max_velocity_in_millimeters_per_sec: 10_f64,
+                max_velocity_in_millimeters_per_sec: 20_f64,
                 distance_in_millimeters: -40_f64,
             }),
         ];
