@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
-use fugit::{SecsDurationU32, TimerDurationU32};
+use fugit::TimerDurationU32;
 use fugit_timer::Timer as FugitTimer;
 use stepper::{
     compat, drivers,

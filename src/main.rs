@@ -33,7 +33,7 @@ mod app {
         defmt::println!("Init!");
 
         let rcc = ctx.device.RCC.constrain();
-        let clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
+        let clocks = rcc.cfgr.sysclk(216.MHz()).freeze();
 
         let mono = ctx.device.TIM2.monotonic_us(&clocks);
 

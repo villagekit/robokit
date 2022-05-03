@@ -114,7 +114,7 @@ impl CommandCenter {
 
         let max_acceleration_in_millimeters_per_sec_per_sec = 5_f64;
 
-        let steps_per_revolution = 3_200_f64;
+        let steps_per_revolution = 25600_f64;
         let leadscrew_starts = 4_f64;
         let leadscrew_pitch = 2_f64;
         let millimeters_per_revolution = leadscrew_starts * leadscrew_pitch;

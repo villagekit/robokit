@@ -28,7 +28,13 @@ where
 
     fn wait(&mut self) -> nb::Result<(), Self::Error> {
         match self.0.wait() {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                // HACK: if the timer isn't cancelled, it's periodic
+                // and will automatically return on next call.
+                self.0.cancel().unwrap();
+
+                Ok(())
+            }
             Err(nb::Error::WouldBlock) => return Err(nb::Error::WouldBlock),
             Err(nb::Error::Other(_)) => {
                 unreachable!("Caught error from infallible method")
