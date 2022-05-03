@@ -1,7 +1,7 @@
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
-use fugit::MillisDurationU32 as MillisDuration;
+use fugit::TimerDurationU32 as TimerDuration;
 use fugit_timer::Timer;
 
 use crate::actor::{ActorPoll, ActorReceive};
@@ -14,25 +14,25 @@ pub enum LedBlinkStatus {
 }
 
 #[derive(Clone, Copy)]
-pub struct LedBlinkState {
+pub struct LedBlinkState<const FREQ: u32> {
     status: LedBlinkStatus,
-    duration: MillisDuration,
+    duration: TimerDuration<FREQ>,
 }
 
-pub struct Led<P, T>
+pub struct Led<P, T, const FREQ: u32>
 where
     P: OutputPin,
-    T: Timer<1_000>,
+    T: Timer<FREQ>,
 {
     pin: P,
     timer: T,
-    state: Option<LedBlinkState>,
+    state: Option<LedBlinkState<FREQ>>,
 }
 
-impl<P, T> Led<P, T>
+impl<P, T, const FREQ: u32> Led<P, T, FREQ>
 where
     P: OutputPin,
-    T: Timer<1_000>,
+    T: Timer<FREQ>,
 {
     pub fn new(pin: P, timer: T) -> Self {
         Led {
@@ -44,16 +44,16 @@ where
 }
 
 #[derive(Format)]
-pub struct LedBlinkMessage {
-    pub duration: MillisDuration,
+pub struct LedBlinkMessage<const FREQ: u32> {
+    pub duration: TimerDuration<FREQ>,
 }
 
-impl<P, T> ActorReceive for Led<P, T>
+impl<P, T, const FREQ: u32> ActorReceive for Led<P, T, FREQ>
 where
     P: OutputPin,
-    T: Timer<1_000>,
+    T: Timer<FREQ>,
 {
-    type Message = LedBlinkMessage;
+    type Message = LedBlinkMessage<FREQ>;
 
     fn receive(&mut self, action: &Self::Message) {
         self.state = Some(LedBlinkState {
@@ -69,10 +69,10 @@ pub enum LedError<PinError, TimerError> {
     Timer(TimerError),
 }
 
-impl<P, T> ActorPoll for Led<P, T>
+impl<P, T, const FREQ: u32> ActorPoll for Led<P, T, FREQ>
 where
     P: OutputPin,
-    T: Timer<1_000>,
+    T: Timer<FREQ>,
 {
     type Error = LedError<P::Error, T::Error>;
 

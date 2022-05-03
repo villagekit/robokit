@@ -67,29 +67,23 @@ mod app {
         let command_center = ctx.local.command_center;
 
         let commands = [
+            /*
             Command::GreenLed(LedBlinkMessage {
-                duration: 1000.millis(),
-            }),
-            Command::XAxis(AxisMoveMessage {
-                max_velocity_in_millimeters_per_sec: 1_f64,
-                distance_in_millimeters: 40_f64,
+                duration: 50000.micros(),
             }),
             Command::BlueLed(LedBlinkMessage {
-                duration: 1000.millis(),
-            }),
-            Command::XAxis(AxisMoveMessage {
-                max_velocity_in_millimeters_per_sec: 1_f64,
-                distance_in_millimeters: -40_f64,
+                duration: 50000.micros(),
             }),
             Command::RedLed(LedBlinkMessage {
-                duration: 1000.millis(),
+                duration: 50000.micros(),
             }),
+            */
             Command::XAxis(AxisMoveMessage {
-                max_velocity_in_millimeters_per_sec: 2_f64,
+                max_velocity_in_millimeters_per_sec: 10_f64,
                 distance_in_millimeters: 40_f64,
             }),
             Command::XAxis(AxisMoveMessage {
-                max_velocity_in_millimeters_per_sec: 2_f64,
+                max_velocity_in_millimeters_per_sec: 10_f64,
                 distance_in_millimeters: -40_f64,
             }),
         ];

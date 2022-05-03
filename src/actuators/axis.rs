@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
-use fugit::TimerDurationU32;
+use fugit::{SecsDurationU32, TimerDurationU32};
 use fugit_timer::Timer as FugitTimer;
 use stepper::{
     compat, drivers,
@@ -114,9 +114,11 @@ impl<Time, const FREQ: u32> motion_control::DelayToTicks<f64> for DelayToTicks<T
     type Error = core::convert::Infallible;
 
     fn delay_to_ticks(&self, delay: f64) -> Result<Self::Ticks, Self::Error> {
-        Ok(StepperTicks::<FREQ>(TimerDurationU32::<FREQ>::from_ticks(
-            delay as u32,
-        )))
+        let ticks = TimerDurationU32::<FREQ>::from_ticks((delay * (FREQ as f64)) as u32);
+
+        // defmt::println!("ticks: {}", ticks);
+
+        Ok(StepperTicks::<FREQ>(ticks))
     }
 }
 
@@ -167,12 +169,15 @@ where
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         match self.state {
-            AxisState::Idle => Poll::Ready(Ok(())),
+            AxisState::Idle => {
+                //defmt::println!("idle");
+                Poll::Ready(Ok(()))
+            }
             AxisState::Initial {
                 max_velocity_in_steps_per_sec,
                 target_step,
             } => {
-                defmt::println!("moving: {}", target_step);
+                defmt::println!("initial: {}", target_step);
                 self.stepper
                     .driver_mut()
                     .move_to_position(max_velocity_in_steps_per_sec, target_step)
@@ -181,6 +186,7 @@ where
                 Poll::Pending
             }
             AxisState::Moving => {
+                //defmt::println!("moving");
                 let still_moving = self
                     .stepper
                     .driver_mut()
