@@ -11,6 +11,7 @@ mod app {
 
     use gridbot::{
         actor::{ActorPoll, ActorReceive},
+        actuators::axis::AxisMoveMessage,
         actuators::led::LedBlinkMessage,
         command::{Command, CommandCenter, CommandCenterResources},
     };
@@ -32,15 +33,17 @@ mod app {
         defmt::println!("Init!");
 
         let rcc = ctx.device.RCC.constrain();
-        let clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
+        let clocks = rcc.cfgr.sysclk(216.MHz()).freeze();
 
         let mono = ctx.device.TIM2.monotonic_us(&clocks);
 
         let command_center = CommandCenter::new(CommandCenterResources {
             GPIOB: ctx.device.GPIOB,
+            GPIOG: ctx.device.GPIOG,
             TIM3: ctx.device.TIM3,
-            TIM4: ctx.device.TIM4,
-            TIM5: ctx.device.TIM5,
+            TIM9: ctx.device.TIM9,
+            TIM10: ctx.device.TIM10,
+            TIM11: ctx.device.TIM11,
             clocks: &clocks,
         });
 
@@ -65,13 +68,30 @@ mod app {
 
         let commands = [
             Command::GreenLed(LedBlinkMessage {
-                duration: 1000.millis(),
+                duration: 50000.micros(),
             }),
             Command::BlueLed(LedBlinkMessage {
-                duration: 2000.millis(),
+                duration: 50000.micros(),
             }),
             Command::RedLed(LedBlinkMessage {
-                duration: 500.millis(),
+                duration: 50000.micros(),
+            }),
+            Command::XAxis(AxisMoveMessage {
+                max_velocity_in_millimeters_per_sec: 40_f64,
+                distance_in_millimeters: 40_f64,
+            }),
+            Command::RedLed(LedBlinkMessage {
+                duration: 50000.micros(),
+            }),
+            Command::BlueLed(LedBlinkMessage {
+                duration: 50000.micros(),
+            }),
+            Command::GreenLed(LedBlinkMessage {
+                duration: 50000.micros(),
+            }),
+            Command::XAxis(AxisMoveMessage {
+                max_velocity_in_millimeters_per_sec: 40_f64,
+                distance_in_millimeters: -40_f64,
             }),
         ];
         let mut command_index = 0;
