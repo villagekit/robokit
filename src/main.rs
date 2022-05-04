@@ -67,7 +67,6 @@ mod app {
         let command_center = ctx.local.command_center;
 
         let commands = [
-            /*
             Command::GreenLed(LedBlinkMessage {
                 duration: 50000.micros(),
             }),
@@ -77,10 +76,18 @@ mod app {
             Command::RedLed(LedBlinkMessage {
                 duration: 50000.micros(),
             }),
-            */
             Command::XAxis(AxisMoveMessage {
                 max_velocity_in_millimeters_per_sec: 40_f64,
                 distance_in_millimeters: 40_f64,
+            }),
+            Command::RedLed(LedBlinkMessage {
+                duration: 50000.micros(),
+            }),
+            Command::BlueLed(LedBlinkMessage {
+                duration: 50000.micros(),
+            }),
+            Command::GreenLed(LedBlinkMessage {
+                duration: 50000.micros(),
             }),
             Command::XAxis(AxisMoveMessage {
                 max_velocity_in_millimeters_per_sec: 40_f64,
