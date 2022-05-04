@@ -116,8 +116,6 @@ impl<Time, const FREQ: u32> motion_control::DelayToTicks<f64> for DelayToTicks<T
     fn delay_to_ticks(&self, delay: f64) -> Result<Self::Ticks, Self::Error> {
         let ticks = TimerDurationU32::<FREQ>::from_ticks((delay * (FREQ as f64)) as u32);
 
-        // defmt::println!("ticks: {}", ticks);
-
         Ok(StepperTicks::<FREQ>(ticks))
     }
 }

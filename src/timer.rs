@@ -20,18 +20,45 @@ where
     where
         Ticks: Into<Self::Time>,
     {
-        let ticks = ticks.into();
-        // defmt::println!("timer: {}", ticks);
-        self.0.start(ticks.0).unwrap();
+        /*
+        // subtract time spent between now and previous timer
+        let sofar_ticks = self.0.now().ticks();
+        let wait_ticks = ticks.into().0.ticks();
+        let mut ticks = if wait_ticks <= sofar_ticks {
+            0
+        } else {
+            wait_ticks - sofar_ticks
+        };
+        if ticks > 50 {
+            defmt::println!("timer: {} - {} = {}", wait_ticks, sofar_ticks, ticks);
+        }
+        */
+
+        let mut ticks = ticks.into().0.ticks();
+
+        // wait to discard any interrupt events that triggered before we started.
+        self.0.wait().ok();
+
+        // if below minimum, set to minimum: 2 ticks
+        if ticks < 2 {
+            ticks = 2;
+        }
+
+        self.0
+            .start(TimerDuration::<u32, FREQ>::from_ticks(ticks))
+            .unwrap();
         Ok(())
     }
 
     fn wait(&mut self) -> nb::Result<(), Self::Error> {
         match self.0.wait() {
             Ok(()) => {
-                // HACK: if the timer isn't cancelled, it's periodic
-                // and will automatically return on next call.
-                self.0.cancel().unwrap();
+                /*
+                // start another timer to count time between now and next timer
+                self.0
+                    .start(TimerDuration::<u32, FREQ>::from_ticks(65535))
+                    .unwrap();
+                */
 
                 Ok(())
             }
@@ -56,11 +83,7 @@ macro_rules! impl_embedded_time_conversions {
                 fn try_from(duration: embedded_time::duration::$duration)
                     -> Result<Self, Self::Error>
                 {
-                    let mut ticks = duration.into_ticks::<u32>(Fraction::new(1, FREQ))?;
-                    // if below minimum, set to minimum: 2 ticks
-                    if ticks < 2 {
-                        ticks = 2;
-                    }
+                    let ticks = duration.into_ticks::<u32>(Fraction::new(1, FREQ))?;
                     Ok(Self(TimerDuration::<u32, FREQ>::from_ticks(ticks)))
                 }
             }
