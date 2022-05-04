@@ -80,6 +80,9 @@ where
         if let Some(state) = self.state {
             match state.status {
                 LedBlinkStatus::Start => {
+                    // wait to discard any interrupt events that triggered before we started.
+                    self.timer.wait().ok();
+
                     // start timer
                     self.timer
                         .start(state.duration)
@@ -109,10 +112,6 @@ where
                     }
                 },
                 LedBlinkStatus::Done => {
-                    // if the timer isn't cancelled, it's periodic
-                    // and will automatically return on next call.
-                    self.timer.cancel().map_err(|err| LedError::Timer(err))?;
-
                     self.pin.set_low().map_err(|err| LedError::Pin(err))?;
 
                     self.state = None;
