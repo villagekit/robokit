@@ -90,7 +90,7 @@ where
             stepper: stepper,
             steps_per_millimeter,
             state: AxisState::Idle,
-            logical_position: 0.,
+            logical_position: 0_f64,
         }
     }
 }
@@ -147,6 +147,9 @@ where
         let real_position_difference = next_logical_position - self.get_real_position();
         let step_difference: i32 = (real_position_difference * self.steps_per_millimeter) as i32;
         let target_step = self.stepper.driver_mut().current_step() + step_difference;
+
+        // NOTE(mw) hmm... is this the best way to do this?
+        self.logical_position = next_logical_position;
 
         self.state = AxisState::Initial {
             max_velocity_in_steps_per_sec,
