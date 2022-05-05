@@ -1,102 +1,56 @@
-# gridbot-software
+# Robo Kit 🤖
 
-Micro-controller: [Nucleo-144 STM32-F767ZI](https://nz.element14.com/stmicroelectronics/nucleo-f767zi/dev-board-nucleo-32-mcu/dp/2546569)
+## About
 
-## Notes
+Firmware for simple robotic automation.
 
-- Pins:
-  - https://github.com/stm32duino/Arduino_Core_STM32/blob/main/variants/STM32F7xx/F765Z(G-I)T_F767Z(G-I)T_F777ZIT/variant_NUCLEO_F767ZI.h
-  - https://os.mbed.com/platforms/ST-Nucleo-F767ZI/
+The short-term goal is to build [an automated machine for grid beam production](https://wiki.villagekit.com/en/grid-bot/concepts).
+
+The long-term goal is to provide a [real-time interrupt-driven](https://rtic.rs) [actor-based](https://en.wikipedia.org/wiki/Actor_model) foundation for robotic automation or CNC machine control.
+
+## Status
+
+Under active development, but probably not useful to anyone.
+
+If you're here and like what's happening, please say hi! 👋
+
+## Feature Wishlist
+
+- Command system
+  - G-Code
+- Actuators
+  - Led
+  - Linear axis
+    - Stepper motor
+  - Spindle
+  - Pneumatic actuator
+- Sensors
+  - Button
+  - Switch
+  - Limit switch
+  - Rotary encoder
+  - Linear encoder
+- Interfaces
+  - Physical controls
+  - JSON-RPC
+  - Web
 
 ## Development
 
-### Setup
+See [`docs/dev.md`](./docs/dev.md)
 
-#### Rust
+## License
 
-With [`rustup`](https://rustup.rs) installed, install the toolchain:
+Copyright 2022 Village Kit Limited
 
-( https://docs.rust-embedded.org/cortex-m-quickstart/cortex_m_quickstart/ )
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-```shell
-rustup target add thumbv7em-none-eabi
-```
+    http://www.apache.org/licenses/LICENSE-2.0
 
-#### Binary utils
-
-```shell
-sudo apt install build-essential
-```
-
-```shell
-cargo install cargo-binutils
-```
-
-```shell
-rustup component add llvm-tools-preview
-```
-
-> Alternatively, install GNU Binutils for ARM:
->
-> ```
-> sudo apt install binutils-arm-none-eabi
-> ```
-
-#### Flash tools
-
-```shell
-sudo apt install pkg-config libusb-1.0-0-dev libudev-dev
-```
-
-```shell
-cargo install cargo-flash
-```
-
-> Alternatively, to flash onto the STM32, install [`stlink-tools`](https://github.com/stlink-org/stlink)
->
-> ```shell
-> sudo apt install stlink-tools
-> ```
-
-### Dev tools
-
-```shell
-cargo install flip-link
-cargo install probe-run
-```
-
-### Run
-
-Run:
-
-```shell
-cargo run
-```
-
-### Build and Flash
-
-Build:
-
-```shell
-cargo build --release
-```
-
-Flash:
-
-```shell
-cargo flash --chip stm32f767zitx --release
-```
-
-### Test
-
-Unit tests:
-
-```shell
-cargo test --lib
-```
-
-Integration tests:
-
-```shell
-cargo test --test integration
-```
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
