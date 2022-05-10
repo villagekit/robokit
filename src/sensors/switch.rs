@@ -1,3 +1,6 @@
+// inspired by https://github.com/rubberduck203/switch-hal
+
+use core::marker::PhantomData;
 use embedded_hal::digital::v2::InputPin;
 
 use crate::actor::ActorSense;
@@ -13,23 +16,56 @@ pub struct SwitchUpdate {
     pub status: SwitchStatus,
 }
 
-pub struct Switch<P>
+pub struct SwitchActiveLow;
+pub struct SwitchActiveHigh;
+
+pub struct Switch<Pin, ActiveLevel>
 where
-    P: InputPin,
+    Pin: InputPin,
 {
-    pin: P,
+    pin: Pin,
     current_status: Option<SwitchStatus>,
+    active_level: PhantomData<ActiveLevel>,
 }
 
-impl<P> Switch<P>
+impl<Pin, ActiveLevel> Switch<Pin, ActiveLevel>
 where
-    P: InputPin,
+    Pin: InputPin,
 {
-    pub fn new(pin: P) -> Self {
+    pub fn new(pin: Pin) -> Self {
         Switch {
             pin,
             current_status: None,
+            active_level: PhantomData::<ActiveLevel>,
         }
+    }
+}
+
+pub trait InputSwitch {
+    type Error;
+
+    fn is_active(&self) -> Result<bool, Self::Error>;
+}
+
+impl<Pin> InputSwitch for Switch<Pin, SwitchActiveLow>
+where
+    Pin: InputPin,
+{
+    type Error = <Pin as InputPin>::Error;
+
+    fn is_active(&self) -> Result<bool, Self::Error> {
+        self.pin.is_low()
+    }
+}
+
+impl<Pin> InputSwitch for Switch<Pin, SwitchActiveHigh>
+where
+    Pin: InputPin,
+{
+    type Error = <Pin as InputPin>::Error;
+
+    fn is_active(&self) -> Result<bool, Self::Error> {
+        self.pin.is_high()
     }
 }
 
@@ -38,17 +74,18 @@ pub enum SwitchError<PinError> {
     Pin(PinError),
 }
 
-impl<P> ActorSense for Switch<P>
+impl<Pin, ActiveLevel> ActorSense for Switch<Pin, ActiveLevel>
 where
-    P: InputPin,
+    Self: InputSwitch,
+    Pin: InputPin,
 {
     type Message = SwitchUpdate;
-    type Error = SwitchError<P::Error>;
+    type Error = SwitchError<<Self as InputSwitch>::Error>;
 
     fn sense(&mut self) -> Result<Option<SwitchUpdate>, Self::Error> {
-        let is_high = self.pin.is_high().map_err(|err| SwitchError::Pin(err))?;
+        let is_active = self.is_active().map_err(|err| SwitchError::Pin(err))?;
 
-        let status = if is_high {
+        let status = if is_active {
             SwitchStatus::On
         } else {
             SwitchStatus::Off

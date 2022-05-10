@@ -18,7 +18,7 @@ use crate::actuators::axis::{
     Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisMoveMessage,
 };
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
-use crate::sensors::switch::{Switch, SwitchError, SwitchUpdate};
+use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchUpdate};
 
 /* actuators */
 
@@ -91,7 +91,7 @@ pub enum ActuatorError {
 }
 
 pub struct CommandCenterSensors {
-    pub user_button: Switch<UserButtonPin>,
+    pub user_button: Switch<UserButtonPin, SwitchActiveHigh>,
 }
 
 #[derive(Debug)]
