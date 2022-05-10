@@ -39,6 +39,7 @@ mod app {
 
         let command_center = CommandCenter::new(CommandCenterResources {
             GPIOB: ctx.device.GPIOB,
+            GPIOC: ctx.device.GPIOC,
             GPIOG: ctx.device.GPIOG,
             TIM3: ctx.device.TIM3,
             TIM9: ctx.device.TIM9,
