@@ -3,7 +3,7 @@ use defmt::Format;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use fugit_timer::Timer;
 use stm32f7xx_hal::{
-    gpio::{Input, Output, Pin, PushPull},
+    gpio::{Floating, Input, Output, Pin, PushPull},
     pac,
     prelude::*,
     rcc::{BusTimerClock, Clocks},
@@ -61,7 +61,7 @@ pub enum CommandActuator {
 }
 
 /* sensors */
-type UserButtonPin = Pin<'C', 13, Input>;
+type UserButtonPin = Pin<'C', 13, Input<Floating>>;
 type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
 
 #[allow(non_snake_case)]
@@ -195,6 +195,12 @@ impl ActorReceive<Command> for CommandCenter {
 
 impl CommandCenter {
     pub fn update(&mut self) -> Result<(), SensorError> {
+        let axis_limit_min_message = AxisLimitMessage {
+            side: AxisLimitSide::Min,
+            status: AxisLimitStatus::Under,
+        };
+        self.actuators.x_axis.receive(&axis_limit_min_message);
+
         if let Some(user_button_update) = self
             .sensors
             .user_button
@@ -203,14 +209,8 @@ impl CommandCenter {
         {
             let axis_limit_status = match user_button_update.status {
                 SwitchStatus::On => AxisLimitStatus::Over,
-                SwitchStatus::Off => AxisLimitStatus::Over,
+                SwitchStatus::Off => AxisLimitStatus::Under,
             };
-
-            let axis_limit_min_message = AxisLimitMessage {
-                side: AxisLimitSide::Min,
-                status: axis_limit_status,
-            };
-            self.actuators.x_axis.receive(&axis_limit_min_message);
 
             let axis_limit_max_message = AxisLimitMessage {
                 side: AxisLimitSide::Max,
