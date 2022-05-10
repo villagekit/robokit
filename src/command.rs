@@ -15,10 +15,11 @@ use stm32f7xx_hal::{
 
 use crate::actor::{ActorPoll, ActorReceive, ActorSense};
 use crate::actuators::axis::{
-    Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisMoveMessage,
+    Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisLimitMessage, AxisLimitSide,
+    AxisLimitStatus, AxisMoveMessage,
 };
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
-use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchUpdate};
+use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
 
 /* actuators */
 
@@ -168,10 +169,8 @@ impl CommandCenter {
     }
 }
 
-impl ActorReceive for CommandCenter {
-    type Message = Command;
-
-    fn receive(&mut self, command: &Self::Message) {
+impl ActorReceive<Command> for CommandCenter {
+    fn receive(&mut self, command: &Command) {
         match command {
             Command::GreenLed(message) => {
                 self.actuators.green_led.receive(message);
@@ -196,13 +195,28 @@ impl ActorReceive for CommandCenter {
 
 impl CommandCenter {
     pub fn update(&mut self) -> Result<(), SensorError> {
-        if let Some(_user_button_update) = self
+        if let Some(user_button_update) = self
             .sensors
             .user_button
             .sense()
             .map_err(|err| SensorError::UserButton(err))?
         {
-            // self.actuators.blue_led.receive(&user_button_update);
+            let axis_limit_status = match user_button_update.status {
+                SwitchStatus::On => AxisLimitStatus::Over,
+                SwitchStatus::Off => AxisLimitStatus::Over,
+            };
+
+            let axis_limit_min_message = AxisLimitMessage {
+                side: AxisLimitSide::Min,
+                status: axis_limit_status,
+            };
+            self.actuators.x_axis.receive(&axis_limit_min_message);
+
+            let axis_limit_max_message = AxisLimitMessage {
+                side: AxisLimitSide::Max,
+                status: axis_limit_status,
+            };
+            self.actuators.x_axis.receive(&axis_limit_max_message);
         }
 
         Ok(())

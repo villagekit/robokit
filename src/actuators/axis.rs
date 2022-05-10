@@ -46,6 +46,18 @@ pub enum AxisState<Velocity> {
     Moving,
 }
 
+#[derive(Debug, Format, Copy, Clone)]
+pub enum AxisLimitSide {
+    Min,
+    Max,
+}
+
+#[derive(Debug, Format, Copy, Clone)]
+pub enum AxisLimitStatus {
+    Under,
+    Over,
+}
+
 pub struct Axis<Driver>
 where
     Driver: MotionControl,
@@ -54,6 +66,8 @@ where
     steps_per_millimeter: f64,
     state: AxisState<<Driver as MotionControl>::Velocity>,
     logical_position: f64,
+    limit_min: Option<AxisLimitStatus>,
+    limit_max: Option<AxisLimitStatus>,
 }
 
 impl<PinDir, PinStep, Timer, const FREQ: u32> Axis<AxisDriverDQ542MA<PinDir, PinStep, Timer, FREQ>>
@@ -91,6 +105,8 @@ where
             steps_per_millimeter,
             state: AxisState::Idle,
             logical_position: 0_f64,
+            limit_min: None,
+            limit_max: None,
         }
     }
 }
@@ -130,14 +146,13 @@ pub struct AxisMoveMessage {
     pub distance_in_millimeters: f64,
 }
 
-impl<Driver, Timer, const FREQ: u32> ActorReceive for Axis<AxisMotionControl<Driver, Timer, FREQ>>
+impl<Driver, Timer, const FREQ: u32> ActorReceive<AxisMoveMessage>
+    for Axis<AxisMotionControl<Driver, Timer, FREQ>>
 where
     Driver: SetDirection + Step,
     Timer: FugitTimer<FREQ>,
 {
-    type Message = AxisMoveMessage;
-
-    fn receive(&mut self, action: &Self::Message) {
+    fn receive(&mut self, action: &AxisMoveMessage) {
         let max_velocity_in_steps_per_sec =
             action.max_velocity_in_millimeters_per_sec * self.steps_per_millimeter;
 
@@ -158,10 +173,33 @@ where
     }
 }
 
+#[derive(Format)]
+pub struct AxisLimitMessage {
+    pub side: AxisLimitSide,
+    pub status: AxisLimitStatus,
+}
+
+impl<Driver> ActorReceive<AxisLimitMessage> for Axis<Driver>
+where
+    Driver: MotionControl,
+{
+    fn receive(&mut self, action: &AxisLimitMessage) {
+        match action.side {
+            AxisLimitSide::Min => {
+                self.limit_min = Some(action.status);
+            }
+            AxisLimitSide::Max => {
+                self.limit_max = Some(action.status);
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum AxisError<DriverError: Debug> {
     Driver(DriverError),
-    Programmer,
+    Limit(AxisLimitSide),
+    Unexpected,
 }
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html#
@@ -173,6 +211,22 @@ where
     type Error = AxisError<<Driver as MotionControl>::Error>;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+        // limit: min
+        if let None = self.limit_min {
+            return Poll::Ready(Err(AxisError::Unexpected));
+        }
+        if let Some(AxisLimitStatus::Over) = self.limit_min {
+            return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Min)));
+        }
+
+        // limit: max
+        if let None = self.limit_max {
+            return Poll::Ready(Err(AxisError::Unexpected));
+        }
+        if let Some(AxisLimitStatus::Over) = self.limit_max {
+            return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Max)));
+        }
+
         match self.state {
             AxisState::Idle => Poll::Ready(Ok(())),
             AxisState::Initial {

@@ -48,14 +48,12 @@ pub struct LedBlinkMessage<const FREQ: u32> {
     pub duration: TimerDuration<FREQ>,
 }
 
-impl<P, T, const FREQ: u32> ActorReceive for Led<P, T, FREQ>
+impl<P, T, const FREQ: u32> ActorReceive<LedBlinkMessage<FREQ>> for Led<P, T, FREQ>
 where
     P: OutputPin,
     T: Timer<FREQ>,
 {
-    type Message = LedBlinkMessage<FREQ>;
-
-    fn receive(&mut self, action: &Self::Message) {
+    fn receive(&mut self, action: &LedBlinkMessage<FREQ>) {
         self.state = Some(LedBlinkState {
             status: LedBlinkStatus::Start,
             duration: action.duration,
