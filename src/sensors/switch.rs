@@ -55,6 +55,8 @@ where
         };
 
         if Some(status) != self.current_status {
+            self.current_status = Some(status);
+
             Ok(Some(SwitchUpdate { status }))
         } else {
             Ok(None)
