@@ -1,6 +1,6 @@
 use embedded_hal::digital::v2::InputPin;
 
-use crate::actor::{ActorPost, ActorSense};
+use crate::actor::ActorSense;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SwitchStatus {
@@ -13,25 +13,21 @@ pub struct SwitchUpdate {
     pub status: SwitchStatus,
 }
 
-pub struct Switch<P, O>
+pub struct Switch<P>
 where
     P: InputPin,
-    O: ActorPost<Message = SwitchUpdate>,
 {
     pin: P,
-    outbox: O,
     current_status: Option<SwitchStatus>,
 }
 
-impl<P, O> Switch<P, O>
+impl<P> Switch<P>
 where
     P: InputPin,
-    O: ActorPost<Message = SwitchUpdate>,
 {
-    pub fn new(pin: P, outbox: O) -> Self {
+    pub fn new(pin: P) -> Self {
         Switch {
             pin,
-            outbox,
             current_status: None,
         }
     }
@@ -42,14 +38,14 @@ pub enum SwitchError<PinError> {
     Pin(PinError),
 }
 
-impl<P, O> ActorSense for Switch<P, O>
+impl<P> ActorSense for Switch<P>
 where
     P: InputPin,
-    O: ActorPost<Message = SwitchUpdate>,
 {
+    type Message = SwitchUpdate;
     type Error = SwitchError<P::Error>;
 
-    fn sense(&mut self) -> Result<(), Self::Error> {
+    fn sense(&mut self) -> Result<Option<SwitchUpdate>, Self::Error> {
         let is_high = self.pin.is_high().map_err(|err| SwitchError::Pin(err))?;
 
         let status = if is_high {
@@ -59,9 +55,9 @@ where
         };
 
         if Some(status) != self.current_status {
-            self.outbox.post(SwitchUpdate { status });
+            Ok(Some(SwitchUpdate { status }))
+        } else {
+            Ok(None)
         }
-
-        Ok(())
     }
 }

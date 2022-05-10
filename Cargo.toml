@@ -21,7 +21,6 @@ embedded-hal = "0.2"
 embedded-time = "0.12"
 fugit = { version = "0.3", features = ["defmt"] }
 fugit-timer = "0.1"
-heapless = "0.7"
 nb = "1"
 num = { version = "0.3", default-features = false }
 panic-probe = { version = "0.3", features = ["print-defmt"] }

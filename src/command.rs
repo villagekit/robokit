@@ -13,9 +13,7 @@ use stm32f7xx_hal::{
     },
 };
 
-use crate::actor::{
-    ActorOutbox, ActorOutboxConsumer, ActorOutboxProducer, ActorPoll, ActorPost, ActorReceive,
-};
+use crate::actor::{ActorPoll, ActorReceive, ActorSense};
 use crate::actuators::axis::{
     Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisMoveMessage,
 };
@@ -85,34 +83,35 @@ pub struct CommandCenterActuators {
 }
 
 #[derive(Debug)]
-pub enum CommandError {
+pub enum ActuatorError {
     GreenLed(GreenLedError),
     BlueLed(BlueLedError),
     RedLed(RedLedError),
     XAxis(XAxisError),
 }
 
-pub struct CommandCenterSensors<'a> {
-    pub user_button: Switch<UserButtonPin, ActorOutboxProducer<'a, SwitchUpdate>>,
+pub struct CommandCenterSensors {
+    pub user_button: Switch<UserButtonPin>,
 }
 
-pub struct CommandCenterSensorOutboxes {
-    pub user_button: ActorOutbox<SwitchUpdate>,
+#[derive(Debug)]
+pub enum SensorError {
+    UserButton(UserButtonError),
 }
 
-pub struct CommandCenterSensorConsumers<'a> {
-    pub user_button: ActorOutboxConsumer<'a, SwitchUpdate>,
+#[derive(Debug)]
+pub enum CommandCenterError {
+    Actuator(ActuatorError),
+    Sensor(SensorError),
 }
 
-pub struct CommandCenter<'a> {
+pub struct CommandCenter {
     pub actuators: CommandCenterActuators,
     pub current_actuator: Option<CommandActuator>,
-    pub sensors: CommandCenterSensors<'a>,
-    // pub sensor_outboxes: CommandCenterSensorOutboxes,
-    pub sensor_consumers: CommandCenterSensorConsumers<'a>,
+    pub sensors: CommandCenterSensors,
 }
 
-impl<'a> CommandCenter<'a> {
+impl CommandCenter {
     pub fn new(resources: CommandCenterResources) -> Self {
         let gpiob = resources.GPIOB.split();
         let gpioc = resources.GPIOC.split();
@@ -154,12 +153,7 @@ impl<'a> CommandCenter<'a> {
             steps_per_millimeter,
         );
 
-        let mut user_button_outbox = ActorOutbox::<SwitchUpdate>::new();
-        let (user_button_outbox_producer, user_button_outbox_consumer) = user_button_outbox.split();
-        let user_button = Switch::new(
-            gpioc.pc13.into_floating_input(),
-            user_button_outbox_producer,
-        );
+        let user_button = Switch::new(gpioc.pc13.into_floating_input());
 
         Self {
             current_actuator: None,
@@ -170,19 +164,11 @@ impl<'a> CommandCenter<'a> {
                 x_axis,
             },
             sensors: CommandCenterSensors { user_button },
-            /*
-            sensor_outboxes: CommandCenterSensorOutboxes {
-                user_button: user_button_outbox,
-            },
-            */
-            sensor_consumers: CommandCenterSensorConsumers {
-                user_button: user_button_outbox_consumer,
-            },
         }
     }
 }
 
-impl<'a> ActorReceive for CommandCenter<'a> {
+impl ActorReceive for CommandCenter {
     type Message = Command;
 
     fn receive(&mut self, command: &Self::Message) {
@@ -208,8 +194,23 @@ impl<'a> ActorReceive for CommandCenter<'a> {
     }
 }
 
-impl<'a> ActorPoll for CommandCenter<'a> {
-    type Error = CommandError;
+impl CommandCenter {
+    pub fn update(&mut self) -> Result<(), SensorError> {
+        if let Some(_user_button_update) = self
+            .sensors
+            .user_button
+            .sense()
+            .map_err(|err| SensorError::UserButton(err))?
+        {
+            // self.actuators.blue_led.receive(&user_button_update);
+        }
+
+        Ok(())
+    }
+}
+
+impl ActorPoll for CommandCenter {
+    type Error = ActuatorError;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         match self.current_actuator {
@@ -218,22 +219,22 @@ impl<'a> ActorPoll for CommandCenter<'a> {
                 .actuators
                 .green_led
                 .poll()
-                .map_err(|err| CommandError::GreenLed(err)),
+                .map_err(|err| ActuatorError::GreenLed(err)),
             Some(CommandActuator::BlueLed) => self
                 .actuators
                 .blue_led
                 .poll()
-                .map_err(|err| CommandError::BlueLed(err)),
+                .map_err(|err| ActuatorError::BlueLed(err)),
             Some(CommandActuator::RedLed) => self
                 .actuators
                 .red_led
                 .poll()
-                .map_err(|err| CommandError::RedLed(err)),
+                .map_err(|err| ActuatorError::RedLed(err)),
             Some(CommandActuator::XAxis) => self
                 .actuators
                 .x_axis
                 .poll()
-                .map_err(|err| CommandError::XAxis(err)),
+                .map_err(|err| ActuatorError::XAxis(err)),
         }
     }
 }

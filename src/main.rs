@@ -105,9 +105,16 @@ mod app {
             command_center.receive(command);
 
             loop {
+                match command_center.update() {
+                    Err(err) => {
+                        panic!("Unexpected sensor error: {:?}", err);
+                    }
+                    Ok(()) => {}
+                }
+
                 match command_center.poll() {
                     Poll::Ready(Err(err)) => {
-                        panic!("Unexpected error: {:?}", err);
+                        panic!("Unexpected actuator error: {:?}", err);
                     }
                     Poll::Ready(Ok(())) => {
                         break;
