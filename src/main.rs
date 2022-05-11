@@ -6,6 +6,7 @@ use gridbot as _;
 #[rtic::app(device = stm32f7xx_hal::pac, dispatchers = [USART1])]
 mod app {
     use core::task::Poll;
+    use defmt::Debug2Format;
     use fugit::ExtU32;
     use stm32f7xx_hal::{pac, prelude::*, timer::monotonic::MonoTimerUs, watchdog};
 
@@ -107,14 +108,14 @@ mod app {
             loop {
                 match command_center.update() {
                     Err(err) => {
-                        panic!("Unexpected sensor error: {:?}", err);
+                        defmt::panic!("Unexpected sensor error: {:?}", Debug2Format(&err));
                     }
                     Ok(()) => {}
                 }
 
                 match command_center.poll() {
                     Poll::Ready(Err(err)) => {
-                        panic!("Unexpected actuator error: {:?}", err);
+                        defmt::panic!("Unexpected actuator error: {:?}", Debug2Format(&err));
                     }
                     Poll::Ready(Ok(())) => {
                         break;

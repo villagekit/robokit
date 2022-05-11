@@ -45,7 +45,7 @@ type XAxisDriverError =
     AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_FREQ>;
 type XAxisError = AxisError<XAxisDriverError>;
 
-#[derive(Format)]
+#[derive(Clone, Copy, Debug, Format)]
 pub enum Command {
     GreenLed(LedBlinkMessage<LED_TIMER_FREQ>),
     BlueLed(LedBlinkMessage<LED_TIMER_FREQ>),
@@ -53,6 +53,7 @@ pub enum Command {
     XAxis(AxisMoveMessage),
 }
 
+#[derive(Clone, Copy, Debug, Format)]
 pub enum CommandActuator {
     GreenLed,
     BlueLed,

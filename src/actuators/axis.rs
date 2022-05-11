@@ -37,6 +37,7 @@ pub type AxisDriverErrorDQ542MA<PinDir, PinStep, Timer, const FREQ: u32> =
     <AxisDriverDQ542MA<PinDir, PinStep, Timer, FREQ> as MotionControl>::Error;
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
+#[derive(Clone, Copy, Debug, Format)]
 pub enum AxisState<Velocity> {
     Idle,
     Initial {
@@ -46,13 +47,13 @@ pub enum AxisState<Velocity> {
     Moving,
 }
 
-#[derive(Debug, Format, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Format)]
 pub enum AxisLimitSide {
     Min,
     Max,
 }
 
-#[derive(Debug, Format, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Format)]
 pub enum AxisLimitStatus {
     Under,
     Over,
@@ -140,7 +141,7 @@ impl<Time, const FREQ: u32> motion_control::DelayToTicks<f64> for DelayToTicks<T
     }
 }
 
-#[derive(Format)]
+#[derive(Clone, Copy, Debug, Format)]
 pub struct AxisMoveMessage {
     pub max_velocity_in_millimeters_per_sec: f64,
     pub distance_in_millimeters: f64,
@@ -173,7 +174,7 @@ where
     }
 }
 
-#[derive(Format)]
+#[derive(Clone, Copy, Debug, Format)]
 pub struct AxisLimitMessage {
     pub side: AxisLimitSide,
     pub status: AxisLimitStatus,
@@ -195,7 +196,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum AxisError<DriverError: Debug> {
     Driver(DriverError),
     Limit(AxisLimitSide),

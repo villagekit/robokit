@@ -1,17 +1,18 @@
 // inspired by https://github.com/rubberduck203/switch-hal
 
 use core::marker::PhantomData;
+use defmt::Format;
 use embedded_hal::digital::v2::InputPin;
 
 use crate::actor::ActorSense;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, Format, PartialEq)]
 pub enum SwitchStatus {
     On,
     Off,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone, Debug, Format)]
 pub struct SwitchUpdate {
     pub status: SwitchStatus,
 }
@@ -19,6 +20,7 @@ pub struct SwitchUpdate {
 pub struct SwitchActiveLow;
 pub struct SwitchActiveHigh;
 
+#[derive(Copy, Clone, Debug, Format)]
 pub struct Switch<Pin, ActiveLevel>
 where
     Pin: InputPin,
@@ -69,7 +71,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Format)]
 pub enum SwitchError<PinError> {
     Pin(PinError),
 }
