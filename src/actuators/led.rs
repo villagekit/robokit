@@ -1,3 +1,4 @@
+use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
@@ -6,19 +7,20 @@ use fugit_timer::Timer;
 
 use crate::actor::{ActorPoll, ActorReceive};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Format)]
 pub enum LedBlinkStatus {
     Start,
     Wait,
     Done,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Format)]
 pub struct LedBlinkState<const FREQ: u32> {
     status: LedBlinkStatus,
     duration: TimerDuration<FREQ>,
 }
 
+#[derive(Clone, Copy, Debug, Format)]
 pub struct Led<P, T, const FREQ: u32>
 where
     P: OutputPin,
@@ -43,19 +45,17 @@ where
     }
 }
 
-#[derive(Format)]
+#[derive(Clone, Copy, Debug, Format)]
 pub struct LedBlinkMessage<const FREQ: u32> {
     pub duration: TimerDuration<FREQ>,
 }
 
-impl<P, T, const FREQ: u32> ActorReceive for Led<P, T, FREQ>
+impl<P, T, const FREQ: u32> ActorReceive<LedBlinkMessage<FREQ>> for Led<P, T, FREQ>
 where
     P: OutputPin,
     T: Timer<FREQ>,
 {
-    type Message = LedBlinkMessage<FREQ>;
-
-    fn receive(&mut self, action: &Self::Message) {
+    fn receive(&mut self, action: &LedBlinkMessage<FREQ>) {
         self.state = Some(LedBlinkState {
             status: LedBlinkStatus::Start,
             duration: action.duration,
@@ -63,8 +63,8 @@ where
     }
 }
 
-#[derive(Debug)]
-pub enum LedError<PinError, TimerError> {
+#[derive(Clone, Copy, Debug)]
+pub enum LedError<PinError: Debug, TimerError: Debug> {
     Pin(PinError),
     Timer(TimerError),
 }
@@ -72,7 +72,9 @@ pub enum LedError<PinError, TimerError> {
 impl<P, T, const FREQ: u32> ActorPoll for Led<P, T, FREQ>
 where
     P: OutputPin,
+    P::Error: Debug,
     T: Timer<FREQ>,
+    T::Error: Debug,
 {
     type Error = LedError<P::Error, T::Error>;
 

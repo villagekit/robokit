@@ -1,9 +1,9 @@
 use core::task::Poll;
 use defmt::Format;
-use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 use fugit_timer::Timer;
 use stm32f7xx_hal::{
-    gpio::{Output, Pin, PushPull},
+    gpio::{Floating, Input, Output, Pin, PushPull},
     pac,
     prelude::*,
     rcc::{BusTimerClock, Clocks},
@@ -13,19 +13,29 @@ use stm32f7xx_hal::{
     },
 };
 
-use crate::actor::{ActorPoll, ActorReceive};
+use crate::actor::{ActorPoll, ActorReceive, ActorSense};
 use crate::actuators::axis::{
-    Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisMoveMessage,
+    Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisLimitMessage, AxisLimitSide,
+    AxisLimitStatus, AxisMoveMessage,
 };
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
+use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
+
+/* actuators */
 
 const LED_TIMER_FREQ: u32 = 1_000_000;
 type GreenLedPin = Pin<'B', 0, Output<PushPull>>;
 type GreenLedTimer = CounterUs<pac::TIM9>;
+type GreenLedError =
+    LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<LED_TIMER_FREQ>>::Error>;
 type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
 type BlueLedTimer = CounterUs<pac::TIM10>;
+type BlueLedError =
+    LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<LED_TIMER_FREQ>>::Error>;
 type RedLedPin = Pin<'B', 14, Output<PushPull>>;
 type RedLedTimer = CounterUs<pac::TIM11>;
+type RedLedError =
+    LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<LED_TIMER_FREQ>>::Error>;
 const X_AXIS_TIMER_FREQ: u32 = 1_000_000;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
 type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
@@ -33,8 +43,9 @@ type XAxisTimer = Counter<pac::TIM3, X_AXIS_TIMER_FREQ>;
 type XAxisDriver = AxisDriverDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_FREQ>;
 type XAxisDriverError =
     AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_FREQ>;
+type XAxisError = AxisError<XAxisDriverError>;
 
-#[derive(Format)]
+#[derive(Clone, Copy, Debug, Format)]
 pub enum Command {
     GreenLed(LedBlinkMessage<LED_TIMER_FREQ>),
     BlueLed(LedBlinkMessage<LED_TIMER_FREQ>),
@@ -42,16 +53,22 @@ pub enum Command {
     XAxis(AxisMoveMessage),
 }
 
-pub enum CommandActor {
+#[derive(Clone, Copy, Debug, Format)]
+pub enum CommandActuator {
     GreenLed,
     BlueLed,
     RedLed,
     XAxis,
 }
 
+/* sensors */
+type UserButtonPin = Pin<'C', 13, Input<Floating>>;
+type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
+
 #[allow(non_snake_case)]
 pub struct CommandCenterResources<'a> {
     pub GPIOB: pac::GPIOB,
+    pub GPIOC: pac::GPIOC,
     pub GPIOG: pac::GPIOG,
     pub TIM3: pac::TIM3,
     pub TIM9: pac::TIM9,
@@ -60,7 +77,7 @@ pub struct CommandCenterResources<'a> {
     pub clocks: &'a Clocks,
 }
 
-pub struct CommandCenterActors {
+pub struct CommandCenterActuators {
     pub green_led: Led<GreenLedPin, GreenLedTimer, LED_TIMER_FREQ>,
     pub blue_led: Led<BlueLedPin, BlueLedTimer, LED_TIMER_FREQ>,
     pub red_led: Led<RedLedPin, RedLedTimer, LED_TIMER_FREQ>,
@@ -68,30 +85,38 @@ pub struct CommandCenterActors {
 }
 
 #[derive(Debug)]
-pub enum CommandError {
-    GreenLed(
-        LedError<
-            <GreenLedPin as OutputPin>::Error,
-            <GreenLedTimer as Timer<LED_TIMER_FREQ>>::Error,
-        >,
-    ),
-    BlueLed(
-        LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<LED_TIMER_FREQ>>::Error>,
-    ),
-    RedLed(
-        LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<LED_TIMER_FREQ>>::Error>,
-    ),
-    XAxis(AxisError<XAxisDriverError>),
+pub enum ActuatorError {
+    GreenLed(GreenLedError),
+    BlueLed(BlueLedError),
+    RedLed(RedLedError),
+    XAxis(XAxisError),
+}
+
+pub struct CommandCenterSensors {
+    pub user_button: Switch<UserButtonPin, SwitchActiveHigh>,
+}
+
+#[derive(Debug)]
+pub enum SensorError {
+    UserButton(UserButtonError),
+}
+
+#[derive(Debug)]
+pub enum CommandCenterError {
+    Actuator(ActuatorError),
+    Sensor(SensorError),
 }
 
 pub struct CommandCenter {
-    pub actors: CommandCenterActors,
-    pub current_actor: Option<CommandActor>,
+    pub actuators: CommandCenterActuators,
+    pub current_actuator: Option<CommandActuator>,
+    pub sensors: CommandCenterSensors,
 }
 
 impl CommandCenter {
     pub fn new(resources: CommandCenterResources) -> Self {
         let gpiob = resources.GPIOB.split();
+        let gpioc = resources.GPIOC.split();
         let gpiog = resources.GPIOG.split();
 
         let green_led = Led::new(
@@ -130,70 +155,101 @@ impl CommandCenter {
             steps_per_millimeter,
         );
 
+        let user_button = Switch::new(gpioc.pc13.into_floating_input());
+
         Self {
-            current_actor: None,
-            actors: CommandCenterActors {
+            current_actuator: None,
+            actuators: CommandCenterActuators {
                 green_led,
                 blue_led,
                 red_led,
                 x_axis,
             },
+            sensors: CommandCenterSensors { user_button },
         }
     }
 }
 
-impl ActorReceive for CommandCenter {
-    type Message = Command;
-
-    fn receive(&mut self, command: &Self::Message) {
+impl ActorReceive<Command> for CommandCenter {
+    fn receive(&mut self, command: &Command) {
         match command {
             Command::GreenLed(message) => {
-                self.actors.green_led.receive(message);
-                self.current_actor = Some(CommandActor::GreenLed);
+                self.actuators.green_led.receive(message);
+                self.current_actuator = Some(CommandActuator::GreenLed);
             }
 
             Command::BlueLed(message) => {
-                self.actors.blue_led.receive(message);
-                self.current_actor = Some(CommandActor::BlueLed);
+                self.actuators.blue_led.receive(message);
+                self.current_actuator = Some(CommandActuator::BlueLed);
             }
             Command::RedLed(message) => {
-                self.actors.red_led.receive(message);
-                self.current_actor = Some(CommandActor::RedLed);
+                self.actuators.red_led.receive(message);
+                self.current_actuator = Some(CommandActuator::RedLed);
             }
             Command::XAxis(message) => {
-                self.actors.x_axis.receive(message);
-                self.current_actor = Some(CommandActor::XAxis);
+                self.actuators.x_axis.receive(message);
+                self.current_actuator = Some(CommandActuator::XAxis);
             }
         }
+    }
+}
+
+impl CommandCenter {
+    pub fn update(&mut self) -> Result<(), SensorError> {
+        let axis_limit_min_message = AxisLimitMessage {
+            side: AxisLimitSide::Min,
+            status: AxisLimitStatus::Under,
+        };
+        self.actuators.x_axis.receive(&axis_limit_min_message);
+
+        if let Some(user_button_update) = self
+            .sensors
+            .user_button
+            .sense()
+            .map_err(|err| SensorError::UserButton(err))?
+        {
+            let axis_limit_status = match user_button_update.status {
+                SwitchStatus::On => AxisLimitStatus::Over,
+                SwitchStatus::Off => AxisLimitStatus::Under,
+            };
+
+            let axis_limit_max_message = AxisLimitMessage {
+                side: AxisLimitSide::Max,
+                status: axis_limit_status,
+            };
+            self.actuators.x_axis.receive(&axis_limit_max_message);
+        }
+
+        Ok(())
     }
 }
 
 impl ActorPoll for CommandCenter {
-    type Error = CommandError;
+    type Error = ActuatorError;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        match self.current_actor {
+        match self.current_actuator {
             None => Poll::Ready(Ok(())),
-            Some(CommandActor::GreenLed) => self
-                .actors
+            Some(CommandActuator::GreenLed) => self
+                .actuators
                 .green_led
                 .poll()
-                .map_err(|err| CommandError::GreenLed(err)),
-            Some(CommandActor::BlueLed) => self
-                .actors
+                .map_err(|err| ActuatorError::GreenLed(err)),
+            Some(CommandActuator::BlueLed) => self
+                .actuators
                 .blue_led
                 .poll()
-                .map_err(|err| CommandError::BlueLed(err)),
-            Some(CommandActor::RedLed) => self
-                .actors
+                .map_err(|err| ActuatorError::BlueLed(err)),
+            Some(CommandActuator::RedLed) => self
+                .actuators
                 .red_led
                 .poll()
-                .map_err(|err| CommandError::RedLed(err)),
-            Some(CommandActor::XAxis) => self
-                .actors
+                .map_err(|err| ActuatorError::RedLed(err)),
+            Some(CommandActuator::XAxis) => self
+                .actuators
                 .x_axis
                 .poll()
-                .map_err(|err| CommandError::XAxis(err)),
+                .map_err(|err| ActuatorError::XAxis(err)),
         }
     }
 }

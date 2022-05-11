@@ -4,6 +4,7 @@
 pub mod actor;
 pub mod actuators;
 pub mod command;
+pub mod sensors;
 
 use defmt_rtt as _; // global logger
 

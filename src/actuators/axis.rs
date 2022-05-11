@@ -37,6 +37,7 @@ pub type AxisDriverErrorDQ542MA<PinDir, PinStep, Timer, const FREQ: u32> =
     <AxisDriverDQ542MA<PinDir, PinStep, Timer, FREQ> as MotionControl>::Error;
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
+#[derive(Clone, Copy, Debug, Format)]
 pub enum AxisState<Velocity> {
     Idle,
     Initial {
@@ -44,6 +45,18 @@ pub enum AxisState<Velocity> {
         target_step: i32,
     },
     Moving,
+}
+
+#[derive(Clone, Copy, Debug, Format)]
+pub enum AxisLimitSide {
+    Min,
+    Max,
+}
+
+#[derive(Clone, Copy, Debug, Format)]
+pub enum AxisLimitStatus {
+    Under,
+    Over,
 }
 
 pub struct Axis<Driver>
@@ -54,6 +67,8 @@ where
     steps_per_millimeter: f64,
     state: AxisState<<Driver as MotionControl>::Velocity>,
     logical_position: f64,
+    limit_min: Option<AxisLimitStatus>,
+    limit_max: Option<AxisLimitStatus>,
 }
 
 impl<PinDir, PinStep, Timer, const FREQ: u32> Axis<AxisDriverDQ542MA<PinDir, PinStep, Timer, FREQ>>
@@ -91,6 +106,8 @@ where
             steps_per_millimeter,
             state: AxisState::Idle,
             logical_position: 0_f64,
+            limit_min: None,
+            limit_max: None,
         }
     }
 }
@@ -124,20 +141,19 @@ impl<Time, const FREQ: u32> motion_control::DelayToTicks<f64> for DelayToTicks<T
     }
 }
 
-#[derive(Format)]
+#[derive(Clone, Copy, Debug, Format)]
 pub struct AxisMoveMessage {
     pub max_velocity_in_millimeters_per_sec: f64,
     pub distance_in_millimeters: f64,
 }
 
-impl<Driver, Timer, const FREQ: u32> ActorReceive for Axis<AxisMotionControl<Driver, Timer, FREQ>>
+impl<Driver, Timer, const FREQ: u32> ActorReceive<AxisMoveMessage>
+    for Axis<AxisMotionControl<Driver, Timer, FREQ>>
 where
     Driver: SetDirection + Step,
     Timer: FugitTimer<FREQ>,
 {
-    type Message = AxisMoveMessage;
-
-    fn receive(&mut self, action: &Self::Message) {
+    fn receive(&mut self, action: &AxisMoveMessage) {
         let max_velocity_in_steps_per_sec =
             action.max_velocity_in_millimeters_per_sec * self.steps_per_millimeter;
 
@@ -158,21 +174,65 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Format)]
+pub struct AxisLimitMessage {
+    pub side: AxisLimitSide,
+    pub status: AxisLimitStatus,
+}
+
+impl<Driver> ActorReceive<AxisLimitMessage> for Axis<Driver>
+where
+    Driver: MotionControl,
+{
+    fn receive(&mut self, action: &AxisLimitMessage) {
+        match action.side {
+            AxisLimitSide::Min => {
+                self.limit_min = Some(action.status);
+            }
+            AxisLimitSide::Max => {
+                self.limit_max = Some(action.status);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum AxisError<DriverError: Debug> {
     Driver(DriverError),
-    Programmer,
+    Limit(AxisLimitSide),
+    Unexpected,
 }
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html#
-impl<Driver> ActorPoll for Axis<Driver>
+impl<Driver, Timer, const FREQ: u32> ActorPoll for Axis<AxisMotionControl<Driver, Timer, FREQ>>
 where
-    Driver: MotionControl,
-    <Driver as MotionControl>::Error: Debug,
+    Driver: SetDirection + Step,
+    Timer: FugitTimer<FREQ>,
+    <AxisMotionControl<Driver, Timer, FREQ> as MotionControl>::Error: Debug,
 {
-    type Error = AxisError<<Driver as MotionControl>::Error>;
+    type Error = AxisError<<AxisMotionControl<Driver, Timer, FREQ> as MotionControl>::Error>;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+        // limit: min
+        if let None = self.limit_min {
+            return Poll::Ready(Err(AxisError::Unexpected));
+        }
+        if let Some(AxisLimitStatus::Over) = self.limit_min {
+            if let Direction::Backward = self.stepper.driver_mut().current_direction() {
+                return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Min)));
+            }
+        }
+
+        // limit: max
+        if let None = self.limit_max {
+            return Poll::Ready(Err(AxisError::Unexpected));
+        }
+        if let Some(AxisLimitStatus::Over) = self.limit_max {
+            if let Direction::Forward = self.stepper.driver_mut().current_direction() {
+                return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Max)));
+            }
+        }
+
         match self.state {
             AxisState::Idle => Poll::Ready(Ok(())),
             AxisState::Initial {
