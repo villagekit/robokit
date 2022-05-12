@@ -296,6 +296,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fixedvec"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b395ef2adf62bdeefcd1b59ad0dd2225c6c333ec79656ea79ac5285c46d051ea"
+
+[[package]]
 name = "fugit"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -338,10 +344,12 @@ dependencies = [
  "embedded-time",
  "fugit",
  "fugit-timer",
+ "heapless",
  "nb 1.0.0",
  "num",
  "panic-probe",
  "ramp-maker",
+ "rmodbus",
  "stepper",
  "stm32f7",
  "stm32f7xx-hal",
@@ -380,6 +388,12 @@ dependencies = [
  "spin",
  "stable_deref_trait",
 ]
+
+[[package]]
+name = "ieee754"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9007da9cacbd3e6343da136e98b0d2df013f553d35bdec8b518f07bea768e19c"
 
 [[package]]
 name = "indexmap"
@@ -647,6 +661,16 @@ checksum = "88aa938cda42a0cf62a20cfe8d139ff1af20c2e681212b5b34adb5a58333f222"
 dependencies = [
  "lazy_static",
  "regex",
+]
+
+[[package]]
+name = "rmodbus"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67921a551740b1b5568c916b28ab4aa8b0c67305b2d9ed150c1d7f07e05362de"
+dependencies = [
+ "fixedvec",
+ "ieee754",
 ]
 
 [[package]]
