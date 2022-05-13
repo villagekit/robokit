@@ -1,12 +1,14 @@
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
+use fixedvec::alloc_stack;
 use fugit_timer::Timer;
 use stm32f7xx_hal::{
-    gpio::{Floating, Input, Output, Pin, PushPull},
+    gpio::{self, Alternate, Floating, Input, Output, Pin, PushPull},
     pac,
     prelude::*,
     rcc::{BusTimerClock, Clocks},
+    serial::{Config as SerialConfig, Oversampling as SerialOversampling, Serial},
     timer::{
         counter::{Counter, CounterUs},
         /*Error as TimerError,*/ TimerExt,
@@ -19,6 +21,7 @@ use crate::actuators::axis::{
     AxisLimitStatus, AxisMoveMessage,
 };
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
+use crate::actuators::spindle::{Spindle, SpindleDriver, SpindleDriverJmcHsv57, SpindleSetMessage};
 use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
 
 /* actuators */
@@ -36,6 +39,7 @@ type RedLedPin = Pin<'B', 14, Output<PushPull>>;
 type RedLedTimer = CounterUs<pac::TIM11>;
 type RedLedError =
     LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<LED_TIMER_FREQ>>::Error>;
+
 const X_AXIS_TIMER_FREQ: u32 = 1_000_000;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
 type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
@@ -45,12 +49,20 @@ type XAxisDriverError =
     AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_FREQ>;
 type XAxisError = AxisError<XAxisDriverError>;
 
+type MainSpindleSerial = Serial<pac::USART2, (gpio::PD5<Alternate<7>>, gpio::PD6<Alternate<7>>)>;
+type MainSpindleDriver<'a> = SpindleDriverJmcHsv57<'a, MainSpindleSerial, MainSpindleSerial>;
+type MainSpindleDriverError<'a> = <MainSpindleDriver<'a> as SpindleDriver>::Error;
+
+static main_spindle_serial_request_bytes_space: [u8; 256] = alloc_stack!([u8; 256]);
+static main_spindle_serial_response_bytes_space: [u8; 256] = alloc_stack!([u8; 256]);
+
 #[derive(Clone, Copy, Debug, Format)]
 pub enum Command {
     GreenLed(LedBlinkMessage<LED_TIMER_FREQ>),
     BlueLed(LedBlinkMessage<LED_TIMER_FREQ>),
     RedLed(LedBlinkMessage<LED_TIMER_FREQ>),
     XAxis(AxisMoveMessage),
+    MainSpindle(SpindleSetMessage),
 }
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -59,6 +71,7 @@ pub enum CommandActuator {
     BlueLed,
     RedLed,
     XAxis,
+    MainSpindle,
 }
 
 /* sensors */
@@ -69,19 +82,22 @@ type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
 pub struct CommandCenterResources<'a> {
     pub GPIOB: pac::GPIOB,
     pub GPIOC: pac::GPIOC,
+    pub GPIOD: pac::GPIOD,
     pub GPIOG: pac::GPIOG,
     pub TIM3: pac::TIM3,
     pub TIM9: pac::TIM9,
     pub TIM10: pac::TIM10,
     pub TIM11: pac::TIM11,
+    pub USART2: pac::USART2,
     pub clocks: &'a Clocks,
 }
 
-pub struct CommandCenterActuators {
+pub struct CommandCenterActuators<'a> {
     pub green_led: Led<GreenLedPin, GreenLedTimer, LED_TIMER_FREQ>,
     pub blue_led: Led<BlueLedPin, BlueLedTimer, LED_TIMER_FREQ>,
     pub red_led: Led<RedLedPin, RedLedTimer, LED_TIMER_FREQ>,
     pub x_axis: Axis<XAxisDriver>,
+    pub main_spindle: Spindle<MainSpindleDriver<'a>>,
 }
 
 #[derive(Debug)]
@@ -107,16 +123,17 @@ pub enum CommandCenterError {
     Sensor(SensorError),
 }
 
-pub struct CommandCenter {
-    pub actuators: CommandCenterActuators,
+pub struct CommandCenter<'a> {
+    pub actuators: CommandCenterActuators<'a>,
     pub current_actuator: Option<CommandActuator>,
     pub sensors: CommandCenterSensors,
 }
 
-impl CommandCenter {
+impl<'a> CommandCenter<'a> {
     pub fn new(resources: CommandCenterResources) -> Self {
         let gpiob = resources.GPIOB.split();
         let gpioc = resources.GPIOC.split();
+        let gpiod = resources.GPIOD.split();
         let gpiog = resources.GPIOG.split();
 
         let green_led = Led::new(
@@ -155,6 +172,29 @@ impl CommandCenter {
             steps_per_millimeter,
         );
 
+        let desired_rpm = 10;
+        let tx = gpiod.pd5.into_alternate();
+        let rx = gpiod.pd6.into_alternate();
+        let main_spindle_serial = Serial::new(
+            resources.USART2,
+            (tx, rx),
+            &resources.clocks,
+            SerialConfig {
+                baud_rate: 115_200.bps(),
+                oversampling: SerialOversampling::By16,
+                character_match: None,
+                sysclock: false,
+            },
+        );
+        let main_spindle_driver = SpindleDriverJmcHsv57::new(
+            main_spindle_serial,
+            main_spindle_serial,
+            &mut main_spindle_serial_request_bytes_space,
+            &mut main_spindle_serial_response_bytes_space,
+            desired_rpm,
+        );
+        let main_spindle = Spindle::new(main_spindle_driver);
+
         let user_button = Switch::new(gpioc.pc13.into_floating_input());
 
         Self {
@@ -164,13 +204,14 @@ impl CommandCenter {
                 blue_led,
                 red_led,
                 x_axis,
+                main_spindle,
             },
             sensors: CommandCenterSensors { user_button },
         }
     }
 }
 
-impl ActorReceive<Command> for CommandCenter {
+impl<'a> ActorReceive<Command> for CommandCenter<'a> {
     fn receive(&mut self, command: &Command) {
         match command {
             Command::GreenLed(message) => {
@@ -194,7 +235,7 @@ impl ActorReceive<Command> for CommandCenter {
     }
 }
 
-impl CommandCenter {
+impl<'a> CommandCenter<'a> {
     pub fn update(&mut self) -> Result<(), SensorError> {
         let axis_limit_min_message = AxisLimitMessage {
             side: AxisLimitSide::Min,
@@ -224,7 +265,7 @@ impl CommandCenter {
     }
 }
 
-impl ActorPoll for CommandCenter {
+impl<'a> ActorPoll for CommandCenter<'a> {
     type Error = ActuatorError;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {

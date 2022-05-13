@@ -171,7 +171,9 @@ where
             if next_spindle_status != self.spindle_status {
                 // set speed over modbus
                 self.modbus_requests
-                    .push_back(JmcHsv57ModbusRequest::SetSpeed { rpm: 10 })
+                    .push_back(JmcHsv57ModbusRequest::SetSpeed {
+                        rpm: self.desired_rpm,
+                    })
                     .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
 
                 return Poll::Pending;
@@ -211,6 +213,7 @@ where
     }
 }
 
+#[derive(Clone, Copy, Debug, Format)]
 pub struct SpindleSetMessage {
     status: SpindleStatus,
 }

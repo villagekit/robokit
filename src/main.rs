@@ -41,11 +41,15 @@ mod app {
         let command_center = CommandCenter::new(CommandCenterResources {
             GPIOB: ctx.device.GPIOB,
             GPIOC: ctx.device.GPIOC,
+            GPIOD: ctx.device.GPIOD,
             GPIOG: ctx.device.GPIOG,
             TIM3: ctx.device.TIM3,
             TIM9: ctx.device.TIM9,
             TIM10: ctx.device.TIM10,
             TIM11: ctx.device.TIM11,
+            USART2: ctx.device.USART2,
+            main_spindle_serial_request_bytes_space,
+            main_spindle_serial_response_bytes_space,
             clocks: &clocks,
         });
 
