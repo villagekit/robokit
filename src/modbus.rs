@@ -70,73 +70,118 @@ where
         }
     }
 
-    pub fn get_coils(&mut self, reg: u16, count: u16) -> Result<(), ModbusError> {
+    pub fn get_coils(
+        &mut self,
+        reg: u16,
+        count: u16,
+    ) -> Result<(), ModbusSerialError<SerialTx, SerialRx>> {
         self.request
-            .generate_get_coils(reg, count, &mut self.request_bytes)?;
+            .generate_get_coils(reg, count, &mut self.request_bytes)
+            .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
     }
 
-    pub fn get_discretes(&mut self, reg: u16, count: u16) -> Result<(), ModbusError> {
+    pub fn get_discretes(
+        &mut self,
+        reg: u16,
+        count: u16,
+    ) -> Result<(), ModbusSerialError<SerialTx, SerialRx>> {
         self.request
-            .generate_get_discretes(reg, count, &mut self.request_bytes)?;
+            .generate_get_discretes(reg, count, &mut self.request_bytes)
+            .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
     }
 
-    pub fn get_inputs(&mut self, reg: u16, count: u16) -> Result<(), ModbusError> {
+    pub fn get_inputs(
+        &mut self,
+        reg: u16,
+        count: u16,
+    ) -> Result<(), ModbusSerialError<SerialTx, SerialRx>> {
         self.request
-            .generate_get_inputs(reg, count, &mut self.request_bytes)?;
+            .generate_get_inputs(reg, count, &mut self.request_bytes)
+            .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
     }
 
-    pub fn set_coil(&mut self, reg: u16, value: bool) -> Result<(), ModbusError> {
+    pub fn set_coil(
+        &mut self,
+        reg: u16,
+        value: bool,
+    ) -> Result<(), ModbusSerialError<SerialTx, SerialRx>> {
         self.request
-            .generate_set_coil(reg, value, &mut self.request_bytes)?;
+            .generate_set_coil(reg, value, &mut self.request_bytes)
+            .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
     }
 
-    pub fn set_holding(&mut self, reg: u16, value: u16) -> Result<(), ModbusError> {
+    pub fn set_holding(
+        &mut self,
+        reg: u16,
+        value: u16,
+    ) -> Result<(), ModbusSerialError<SerialTx, SerialRx>> {
         self.request
-            .generate_set_holding(reg, value, &mut self.request_bytes)?;
+            .generate_set_holding(reg, value, &mut self.request_bytes)
+            .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
     }
 
-    pub fn set_holdings_bulk(&mut self, reg: u16, values: &[u16]) -> Result<(), ModbusError> {
+    pub fn set_holdings_bulk(
+        &mut self,
+        reg: u16,
+        values: &[u16],
+    ) -> Result<(), ModbusSerialError<SerialTx, SerialRx>> {
         self.request
-            .generate_set_holdings_bulk(reg, values, &mut self.request_bytes)?;
+            .generate_set_holdings_bulk(reg, values, &mut self.request_bytes)
+            .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
     }
 
-    pub fn set_coils_bulk(&mut self, reg: u16, values: &[bool]) -> Result<(), ModbusError> {
+    pub fn set_coils_bulk(
+        &mut self,
+        reg: u16,
+        values: &[bool],
+    ) -> Result<(), ModbusSerialError<SerialTx, SerialRx>> {
         self.request
-            .generate_set_coils_bulk(reg, values, &mut self.request_bytes)?;
+            .generate_set_coils_bulk(reg, values, &mut self.request_bytes)
+            .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
     }
 
-    pub fn parse_ok(&mut self) -> Result<(), ModbusError> {
+    pub fn parse_ok(&mut self) -> Result<(), ModbusSerialError<SerialTx, SerialRx>> {
         self.response_ready = false;
 
-        self.request.parse_ok(self.response_bytes.as_slice())
+        self.request
+            .parse_ok(self.response_bytes.as_slice())
+            .map_err(|err| ModbusSerialError::Modbus(err))
     }
 
-    pub fn parse_u16<V: VectorTrait<u16>>(&mut self, result: &mut V) -> Result<(), ModbusError> {
+    pub fn parse_u16<V: VectorTrait<u16>>(
+        &mut self,
+        result: &mut V,
+    ) -> Result<(), ModbusSerialError<SerialTx, SerialRx>> {
         self.response_ready = false;
 
         self.request
             .parse_u16(self.response_bytes.as_slice(), result)
+            .map_err(|err| ModbusSerialError::Modbus(err))
     }
 
-    pub fn parse_bool<V: VectorTrait<bool>>(&mut self, result: &mut V) -> Result<(), ModbusError> {
+    pub fn parse_bool<V: VectorTrait<bool>>(
+        &mut self,
+        result: &mut V,
+    ) -> Result<(), ModbusSerialError<SerialTx, SerialRx>> {
         self.response_ready = false;
 
         self.request
             .parse_bool(self.response_bytes.as_slice(), result)
+            .map_err(|err| ModbusSerialError::Modbus(err))
     }
 
     pub fn poll(&mut self) -> Poll<Result<bool, ModbusSerialError<SerialTx, SerialRx>>> {
