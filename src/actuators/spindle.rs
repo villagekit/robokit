@@ -8,7 +8,7 @@ use heapless::Deque;
 use num::abs;
 
 use crate::actor::{ActorPoll, ActorReceive};
-use crate::modbus::{ModbusSerial, ModbusSerialError};
+use crate::modbus::{ModbusSerial, ModbusSerialError, ModbusSerialErrorAlias};
 
 #[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub enum SpindleStatus {
@@ -59,12 +59,7 @@ where
     <Serial as Write<u8>>::Error: Debug,
     <Serial as Read<u8>>::Error: Debug,
 {
-    pub fn new(
-        serial: Serial,
-        // request_bytes_space: &mut [u8],
-        // response_bytes_space: &mut [u8],
-        desired_rpm: u16,
-    ) -> Self {
+    pub fn new(serial: Serial, desired_rpm: u16) -> Self {
         Self {
             modbus: ModbusSerial::new(serial, 1),
             modbus_requests: Deque::new(),
@@ -77,15 +72,21 @@ where
         }
     }
 
-    pub fn handle_modbus(&mut self) -> Poll<Result<(), ModbusSerialError<Serial>>> {
+    pub fn handle_modbus(&mut self) -> Poll<Result<(), ModbusSerialErrorAlias<Serial>>> {
         match self.modbus.poll() {
             Poll::Ready(Ok(is_response_ready)) => {
                 if is_response_ready {
                     // handle modbus response
                     match self.modbus_response_type.unwrap() {
-                        JmcHsv57ModbusResponseType::InitSpeedSource => {}
-                        JmcHsv57ModbusResponseType::SetSpeed => {}
-                        JmcHsv57ModbusResponseType::GetSpeed => {}
+                        JmcHsv57ModbusResponseType::InitSpeedSource => {
+                            // TODO
+                        }
+                        JmcHsv57ModbusResponseType::SetSpeed => {
+                            // TODO
+                        }
+                        JmcHsv57ModbusResponseType::GetSpeed => {
+                            // TODO
+                        }
                     };
 
                     return Poll::Pending;
@@ -126,15 +127,13 @@ where
 }
 
 #[derive(Debug)]
-pub enum SpindleDriverJmcHsv57Error<Serial>
-where
-    Serial: Write<u8> + Read<u8>,
-    <Serial as Write<u8>>::Error: Debug,
-    <Serial as Read<u8>>::Error: Debug,
-{
-    ModbusSerial(ModbusSerialError<Serial>),
+pub enum SpindleDriverJmcHsv57Error<SerialTxError: Debug, SerialRxError: Debug> {
+    ModbusSerial(ModbusSerialError<SerialTxError, SerialRxError>),
     QueueFull,
 }
+
+pub type SpindleDriverJmcHsv57ErrorAlias<Serial> =
+    SpindleDriverJmcHsv57Error<<Serial as Write<u8>>::Error, <Serial as Read<u8>>::Error>;
 
 impl<Serial> SpindleDriver for SpindleDriverJmcHsv57<Serial>
 where
@@ -142,7 +141,7 @@ where
     <Serial as Write<u8>>::Error: Debug,
     <Serial as Read<u8>>::Error: Debug,
 {
-    type Error = SpindleDriverJmcHsv57Error<Serial>;
+    type Error = SpindleDriverJmcHsv57ErrorAlias<Serial>;
 
     fn set(&mut self, status: SpindleStatus) {
         self.next_spindle_status = Some(status);
@@ -234,7 +233,7 @@ impl<Driver> ActorPoll for Spindle<Driver>
 where
     Driver: SpindleDriver,
 {
-    type Error = SpindleError<Driver>;
+    type Error = Driver::Error;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         self.driver.poll()

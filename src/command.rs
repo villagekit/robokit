@@ -10,7 +10,7 @@ use stm32f7xx_hal::{
     serial::{Config as SerialConfig, Oversampling as SerialOversampling, Serial},
     timer::{
         counter::{Counter, CounterUs},
-        /*Error as TimerError,*/ TimerExt,
+        TimerExt,
     },
 };
 
@@ -20,9 +20,7 @@ use crate::actuators::axis::{
     AxisLimitStatus, AxisMoveMessage,
 };
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
-use crate::actuators::spindle::{
-    Spindle, SpindleDriverJmcHsv57, SpindleDriverJmcHsv57Error, SpindleSetMessage,
-};
+use crate::actuators::spindle::{Spindle, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage};
 use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
 
 /* actuators */
@@ -52,7 +50,7 @@ type XAxisError = AxisError<XAxisDriverError>;
 
 type MainSpindleSerial = Serial<pac::USART2, (gpio::PD5<Alternate<7>>, gpio::PD6<Alternate<7>>)>;
 type MainSpindleDriver = SpindleDriverJmcHsv57<MainSpindleSerial>;
-type MainSpindleError = SpindleDriverJmcHsv57Error<MainSpindleSerial>;
+type MainSpindleError = SpindleError<MainSpindleDriver>;
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum Command {
@@ -179,18 +177,13 @@ impl CommandCenter {
             (tx, rx),
             &resources.clocks,
             SerialConfig {
-                baud_rate: 115_200.bps(),
+                baud_rate: 9_600.bps(),
                 oversampling: SerialOversampling::By16,
                 character_match: None,
                 sysclock: false,
             },
         );
-        let main_spindle_driver = SpindleDriverJmcHsv57::new(
-            main_spindle_serial,
-            // &mut main_spindle_serial_request_bytes_space,
-            // &mut main_spindle_serial_response_bytes_space,
-            desired_rpm,
-        );
+        let main_spindle_driver = SpindleDriverJmcHsv57::new(main_spindle_serial, desired_rpm);
         let main_spindle = Spindle::new(main_spindle_driver);
 
         let user_button = Switch::new(gpioc.pc13.into_floating_input());
