@@ -19,6 +19,7 @@ defmt = "0.3"
 defmt-rtt = "0.3"
 embedded-hal = "0.2"
 embedded-time = "0.12"
+fixedvec = "0.2"
 fugit = { version = "0.3", features = ["defmt"] }
 fugit-timer = "0.1"
 heapless = "0.7"

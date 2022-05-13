@@ -1,13 +1,14 @@
+// https://github.com/robert-budde/iHSV-Servo-Tool/blob/master/iHSV_Properties.py
+
 use core::convert::Infallible;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::serial::{Read, Write};
-use heapless::Deque;
-use nb;
-use rmodbus::{client::ModbusRequest, guess_response_frame_len, ModbusProto};
+use rmodbus::ErrorKind as ModbusError;
 
 use crate::actor::{ActorPoll, ActorReceive};
+use crate::modbus::{ModbusSerial, ModbusSerialError};
 
 #[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub enum SpindleStatus {
@@ -22,42 +23,33 @@ pub trait SpindleDriver {
     fn poll(&mut self) -> Poll<Result<(), Self::Error>>;
 }
 
-enum SpindleSerialStatus {
-    Idle,
-    Writing,
-    Reading,
-}
-
-pub struct SpindleDriverJmcHsv57<SerialTx, SerialRx>
+pub struct SpindleDriverJmcHsv57<'a, SerialTx, SerialRx>
 where
     SerialTx: Write<u8>,
     SerialRx: Read<u8>,
 {
-    tx: SerialTx,
-    rx: SerialRx,
+    modbus: ModbusSerial<'a, SerialTx, SerialRx>,
     has_initialized: bool,
     spindle_status: SpindleStatus,
     next_spindle_status: Option<SpindleStatus>,
-    serial_status: SpindleSerialStatus,
-    current_serial_request: Option<Deque<u8, 256>>,
-    current_serial_response: Option<Deque<u8, 256>>,
 }
 
-impl<SerialTx, SerialRx> SpindleDriverJmcHsv57<SerialTx, SerialRx>
+impl<'a, SerialTx, SerialRx> SpindleDriverJmcHsv57<'a, SerialTx, SerialRx>
 where
     SerialTx: Write<u8>,
     SerialRx: Read<u8>,
 {
-    pub fn new(tx: SerialTx, rx: SerialRx) -> Self {
+    pub fn new(
+        tx: SerialTx,
+        rx: SerialRx,
+        request_bytes_space: &'a mut [u8],
+        response_bytes_space: &'a mut [u8],
+    ) -> Self {
         Self {
-            tx,
-            rx,
+            modbus: ModbusSerial::new(tx, rx, 1, request_bytes_space, response_bytes_space),
             has_initialized: false,
             spindle_status: SpindleStatus::Off,
             next_spindle_status: None,
-            serial_status: SpindleSerialStatus::Idle,
-            current_serial_request: None,
-            current_serial_response: None,
         }
     }
 }
@@ -67,12 +59,10 @@ where
     SerialTx: Write<u8>,
     SerialRx: Read<u8>,
 {
-    SerialTx(SerialTx::Error),
-    SerialRx(SerialRx::Error),
-    Unexpected,
+    ModbusSerial(ModbusSerialError<SerialTx, SerialRx>),
 }
 
-impl<SerialTx, SerialRx> SpindleDriver for SpindleDriverJmcHsv57<SerialTx, SerialRx>
+impl<'a, SerialTx, SerialRx> SpindleDriver for SpindleDriverJmcHsv57<'a, SerialTx, SerialRx>
 where
     SerialTx: Write<u8>,
     SerialRx: Read<u8>,
@@ -84,42 +74,28 @@ where
     }
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        if let SpindleSerialStatus::Writing = self.serial_status {
-            if let Some(current_serial_request) = self.current_serial_request.as_mut() {
-                if let Some(next_write) = current_serial_request.pop_front() {
-                    match self.tx.write(next_write) {
-                        Ok(()) => {}
-                        Err(nb::Error::WouldBlock) => {}
-                        Err(nb::Error::Other(err)) => {
-                            return Poll::Ready(Err(SpindleDriverJmcHsv57Error::SerialTx(err)))
-                        }
-                    }
-                } else {
-                    match self.tx.flush() {
-                        Ok(()) => {
-                            self.serial_status = SpindleSerialStatus::Reading;
-                        }
-                        Err(nb::Error::WouldBlock) => {}
-                        Err(nb::Error::Other(err)) => {
-                            return Poll::Ready(Err(SpindleDriverJmcHsv57Error::SerialTx(err)))
-                        }
-                    }
-                }
+        match self.modbus.poll() {
+            Poll::Ready(Ok(is_response_ready)) => {
+                // handle modbus response
                 return Poll::Pending;
-            } else {
-                return Poll::Ready(Err(SpindleDriverJmcHsv57Error::Unexpected));
             }
+            Poll::Ready(Err(err)) => {
+                return Poll::Ready(Err(SpindleDriverJmcHsv57Error::ModbusSerial(err)))
+            }
+            Poll::Pending => {}
         }
 
         if !self.has_initialized {
             // initialize spindle over modbus
             return Poll::Pending;
+            // set P04-01 (0x0191) to 1
         }
 
         if let Some(next_spindle_status) = self.next_spindle_status {
             if next_spindle_status != self.spindle_status {
                 // set speed over modbus
                 return Poll::Pending;
+                // set P04-01 (0x0192) to rpm (-6000 to 6000)
             }
         }
 
@@ -136,13 +112,18 @@ where
     driver: Driver,
 }
 
-impl<SerialTx, SerialRx> Spindle<SpindleDriverJmcHsv57<SerialTx, SerialRx>>
+impl<'a, SerialTx, SerialRx> Spindle<SpindleDriverJmcHsv57<'a, SerialTx, SerialRx>>
 where
     SerialTx: Write<u8>,
     SerialRx: Read<u8>,
 {
-    pub fn new_jmchsv57(tx: SerialTx, rx: SerialRx) -> Self {
-        let driver = SpindleDriverJmcHsv57::new(tx, rx);
+    pub fn new_jmchsv57(
+        tx: SerialTx,
+        rx: SerialRx,
+        request_bytes_space: &'a mut [u8],
+        response_bytes_space: &'a mut [u8],
+    ) -> Self {
+        let driver = SpindleDriverJmcHsv57::new(tx, rx, request_bytes_space, response_bytes_space);
 
         Spindle { driver }
     }
