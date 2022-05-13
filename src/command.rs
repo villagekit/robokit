@@ -20,7 +20,9 @@ use crate::actuators::axis::{
     AxisLimitStatus, AxisMoveMessage,
 };
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
-use crate::actuators::spindle::{Spindle, SpindleDriver, SpindleDriverJmcHsv57, SpindleSetMessage};
+use crate::actuators::spindle::{
+    Spindle, SpindleDriverJmcHsv57, SpindleDriverJmcHsv57Error, SpindleSetMessage,
+};
 use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
 
 /* actuators */
@@ -50,7 +52,7 @@ type XAxisError = AxisError<XAxisDriverError>;
 
 type MainSpindleSerial = Serial<pac::USART2, (gpio::PD5<Alternate<7>>, gpio::PD6<Alternate<7>>)>;
 type MainSpindleDriver = SpindleDriverJmcHsv57<MainSpindleSerial>;
-type MainSpindleDriverError = <MainSpindleDriver as SpindleDriver>::Error;
+type MainSpindleError = SpindleDriverJmcHsv57Error<MainSpindleSerial>;
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum Command {
@@ -102,6 +104,7 @@ pub enum ActuatorError {
     BlueLed(BlueLedError),
     RedLed(RedLedError),
     XAxis(XAxisError),
+    MainSpindle(MainSpindleError),
 }
 
 pub struct CommandCenterSensors {
@@ -213,7 +216,6 @@ impl ActorReceive<Command> for CommandCenter {
                 self.actuators.green_led.receive(message);
                 self.current_actuator = Some(CommandActuator::GreenLed);
             }
-
             Command::BlueLed(message) => {
                 self.actuators.blue_led.receive(message);
                 self.current_actuator = Some(CommandActuator::BlueLed);
@@ -225,6 +227,10 @@ impl ActorReceive<Command> for CommandCenter {
             Command::XAxis(message) => {
                 self.actuators.x_axis.receive(message);
                 self.current_actuator = Some(CommandActuator::XAxis);
+            }
+            Command::MainSpindle(message) => {
+                self.actuators.main_spindle.receive(message);
+                self.current_actuator = Some(CommandActuator::MainSpindle);
             }
         }
     }
@@ -286,6 +292,11 @@ impl ActorPoll for CommandCenter {
                 .x_axis
                 .poll()
                 .map_err(|err| ActuatorError::XAxis(err)),
+            Some(CommandActuator::MainSpindle) => self
+                .actuators
+                .main_spindle
+                .poll()
+                .map_err(|err| ActuatorError::MainSpindle(err)),
         }
     }
 }

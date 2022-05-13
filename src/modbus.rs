@@ -1,4 +1,3 @@
-use core::convert::Infallible;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
@@ -32,9 +31,12 @@ where
     response_ready: bool,
 }
 
+#[derive(Debug)]
 pub enum ModbusSerialError<Serial>
 where
     Serial: Write<u8> + Read<u8>,
+    <Serial as Write<u8>>::Error: Debug,
+    <Serial as Read<u8>>::Error: Debug,
 {
     SerialTx(<Serial as Write<u8>>::Error),
     SerialRx(<Serial as Read<u8>>::Error),
@@ -46,10 +48,12 @@ where
 impl<Serial> ModbusSerial<Serial>
 where
     Serial: Write<u8> + Read<u8>,
+    <Serial as Write<u8>>::Error: Debug,
+    <Serial as Read<u8>>::Error: Debug,
 {
     pub fn new(serial: Serial, unit_id: u8) -> Self {
-        let mut request_bytes_space: [u8; 256] = alloc_stack!([u8; 256]);
-        let mut response_bytes_space: [u8; 256] = alloc_stack!([u8; 256]);
+        let request_bytes_space: [u8; 256] = alloc_stack!([u8; 256]);
+        let response_bytes_space: [u8; 256] = alloc_stack!([u8; 256]);
 
         Self {
             serial,

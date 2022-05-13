@@ -1,6 +1,5 @@
 // https://github.com/robert-budde/iHSV-Servo-Tool/blob/master/iHSV_Properties.py
 
-use core::convert::Infallible;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
@@ -57,6 +56,8 @@ const RPM_ERROR_BOUND: u16 = 2;
 impl<Serial> SpindleDriverJmcHsv57<Serial>
 where
     Serial: Write<u8> + Read<u8>,
+    <Serial as Write<u8>>::Error: Debug,
+    <Serial as Read<u8>>::Error: Debug,
 {
     pub fn new(
         serial: Serial,
@@ -124,9 +125,12 @@ where
     }
 }
 
+#[derive(Debug)]
 pub enum SpindleDriverJmcHsv57Error<Serial>
 where
     Serial: Write<u8> + Read<u8>,
+    <Serial as Write<u8>>::Error: Debug,
+    <Serial as Read<u8>>::Error: Debug,
 {
     ModbusSerial(ModbusSerialError<Serial>),
     QueueFull,
@@ -135,6 +139,8 @@ where
 impl<Serial> SpindleDriver for SpindleDriverJmcHsv57<Serial>
 where
     Serial: Write<u8> + Read<u8>,
+    <Serial as Write<u8>>::Error: Debug,
+    <Serial as Read<u8>>::Error: Debug,
 {
     type Error = SpindleDriverJmcHsv57Error<Serial>;
 
