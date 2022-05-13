@@ -38,12 +38,11 @@ enum JmcHsv57ModbusResponseType {
     GetSpeed,
 }
 
-pub struct SpindleDriverJmcHsv57<'a, SerialTx, SerialRx>
+pub struct SpindleDriverJmcHsv57<Serial>
 where
-    SerialTx: Write<u8>,
-    SerialRx: Read<u8>,
+    Serial: Write<u8> + Read<u8>,
 {
-    modbus: ModbusSerial<'a, SerialTx, SerialRx>,
+    modbus: ModbusSerial<Serial>,
     modbus_requests: Deque<JmcHsv57ModbusRequest, 8>,
     modbus_response_type: Option<JmcHsv57ModbusResponseType>,
     has_initialized: bool,
@@ -55,20 +54,18 @@ where
 
 const RPM_ERROR_BOUND: u16 = 2;
 
-impl<'a, SerialTx, SerialRx> SpindleDriverJmcHsv57<'a, SerialTx, SerialRx>
+impl<Serial> SpindleDriverJmcHsv57<Serial>
 where
-    SerialTx: Write<u8>,
-    SerialRx: Read<u8>,
+    Serial: Write<u8> + Read<u8>,
 {
     pub fn new(
-        tx: SerialTx,
-        rx: SerialRx,
-        request_bytes_space: &'a mut [u8],
-        response_bytes_space: &'a mut [u8],
+        serial: Serial,
+        // request_bytes_space: &mut [u8],
+        // response_bytes_space: &mut [u8],
         desired_rpm: u16,
     ) -> Self {
         Self {
-            modbus: ModbusSerial::new(tx, rx, 1, request_bytes_space, response_bytes_space),
+            modbus: ModbusSerial::new(serial, 1),
             modbus_requests: Deque::new(),
             modbus_response_type: None,
             has_initialized: false,
@@ -79,7 +76,7 @@ where
         }
     }
 
-    pub fn handle_modbus(&mut self) -> Poll<Result<(), ModbusSerialError<SerialTx, SerialRx>>> {
+    pub fn handle_modbus(&mut self) -> Poll<Result<(), ModbusSerialError<Serial>>> {
         match self.modbus.poll() {
             Poll::Ready(Ok(is_response_ready)) => {
                 if is_response_ready {
@@ -127,21 +124,19 @@ where
     }
 }
 
-pub enum SpindleDriverJmcHsv57Error<SerialTx, SerialRx>
+pub enum SpindleDriverJmcHsv57Error<Serial>
 where
-    SerialTx: Write<u8>,
-    SerialRx: Read<u8>,
+    Serial: Write<u8> + Read<u8>,
 {
-    ModbusSerial(ModbusSerialError<SerialTx, SerialRx>),
+    ModbusSerial(ModbusSerialError<Serial>),
     QueueFull,
 }
 
-impl<'a, SerialTx, SerialRx> SpindleDriver for SpindleDriverJmcHsv57<'a, SerialTx, SerialRx>
+impl<Serial> SpindleDriver for SpindleDriverJmcHsv57<Serial>
 where
-    SerialTx: Write<u8>,
-    SerialRx: Read<u8>,
+    Serial: Write<u8> + Read<u8>,
 {
-    type Error = SpindleDriverJmcHsv57Error<SerialTx, SerialRx>;
+    type Error = SpindleDriverJmcHsv57Error<Serial>;
 
     fn set(&mut self, status: SpindleStatus) {
         self.next_spindle_status = Some(status);
