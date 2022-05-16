@@ -4,6 +4,7 @@ use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::serial::{Read, Write};
+use fixedvec::{alloc_stack, FixedVec};
 use heapless::Deque;
 use num::abs;
 
@@ -13,7 +14,7 @@ use crate::modbus::{ModbusSerial, ModbusSerialError, ModbusSerialErrorAlias};
 #[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub enum SpindleStatus {
     Off,
-    On,
+    On { rpm: i16 },
 }
 
 pub trait SpindleDriver {
@@ -47,11 +48,10 @@ where
     has_initialized: bool,
     spindle_status: SpindleStatus,
     next_spindle_status: Option<SpindleStatus>,
-    desired_rpm: u16,
-    current_rpm: Option<u16>,
+    current_rpm: Option<i16>,
 }
 
-const RPM_ERROR_BOUND: u16 = 2;
+const RPM_ERROR_BOUND: i16 = 2;
 
 impl<Serial> SpindleDriverJmcHsv57<Serial>
 where
@@ -59,7 +59,7 @@ where
     <Serial as Write<u8>>::Error: Debug,
     <Serial as Read<u8>>::Error: Debug,
 {
-    pub fn new(serial: Serial, desired_rpm: u16) -> Self {
+    pub fn new(serial: Serial) -> Self {
         Self {
             modbus: ModbusSerial::new(serial, 1),
             modbus_requests: Deque::new(),
@@ -67,7 +67,6 @@ where
             has_initialized: false,
             spindle_status: SpindleStatus::Off,
             next_spindle_status: None,
-            desired_rpm,
             current_rpm: None,
         }
     }
@@ -78,14 +77,14 @@ where
                 if is_response_ready {
                     // handle modbus response
                     match self.modbus_response_type.unwrap() {
-                        JmcHsv57ModbusResponseType::InitSpeedSource => {
-                            // TODO
-                        }
-                        JmcHsv57ModbusResponseType::SetSpeed => {
-                            // TODO
-                        }
+                        JmcHsv57ModbusResponseType::InitSpeedSource => self.modbus.parse_ok()?,
+                        JmcHsv57ModbusResponseType::SetSpeed => self.modbus.parse_ok()?,
                         JmcHsv57ModbusResponseType::GetSpeed => {
-                            // TODO
+                            let mut result_space = alloc_stack!([u16; 1]);
+                            let mut result = FixedVec::new(&mut result_space);
+                            self.modbus.parse_u16(&mut result)?;
+                            let rpm = result.get(0).unwrap();
+                            self.set_current_rpm_from_u16(*rpm);
                         }
                     };
 
@@ -123,6 +122,25 @@ where
             Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
             Poll::Pending => Poll::Pending,
         }
+    }
+
+    fn desired_rpm(&mut self) -> i16 {
+        match self.spindle_status {
+            SpindleStatus::On { rpm } => rpm,
+            SpindleStatus::Off => 0,
+        }
+    }
+
+    fn desired_rpm_as_u16(&mut self) -> u16 {
+        let rpm = self.desired_rpm();
+        // TODO two's complement
+        rpm as u16
+    }
+
+    fn set_current_rpm_from_u16(&mut self, rpm: u16) {
+        // TODO two's complement
+        let rpm_as_i16 = rpm as i16;
+        self.current_rpm = Some(rpm_as_i16);
     }
 }
 
@@ -170,11 +188,12 @@ where
         if let Some(next_spindle_status) = self.next_spindle_status {
             if next_spindle_status != self.spindle_status {
                 // set speed over modbus
+                let rpm = self.desired_rpm_as_u16();
                 self.modbus_requests
-                    .push_back(JmcHsv57ModbusRequest::SetSpeed {
-                        rpm: self.desired_rpm,
-                    })
+                    .push_back(JmcHsv57ModbusRequest::SetSpeed { rpm })
                     .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
+
+                self.spindle_status = next_spindle_status;
 
                 return Poll::Pending;
             }
@@ -183,7 +202,8 @@ where
         // check if speed has been reached
         if let Some(current_rpm) = self.current_rpm {
             // if rpm within error bounds
-            if abs((current_rpm as i16) - (self.desired_rpm as i16)) < (RPM_ERROR_BOUND as i16) {
+            let desired_rpm = self.desired_rpm();
+            if abs(current_rpm - desired_rpm) < RPM_ERROR_BOUND {
                 return Poll::Ready(Ok(()));
             }
         }
@@ -215,7 +235,7 @@ where
 
 #[derive(Clone, Copy, Debug, Format)]
 pub struct SpindleSetMessage {
-    status: SpindleStatus,
+    pub status: SpindleStatus,
 }
 
 impl<Driver> ActorReceive<SpindleSetMessage> for Spindle<Driver>

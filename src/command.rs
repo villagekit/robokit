@@ -169,7 +169,6 @@ impl CommandCenter {
             steps_per_millimeter,
         );
 
-        let desired_rpm = 10;
         let tx = gpiod.pd5.into_alternate();
         let rx = gpiod.pd6.into_alternate();
         let main_spindle_serial = Serial::new(
@@ -183,7 +182,7 @@ impl CommandCenter {
                 sysclock: false,
             },
         );
-        let main_spindle_driver = SpindleDriverJmcHsv57::new(main_spindle_serial, desired_rpm);
+        let main_spindle_driver = SpindleDriverJmcHsv57::new(main_spindle_serial);
         let main_spindle = Spindle::new(main_spindle_driver);
 
         let user_button = Switch::new(gpioc.pc13.into_floating_input());
