@@ -10,6 +10,7 @@ use num::abs;
 
 use crate::actor::{ActorPoll, ActorReceive};
 use crate::modbus::{ModbusSerial, ModbusSerialError, ModbusSerialErrorAlias};
+use crate::util::{i16_to_u16, u16_to_i16};
 
 #[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub enum SpindleStatus {
@@ -83,8 +84,9 @@ where
                             let mut result_space = alloc_stack!([u16; 1]);
                             let mut result = FixedVec::new(&mut result_space);
                             self.modbus.parse_u16(&mut result)?;
-                            let rpm = result.get(0).unwrap();
-                            self.set_current_rpm_from_u16(*rpm);
+                            let rpm_in_u16 = result.get(0).unwrap();
+                            let rpm_in_i16 = u16_to_i16(*rpm_in_u16);
+                            self.current_rpm = Some(rpm_in_i16);
                         }
                     };
 
@@ -129,18 +131,6 @@ where
             SpindleStatus::On { rpm } => rpm,
             SpindleStatus::Off => 0,
         }
-    }
-
-    fn desired_rpm_as_u16(&mut self) -> u16 {
-        let rpm = self.desired_rpm();
-        // TODO two's complement
-        rpm as u16
-    }
-
-    fn set_current_rpm_from_u16(&mut self, rpm: u16) {
-        // TODO two's complement
-        let rpm_as_i16 = rpm as i16;
-        self.current_rpm = Some(rpm_as_i16);
     }
 }
 
@@ -188,9 +178,10 @@ where
         if let Some(next_spindle_status) = self.next_spindle_status {
             if next_spindle_status != self.spindle_status {
                 // set speed over modbus
-                let rpm = self.desired_rpm_as_u16();
+                let rpm_in_i16 = self.desired_rpm();
+                let rpm_in_u16 = i16_to_u16(rpm_in_i16);
                 self.modbus_requests
-                    .push_back(JmcHsv57ModbusRequest::SetSpeed { rpm })
+                    .push_back(JmcHsv57ModbusRequest::SetSpeed { rpm: rpm_in_u16 })
                     .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
 
                 self.spindle_status = next_spindle_status;
