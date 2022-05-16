@@ -1,6 +1,5 @@
 // two's complement
 pub fn i16_to_u16(num: i16) -> u16 {
-    defmt::println!("num: {}", num);
     if num == 0 {
         0
     } else if num > 0 {
@@ -12,7 +11,6 @@ pub fn i16_to_u16(num: i16) -> u16 {
 
 // two's complement
 pub fn u16_to_i16(num: u16) -> i16 {
-    defmt::println!("num: {}", num);
     if num == 0 {
         0
     } else if num <= i16::MAX as u16 {
