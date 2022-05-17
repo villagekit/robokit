@@ -49,8 +49,6 @@ mod app {
             TIM10: ctx.device.TIM10,
             TIM11: ctx.device.TIM11,
             USART2: ctx.device.USART2,
-            // main_spindle_serial_request_bytes_space,
-            // main_spindle_serial_response_bytes_space,
             clocks: &clocks,
         });
 
