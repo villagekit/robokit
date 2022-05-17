@@ -167,6 +167,7 @@ impl CommandCenter {
             resources.TIM3.counter(resources.clocks),
             max_acceleration_in_millimeters_per_sec_per_sec,
             steps_per_millimeter,
+            AxisLimitSide::Min,
         );
 
         let tx = gpiod.pd5.into_alternate();
