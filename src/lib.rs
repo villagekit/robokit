@@ -4,7 +4,9 @@
 pub mod actor;
 pub mod actuators;
 pub mod command;
+pub mod modbus;
 pub mod sensors;
+pub mod util;
 
 use defmt_rtt as _; // global logger
 
@@ -32,10 +34,29 @@ pub fn exit() -> ! {
 #[cfg(test)]
 #[defmt_test::tests]
 mod unit_tests {
-    use defmt::assert;
+    use defmt::assert_eq;
+
+    use crate::util;
 
     #[test]
-    fn it_works() {
-        assert!(true)
+    fn i16_to_u16() {
+        assert_eq!(util::i16_to_u16(0), 0);
+        assert_eq!(util::i16_to_u16(1), 1);
+        assert_eq!(util::i16_to_u16(2), 2);
+        assert_eq!(util::i16_to_u16(32767), 32767);
+        assert_eq!(util::i16_to_u16(-1), 65535);
+        assert_eq!(util::i16_to_u16(-2), 65534);
+        assert_eq!(util::i16_to_u16(-32768), 32768);
+    }
+
+    #[test]
+    fn u16_to_i16() {
+        assert_eq!(util::u16_to_i16(0), 0);
+        assert_eq!(util::u16_to_i16(1), 1);
+        assert_eq!(util::u16_to_i16(2), 2);
+        assert_eq!(util::u16_to_i16(32767), 32767);
+        assert_eq!(util::u16_to_i16(65535), -1);
+        assert_eq!(util::u16_to_i16(65534), -2);
+        assert_eq!(util::u16_to_i16(32768), -32768);
     }
 }

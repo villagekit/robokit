@@ -14,6 +14,7 @@ mod app {
         actor::{ActorPoll, ActorReceive},
         actuators::axis::AxisMoveMessage,
         actuators::led::LedBlinkMessage,
+        actuators::spindle::{SpindleSetMessage, SpindleStatus},
         command::{Command, CommandCenter, CommandCenterResources},
     };
 
@@ -41,11 +42,13 @@ mod app {
         let command_center = CommandCenter::new(CommandCenterResources {
             GPIOB: ctx.device.GPIOB,
             GPIOC: ctx.device.GPIOC,
+            GPIOD: ctx.device.GPIOD,
             GPIOG: ctx.device.GPIOG,
             TIM3: ctx.device.TIM3,
             TIM9: ctx.device.TIM9,
             TIM10: ctx.device.TIM10,
             TIM11: ctx.device.TIM11,
+            USART2: ctx.device.USART2,
             clocks: &clocks,
         });
 
@@ -69,6 +72,9 @@ mod app {
         let command_center = ctx.local.command_center;
 
         let commands = [
+            Command::MainSpindle(SpindleSetMessage {
+                status: SpindleStatus::On { rpm: 50 },
+            }),
             Command::GreenLed(LedBlinkMessage {
                 duration: 50000.micros(),
             }),
@@ -94,6 +100,24 @@ mod app {
             Command::XAxis(AxisMoveMessage {
                 max_velocity_in_millimeters_per_sec: 40_f64,
                 distance_in_millimeters: -40_f64,
+            }),
+            Command::MainSpindle(SpindleSetMessage {
+                status: SpindleStatus::Off,
+            }),
+            Command::GreenLed(LedBlinkMessage {
+                duration: 50000.micros(),
+            }),
+            Command::BlueLed(LedBlinkMessage {
+                duration: 50000.micros(),
+            }),
+            Command::RedLed(LedBlinkMessage {
+                duration: 50000.micros(),
+            }),
+            Command::BlueLed(LedBlinkMessage {
+                duration: 50000.micros(),
+            }),
+            Command::GreenLed(LedBlinkMessage {
+                duration: 50000.micros(),
             }),
         ];
         let mut command_index = 0;
