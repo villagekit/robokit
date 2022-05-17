@@ -34,13 +34,28 @@ pub type AxisDriverErrorDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> =
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
 #[derive(Clone, Copy, Debug, Format)]
-pub enum AxisState<Velocity> {
-    Idle,
+enum AxisMoveState<Velocity> {
     Initial {
         max_velocity_in_steps_per_sec: Velocity,
         target_step: i32,
     },
-    Moving,
+    Progress,
+}
+
+#[derive(Clone, Copy, Debug, Format)]
+enum AxisHomeState {
+    Initial,
+    Progress,
+    Done,
+}
+
+static HOMING_VELOCITY_IN_STEPS_PER_SEC: f64 = 10_f64;
+
+#[derive(Clone, Copy, Debug, Format)]
+enum AxisState<Velocity> {
+    Idle,
+    Moving(AxisMoveState<Velocity>),
+    Homing(AxisHomeState),
 }
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -65,6 +80,7 @@ where
     logical_position: f64,
     limit_min: Option<AxisLimitStatus>,
     limit_max: Option<AxisLimitStatus>,
+    home_side: AxisLimitSide,
 }
 
 impl<PinDir, PinStep, Timer, const TIMER_HZ: u32>
@@ -83,6 +99,7 @@ where
         timer: Timer,
         max_acceleration_in_millimeters_per_sec_per_sec: f64,
         steps_per_millimeter: f64,
+        home_side: AxisLimitSide,
     ) -> Self {
         let max_acceleration_in_steps_per_sec_per_sec =
             max_acceleration_in_millimeters_per_sec_per_sec * steps_per_millimeter;
@@ -105,6 +122,7 @@ where
             logical_position: 0_f64,
             limit_min: None,
             limit_max: None,
+            home_side,
         }
     }
 }
@@ -163,10 +181,10 @@ where
         // NOTE(mw) hmm... is this the best way to do this?
         self.logical_position = next_logical_position;
 
-        self.state = AxisState::Initial {
+        self.state = AxisState::Moving(AxisMoveState::Initial {
             max_velocity_in_steps_per_sec,
             target_step,
-        };
+        });
     }
 }
 
@@ -192,6 +210,18 @@ where
     }
 }
 
+#[derive(Clone, Copy, Debug, Format)]
+pub struct AxisHomeMessage {}
+
+impl<Driver> ActorReceive<AxisHomeMessage> for Axis<Driver>
+where
+    Driver: MotionControl,
+{
+    fn receive(&mut self, _action: &AxisHomeMessage) {
+        self.state = AxisState::Homing(AxisHomeState::Initial);
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum AxisError<DriverError: Debug> {
     Driver(DriverError),
@@ -210,50 +240,106 @@ where
     type Error = AxisError<<AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error>;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        // limit: min
+        // assert min and max limits are set
         if let None = self.limit_min {
             return Poll::Ready(Err(AxisError::Unexpected));
         }
-        if let Some(AxisLimitStatus::Over) = self.limit_min {
-            if let Direction::Backward = self.stepper.driver_mut().current_direction() {
-                return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Min)));
-            }
-        }
-
-        // limit: max
         if let None = self.limit_max {
             return Poll::Ready(Err(AxisError::Unexpected));
-        }
-        if let Some(AxisLimitStatus::Over) = self.limit_max {
-            if let Direction::Forward = self.stepper.driver_mut().current_direction() {
-                return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Max)));
-            }
         }
 
         match self.state {
             AxisState::Idle => Poll::Ready(Ok(())),
-            AxisState::Initial {
-                max_velocity_in_steps_per_sec,
-                target_step,
-            } => {
-                self.stepper
-                    .driver_mut()
-                    .move_to_position(max_velocity_in_steps_per_sec, target_step)
-                    .map_err(|err| AxisError::Driver(err))?;
-                self.state = AxisState::Moving;
-                Poll::Pending
+            AxisState::Moving(move_state) => {
+                let driver = self.stepper.driver_mut();
+
+                match move_state {
+                    AxisMoveState::Initial {
+                        max_velocity_in_steps_per_sec,
+                        target_step,
+                    } => {
+                        driver
+                            .move_to_position(max_velocity_in_steps_per_sec, target_step)
+                            .map_err(|err| AxisError::Driver(err))?;
+                        self.state = AxisState::Moving(AxisMoveState::Progress);
+                        Poll::Pending
+                    }
+                    AxisMoveState::Progress => {
+                        match driver.current_direction() {
+                            // limit: max
+                            Direction::Forward => {
+                                if let Some(AxisLimitStatus::Over) = self.limit_max {
+                                    return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Max)));
+                                }
+                            }
+                            // limit: min
+                            Direction::Backward => {
+                                if let Some(AxisLimitStatus::Over) = self.limit_min {
+                                    return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Min)));
+                                }
+                            }
+                        }
+
+                        let still_moving = driver.update().map_err(|err| AxisError::Driver(err))?;
+                        if still_moving {
+                            Poll::Pending
+                        } else {
+                            self.state = AxisState::Idle;
+                            Poll::Ready(Ok(()))
+                        }
+                    }
+                }
             }
-            AxisState::Moving => {
-                let still_moving = self
-                    .stepper
-                    .driver_mut()
-                    .update()
-                    .map_err(|err| AxisError::Driver(err))?;
-                if still_moving {
-                    Poll::Pending
-                } else {
-                    self.state = AxisState::Idle;
-                    Poll::Ready(Ok(()))
+            AxisState::Homing(home_state) => {
+                let driver = self.stepper.driver_mut();
+
+                let target_step = match self.home_side {
+                    AxisLimitSide::Min => i32::MIN,
+                    AxisLimitSide::Max => i32::MAX,
+                };
+
+                match home_state {
+                    AxisHomeState::Initial => {
+                        driver
+                            .move_to_position(HOMING_VELOCITY_IN_STEPS_PER_SEC, target_step)
+                            .map_err(|err| AxisError::Driver(err))?;
+                        self.state = AxisState::Homing(AxisHomeState::Progress);
+                        Poll::Pending
+                    }
+                    AxisHomeState::Progress => {
+                        match driver.current_direction() {
+                            // limit: max
+                            Direction::Forward => {
+                                if let Some(AxisLimitStatus::Over) = self.limit_max {
+                                    self.state = AxisState::Homing(AxisHomeState::Done);
+                                    return Poll::Pending;
+                                }
+                            }
+                            // limit: min
+                            Direction::Backward => {
+                                if let Some(AxisLimitStatus::Over) = self.limit_min {
+                                    self.state = AxisState::Homing(AxisHomeState::Done);
+                                    return Poll::Pending;
+                                }
+                            }
+                        }
+
+                        let still_moving = driver.update().map_err(|err| AxisError::Driver(err))?;
+                        if still_moving {
+                            Poll::Pending
+                        } else {
+                            Poll::Ready(Err(AxisError::Unexpected))
+                        }
+                    }
+                    AxisHomeState::Done => {
+                        driver
+                            .reset_position(0)
+                            .map_err(|err| AxisError::Driver(err))?;
+
+                        self.state = AxisState::Idle;
+
+                        Poll::Ready(Ok(()))
+                    }
                 }
             }
         }
