@@ -4,8 +4,7 @@ use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::serial::{Read, Write};
-use fixedvec::{alloc_stack, FixedVec};
-use heapless::Deque;
+use heapless::{Deque, Vec};
 use num::abs;
 
 use crate::actor::{ActorPoll, ActorReceive};
@@ -93,8 +92,7 @@ where
                         JmcHsv57ModbusResponseType::InitDeceleration => self.modbus.parse_ok()?,
                         JmcHsv57ModbusResponseType::SetSpeed => self.modbus.parse_ok()?,
                         JmcHsv57ModbusResponseType::GetSpeed => {
-                            let mut result_space = alloc_stack!([u16; 1]);
-                            let mut result = FixedVec::new(&mut result_space);
+                            let mut result: Vec<u16, 1> = Vec::new();
                             self.modbus.parse_u16(&mut result)?;
                             let rpm_in_u16 = result.get(0).unwrap();
                             let rpm_in_i16 = u16_to_i16(*rpm_in_u16);
