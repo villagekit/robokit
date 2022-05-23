@@ -29,7 +29,7 @@ ramp-maker = { version = "0.2", features = ["libm"] }
 rmodbus = { git = "https://github.com/villagekit/rmodbus", rev = "95f2718", default-features = false, features = ["nostd"] }
 stepper = { git = "https://github.com/ahdinosaur/stepper", rev = "f30b83b", features = ["dq542ma"] }
 stm32f7 = { version = "0.14", features = ["stm32f7x7", "rt"] }
-stm32f7xx-hal = { git = "https://github.com/ahdinosaur/stm32f7xx-hal", rev = "139072bc6", features = ["stm32f767", "rtic"] }
+stm32f7xx-hal = { git = "https://github.com/ahdinosaur/stm32f7xx-hal", rev = "9591f53", features = ["stm32f767", "rtic"] }
 void = { version = "1", default-features = false }
 
 [dev-dependencies]

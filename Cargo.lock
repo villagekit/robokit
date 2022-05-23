@@ -797,7 +797,7 @@ dependencies = [
 [[package]]
 name = "stm32f7xx-hal"
 version = "0.6.0"
-source = "git+https://github.com/ahdinosaur/stm32f7xx-hal?rev=139072bc6#139072bc6cf5f21ccdfc908fc43fdc6f80e471e3"
+source = "git+https://github.com/ahdinosaur/stm32f7xx-hal?rev=9591f53#9591f539398d234d9ee7db286298e24646b075a1"
 dependencies = [
  "as-slice",
  "bare-metal 1.0.0",
