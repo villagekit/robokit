@@ -1,6 +1,6 @@
 use core::fmt::Debug;
 use core::task::Poll;
-use defmt::Format;
+use defmt::{Debug2Format, Format};
 use embedded_hal::serial::{Read, Write};
 use heapless::Vec;
 use nb;
@@ -23,9 +23,9 @@ where
     serial: Serial,
     status: ModbusSerialStatus,
     request: ModbusRequest,
-    request_bytes: Vec<u8, 64>,
+    request_bytes: Vec<u8, 256>,
     request_bytes_index: usize,
-    response_bytes: Vec<u8, 64>,
+    response_bytes: Vec<u8, 256>,
     response_bytes_length: Option<u8>,
     response_ready: bool,
 }
@@ -180,10 +180,15 @@ where
             ModbusSerialStatus::Idle => Poll::Ready(Ok(self.response_ready)),
             ModbusSerialStatus::Writing => {
                 if let Some(next_byte) = self.request_bytes.get(self.request_bytes_index) {
-                    self.request_bytes_index += 1;
+                    defmt::println!("request bytes: {}", Debug2Format(&self.request_bytes));
+                    defmt::println!("write: {}", next_byte);
 
                     match self.serial.write(*next_byte) {
-                        Ok(()) => Poll::Pending,
+                        Ok(()) => {
+                            self.request_bytes_index += 1;
+
+                            Poll::Pending
+                        }
                         Err(nb::Error::WouldBlock) => Poll::Pending,
                         Err(nb::Error::Other(err)) => {
                             Poll::Ready(Err(ModbusSerialError::SerialTx(err)))
@@ -192,6 +197,8 @@ where
                 } else {
                     match self.serial.flush() {
                         Ok(()) => {
+                            defmt::println!("flushed");
+
                             self.request_bytes_index = 0;
                             self.request_bytes.clear();
 
@@ -217,11 +224,13 @@ where
                     self.status = ModbusSerialStatus::Idle;
                     self.response_ready = true;
 
-                    return Poll::Ready(Ok(true));
+                    return Poll::Ready(Ok(self.response_ready));
                 }
 
                 match self.serial.read() {
                     Ok(next_byte) => {
+                        defmt::println!("read: {}", next_byte);
+
                         self.response_bytes
                             .push(next_byte)
                             .map_err(|_err| ModbusSerialError::Vec)?;

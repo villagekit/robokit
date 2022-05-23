@@ -171,17 +171,115 @@ impl CommandCenter {
 
         let tx = gpiod.pd5.into_alternate();
         let rx = gpiod.pd6.into_alternate();
+        // Configure serial registers
+        /*
+        resources.USART2.cr2.reset();
+        resources.USART2.cr3.reset();
+        resources.USART2.cr1.modify(|_, w| {
+            w
+                // enable parity control
+                .pce()
+                .enabled()
+                // even parity
+                .ps()
+                .even()
+                // use m0 to set the data bits
+                .m1()
+                .clear_bit()
+                // 1 start bit, 8 data bits, n stop bits
+                .m0()
+                .bit9()
+        });
+        resources.USART2.cr2.modify(|_, w| {
+            w
+                // 1 stop bit
+                .stop()
+                .stop1()
+                // most significant bit first
+                .msbfirst()
+                .lsb()
+        });
+        */
         let main_spindle_serial = Serial::new(
             resources.USART2,
             (tx, rx),
             &resources.clocks,
             SerialConfig {
-                baud_rate: 9_600.bps(),
+                baud_rate: 57600.bps(),
                 oversampling: SerialOversampling::By16,
                 character_match: None,
                 sysclock: false,
             },
         );
+        /*
+        unsafe {
+            (*pac::USART2::ptr()).cr2.reset();
+            (*pac::USART2::ptr()).cr3.reset();
+            (*pac::USART2::ptr()).cr1.modify(|_, w| {
+                w
+                    // enable parity control
+                    .pce()
+                    .enabled()
+                    // even parity
+                    .ps()
+                    .even()
+                    // use m0 to set the data bits
+                    .m1()
+                    .m0()
+                    // 1 start bit, 9 data bits (including parity), n stop bits
+                    .m0()
+                    .bit9()
+            });
+            (*pac::USART2::ptr()).cr2.modify(|_, w| {
+                w
+                    // 1 stop bit
+                    .stop()
+                    .stop1()
+                    // least significant bit first
+                    .msbfirst()
+                    .lsb()
+            });
+        }
+        */
+        unsafe {
+            (*pac::USART2::ptr()).cr1.write(|w| {
+                w
+                    // usart enable
+                    .ue()
+                    .enabled()
+                    // tx enable
+                    .te()
+                    .enabled()
+                    // rx enable
+                    .re()
+                    .enabled()
+                    // oversampling
+                    .over8()
+                    .oversampling16()
+                    // enable parity control
+                    .pce()
+                    .enabled()
+                    // even parity
+                    .ps()
+                    .even()
+                    // use m0 to set the data bits
+                    .m1()
+                    .m0()
+                    // 1 start bit, 9 data bits (including parity), n stop bits
+                    .m0()
+                    .bit9()
+            });
+            (*pac::USART2::ptr()).cr2.write(|w| {
+                w
+                    // 1 stop bit
+                    .stop()
+                    .stop1()
+                    // least significant bit first
+                    .msbfirst()
+                    .lsb()
+            });
+            (*pac::USART2::ptr()).cr3.reset();
+        }
         let main_spindle_driver = SpindleDriverJmcHsv57::new(main_spindle_serial);
         let main_spindle = Spindle::new(main_spindle_driver);
 

@@ -5,6 +5,7 @@
 - [Gridbot](https://github.com/villagekit/gridbot-cad)
 - micro-controller: [Nucleo-144 STM32-F767ZI](https://nz.element14.com/stmicroelectronics/nucleo-f767zi/dev-board-nucleo-32-mcu/dp/2546569)
   - pins: https://os.mbed.com/platforms/ST-Nucleo-F767ZI/
+  - chip: https://www.st.com/resource/en/datasheet/stm32f767zi.pdf
 
 ## Setup
 
