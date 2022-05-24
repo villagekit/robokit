@@ -196,6 +196,15 @@ impl CommandCenter {
     }
 }
 
+#[derive(Clone, Copy, Debug, Format)]
+pub enum ResetMessage {}
+
+impl ActorReceive<ResetMessage> for CommandCenter {
+    fn receive(&mut self, _message: &ResetMessage) {
+        self.active_commands.clear()
+    }
+}
+
 impl ActorReceive<Command> for CommandCenter {
     fn receive(&mut self, command: &Command) {
         match command {

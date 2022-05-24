@@ -12,9 +12,6 @@ mod app {
 
     use gridbot::{
         actor::{ActorPoll, ActorReceive},
-        actuators::axis::AxisMoveMessage,
-        actuators::led::LedBlinkMessage,
-        actuators::spindle::{SpindleSetMessage, SpindleStatus},
         command::{Command, CommandCenter, CommandCenterResources},
     };
 
@@ -71,55 +68,6 @@ mod app {
 
         let command_center = ctx.local.command_center;
 
-        let commands = [
-            Command::MainSpindle(SpindleSetMessage {
-                status: SpindleStatus::On { rpm: 1000 },
-            }),
-            Command::GreenLed(LedBlinkMessage {
-                duration: 50000.micros(),
-            }),
-            Command::BlueLed(LedBlinkMessage {
-                duration: 50000.micros(),
-            }),
-            Command::RedLed(LedBlinkMessage {
-                duration: 50000.micros(),
-            }),
-            Command::XAxis(AxisMoveMessage {
-                max_velocity_in_millimeters_per_sec: 40_f64,
-                distance_in_millimeters: 40_f64,
-            }),
-            Command::RedLed(LedBlinkMessage {
-                duration: 50000.micros(),
-            }),
-            Command::BlueLed(LedBlinkMessage {
-                duration: 50000.micros(),
-            }),
-            Command::GreenLed(LedBlinkMessage {
-                duration: 50000.micros(),
-            }),
-            Command::XAxis(AxisMoveMessage {
-                max_velocity_in_millimeters_per_sec: 40_f64,
-                distance_in_millimeters: -40_f64,
-            }),
-            Command::MainSpindle(SpindleSetMessage {
-                status: SpindleStatus::Off,
-            }),
-            Command::GreenLed(LedBlinkMessage {
-                duration: 50000.micros(),
-            }),
-            Command::BlueLed(LedBlinkMessage {
-                duration: 50000.micros(),
-            }),
-            Command::RedLed(LedBlinkMessage {
-                duration: 50000.micros(),
-            }),
-            Command::BlueLed(LedBlinkMessage {
-                duration: 50000.micros(),
-            }),
-            Command::GreenLed(LedBlinkMessage {
-                duration: 50000.micros(),
-            }),
-        ];
         let mut command_index = 0;
 
         loop {
