@@ -63,15 +63,6 @@ pub enum Command {
     MainSpindle(SpindleSetMessage),
 }
 
-#[derive(Clone, Copy, Debug, Format)]
-pub enum CommandActuator {
-    GreenLed,
-    BlueLed,
-    RedLed,
-    XAxis,
-    MainSpindle,
-}
-
 /* sensors */
 type UserButtonPin = Pin<'C', 13, Input<Floating>>;
 type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
@@ -123,8 +114,8 @@ pub enum CommandCenterError {
 }
 
 pub struct CommandCenter {
+    pub active_command: Option<Command>,
     pub actuators: CommandCenterActuators,
-    pub current_actuator: Option<CommandActuator>,
     pub sensors: CommandCenterSensors,
 }
 
@@ -191,7 +182,7 @@ impl CommandCenter {
         let user_button = Switch::new(gpioc.pc13.into_floating_input());
 
         Self {
-            current_actuator: None,
+            active_command: None,
             actuators: CommandCenterActuators {
                 green_led,
                 blue_led,
@@ -209,25 +200,22 @@ impl ActorReceive<Command> for CommandCenter {
         match command {
             Command::GreenLed(message) => {
                 self.actuators.green_led.receive(message);
-                self.current_actuator = Some(CommandActuator::GreenLed);
             }
             Command::BlueLed(message) => {
                 self.actuators.blue_led.receive(message);
-                self.current_actuator = Some(CommandActuator::BlueLed);
             }
             Command::RedLed(message) => {
                 self.actuators.red_led.receive(message);
-                self.current_actuator = Some(CommandActuator::RedLed);
             }
             Command::XAxis(message) => {
                 self.actuators.x_axis.receive(message);
-                self.current_actuator = Some(CommandActuator::XAxis);
             }
             Command::MainSpindle(message) => {
                 self.actuators.main_spindle.receive(message);
-                self.current_actuator = Some(CommandActuator::MainSpindle);
             }
         }
+
+        self.active_command = Some(*command);
     }
 }
 
@@ -265,29 +253,29 @@ impl ActorPoll for CommandCenter {
     type Error = ActuatorError;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        match self.current_actuator {
+        match self.active_command {
             None => Poll::Ready(Ok(())),
-            Some(CommandActuator::GreenLed) => self
+            Some(Command::GreenLed(_)) => self
                 .actuators
                 .green_led
                 .poll()
                 .map_err(|err| ActuatorError::GreenLed(err)),
-            Some(CommandActuator::BlueLed) => self
+            Some(Command::BlueLed(_)) => self
                 .actuators
                 .blue_led
                 .poll()
                 .map_err(|err| ActuatorError::BlueLed(err)),
-            Some(CommandActuator::RedLed) => self
+            Some(Command::RedLed(_)) => self
                 .actuators
                 .red_led
                 .poll()
                 .map_err(|err| ActuatorError::RedLed(err)),
-            Some(CommandActuator::XAxis) => self
+            Some(Command::XAxis(_)) => self
                 .actuators
                 .x_axis
                 .poll()
                 .map_err(|err| ActuatorError::XAxis(err)),
-            Some(CommandActuator::MainSpindle) => self
+            Some(Command::MainSpindle(_)) => self
                 .actuators
                 .main_spindle
                 .poll()
