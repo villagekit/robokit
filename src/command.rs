@@ -7,7 +7,9 @@ use stm32f7xx_hal::{
     pac,
     prelude::*,
     rcc::{BusTimerClock, Clocks},
-    serial::{Config as SerialConfig, Oversampling as SerialOversampling, Serial},
+    serial::{
+        Config as SerialConfig, Oversampling as SerialOversampling, Parity as SerialParity, Serial,
+    },
     timer::{
         counter::{Counter, CounterUs},
         TimerExt,
@@ -176,10 +178,11 @@ impl CommandCenter {
             (tx, rx),
             &resources.clocks,
             SerialConfig {
-                baud_rate: 9_600.bps(),
+                baud_rate: 57600.bps(),
                 oversampling: SerialOversampling::By16,
                 character_match: None,
                 sysclock: false,
+                parity: SerialParity::ParityEven,
             },
         );
         let main_spindle_driver = SpindleDriverJmcHsv57::new(main_spindle_serial);

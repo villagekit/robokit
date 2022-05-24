@@ -4,15 +4,14 @@ use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::serial::{Read, Write};
-use fixedvec::{alloc_stack, FixedVec};
-use heapless::Deque;
+use heapless::{Deque, Vec};
 use num::abs;
 
 use crate::actor::{ActorPoll, ActorReceive};
 use crate::modbus::{ModbusSerial, ModbusSerialError, ModbusSerialErrorAlias};
 use crate::util::{i16_to_u16, u16_to_i16};
 
-static ACCELERATION_IN_MS_PER_1000_RPM: u16 = 1_000;
+static ACCELERATION_IN_MS_PER_1000_RPM: u16 = 10_000;
 
 #[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub enum SpindleStatus {
@@ -93,8 +92,7 @@ where
                         JmcHsv57ModbusResponseType::InitDeceleration => self.modbus.parse_ok()?,
                         JmcHsv57ModbusResponseType::SetSpeed => self.modbus.parse_ok()?,
                         JmcHsv57ModbusResponseType::GetSpeed => {
-                            let mut result_space = alloc_stack!([u16; 1]);
-                            let mut result = FixedVec::new(&mut result_space);
+                            let mut result: Vec<u16, 1> = Vec::new();
                             self.modbus.parse_u16(&mut result)?;
                             let rpm_in_u16 = result.get(0).unwrap();
                             let rpm_in_i16 = u16_to_i16(*rpm_in_u16);
@@ -141,7 +139,7 @@ where
                                 // get d08.F.SP (0x0842) for rpm
                                 self.modbus_response_type =
                                     Some(JmcHsv57ModbusResponseType::GetSpeed);
-                                self.modbus.get_inputs(0x0842, 1)?;
+                                self.modbus.get_holdings(0x0842, 1)?;
                             }
                         };
 
@@ -218,19 +216,21 @@ where
                 })
                 .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
 
+            self.has_initialized = true;
+
             return Poll::Pending;
         }
 
         if let Some(next_spindle_status) = self.next_spindle_status {
             if next_spindle_status != self.spindle_status {
+                self.spindle_status = next_spindle_status;
+
                 // set speed over modbus
                 let rpm_in_i16 = self.desired_rpm();
                 let rpm_in_u16 = i16_to_u16(rpm_in_i16);
                 self.modbus_requests
                     .push_back(JmcHsv57ModbusRequest::SetSpeed { rpm: rpm_in_u16 })
                     .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
-
-                self.spindle_status = next_spindle_status;
 
                 return Poll::Pending;
             }

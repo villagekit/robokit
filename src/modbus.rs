@@ -2,8 +2,7 @@ use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::serial::{Read, Write};
-use fixedvec::alloc_stack;
-use fixedvec::{ErrorKind as FixedVecError, FixedVec};
+use heapless::Vec;
 use nb;
 use rmodbus::{
     client::ModbusRequest, guess_response_frame_len, ErrorKind as ModbusError, ModbusProto,
@@ -24,9 +23,9 @@ where
     serial: Serial,
     status: ModbusSerialStatus,
     request: ModbusRequest,
-    request_bytes_space: [u8; 256],
+    request_bytes: Vec<u8, 256>,
     request_bytes_index: usize,
-    response_bytes_space: [u8; 256],
+    response_bytes: Vec<u8, 256>,
     response_bytes_length: Option<u8>,
     response_ready: bool,
 }
@@ -35,7 +34,7 @@ where
 pub enum ModbusSerialError<SerialTxError: Debug, SerialRxError: Debug> {
     SerialTx(SerialTxError),
     SerialRx(SerialRxError),
-    FixedVec(FixedVecError),
+    Vec,
     Modbus(ModbusError),
     Unexpected,
 }
@@ -50,30 +49,25 @@ where
     <Serial as Read<u8>>::Error: Debug,
 {
     pub fn new(serial: Serial, unit_id: u8) -> Self {
-        let request_bytes_space: [u8; 256] = alloc_stack!([u8; 256]);
-        let response_bytes_space: [u8; 256] = alloc_stack!([u8; 256]);
-
         Self {
             serial,
             status: ModbusSerialStatus::Idle,
             request: ModbusRequest::new(unit_id, ModbusProto::Rtu),
-            request_bytes_space,
+            request_bytes: Vec::new(),
             request_bytes_index: 0,
-            response_bytes_space,
+            response_bytes: Vec::new(),
             response_bytes_length: None,
             response_ready: false,
         }
     }
-    // response_bytes: FixedVec::new(&mut response_bytes_space),
 
     pub fn get_coils(
         &mut self,
         reg: u16,
         count: u16,
     ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
-        let mut request_bytes = FixedVec::new(&mut self.request_bytes_space);
         self.request
-            .generate_get_coils(reg, count, &mut request_bytes)
+            .generate_get_coils(reg, count, &mut self.request_bytes)
             .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
@@ -84,9 +78,20 @@ where
         reg: u16,
         count: u16,
     ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
-        let mut request_bytes = FixedVec::new(&mut self.request_bytes_space);
         self.request
-            .generate_get_discretes(reg, count, &mut request_bytes)
+            .generate_get_discretes(reg, count, &mut self.request_bytes)
+            .map_err(|err| ModbusSerialError::Modbus(err))?;
+        self.status = ModbusSerialStatus::Writing;
+        Ok(())
+    }
+
+    pub fn get_holdings(
+        &mut self,
+        reg: u16,
+        count: u16,
+    ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
+        self.request
+            .generate_get_holdings(reg, count, &mut self.request_bytes)
             .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
@@ -97,9 +102,8 @@ where
         reg: u16,
         count: u16,
     ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
-        let mut request_bytes = FixedVec::new(&mut self.request_bytes_space);
         self.request
-            .generate_get_inputs(reg, count, &mut request_bytes)
+            .generate_get_inputs(reg, count, &mut self.request_bytes)
             .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
@@ -110,9 +114,8 @@ where
         reg: u16,
         value: bool,
     ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
-        let mut request_bytes = FixedVec::new(&mut self.request_bytes_space);
         self.request
-            .generate_set_coil(reg, value, &mut request_bytes)
+            .generate_set_coil(reg, value, &mut self.request_bytes)
             .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
@@ -123,9 +126,8 @@ where
         reg: u16,
         value: u16,
     ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
-        let mut request_bytes = FixedVec::new(&mut self.request_bytes_space);
         self.request
-            .generate_set_holding(reg, value, &mut request_bytes)
+            .generate_set_holding(reg, value, &mut self.request_bytes)
             .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
@@ -136,9 +138,8 @@ where
         reg: u16,
         values: &[u16],
     ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
-        let mut request_bytes = FixedVec::new(&mut self.request_bytes_space);
         self.request
-            .generate_set_holdings_bulk(reg, values, &mut request_bytes)
+            .generate_set_holdings_bulk(reg, values, &mut self.request_bytes)
             .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
@@ -149,9 +150,8 @@ where
         reg: u16,
         values: &[bool],
     ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
-        let mut request_bytes = FixedVec::new(&mut self.request_bytes_space);
         self.request
-            .generate_set_coils_bulk(reg, values, &mut request_bytes)
+            .generate_set_coils_bulk(reg, values, &mut self.request_bytes)
             .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
@@ -160,9 +160,8 @@ where
     pub fn parse_ok(&mut self) -> Result<(), ModbusSerialErrorAlias<Serial>> {
         self.response_ready = false;
 
-        let response_bytes = FixedVec::new(&mut self.response_bytes_space);
         self.request
-            .parse_ok(response_bytes.as_slice())
+            .parse_ok(self.response_bytes.as_slice())
             .map_err(|err| ModbusSerialError::Modbus(err))
     }
 
@@ -172,9 +171,8 @@ where
     ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
         self.response_ready = false;
 
-        let response_bytes = FixedVec::new(&mut self.response_bytes_space);
         self.request
-            .parse_u16(response_bytes.as_slice(), result)
+            .parse_u16(self.response_bytes.as_slice(), result)
             .map_err(|err| ModbusSerialError::Modbus(err))
     }
 
@@ -184,9 +182,8 @@ where
     ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
         self.response_ready = false;
 
-        let response_bytes = FixedVec::new(&mut self.response_bytes_space);
         self.request
-            .parse_bool(response_bytes.as_slice(), result)
+            .parse_bool(self.response_bytes.as_slice(), result)
             .map_err(|err| ModbusSerialError::Modbus(err))
     }
 
@@ -194,14 +191,13 @@ where
         match self.status {
             ModbusSerialStatus::Idle => Poll::Ready(Ok(self.response_ready)),
             ModbusSerialStatus::Writing => {
-                let mut request_bytes = FixedVec::new(&mut self.request_bytes_space);
-                let mut response_bytes = FixedVec::new(&mut self.response_bytes_space);
-
-                if let Some(next_byte) = request_bytes.get(self.request_bytes_index) {
-                    self.request_bytes_index += 1;
-
+                if let Some(next_byte) = self.request_bytes.get(self.request_bytes_index) {
                     match self.serial.write(*next_byte) {
-                        Ok(()) => Poll::Pending,
+                        Ok(()) => {
+                            self.request_bytes_index += 1;
+
+                            Poll::Pending
+                        }
                         Err(nb::Error::WouldBlock) => Poll::Pending,
                         Err(nb::Error::Other(err)) => {
                             Poll::Ready(Err(ModbusSerialError::SerialTx(err)))
@@ -211,10 +207,10 @@ where
                     match self.serial.flush() {
                         Ok(()) => {
                             self.request_bytes_index = 0;
-                            request_bytes.clear();
+                            self.request_bytes.clear();
 
                             self.response_bytes_length = None;
-                            response_bytes.clear();
+                            self.response_bytes.clear();
 
                             self.status = ModbusSerialStatus::Reading;
 
@@ -228,27 +224,25 @@ where
                 }
             }
             ModbusSerialStatus::Reading => {
-                let mut response_bytes = FixedVec::new(&mut self.response_bytes_space);
-
                 // if we've read enough, stop reading and return result
                 if self.response_bytes_length.is_some()
-                    && response_bytes.len() > (self.response_bytes_length.unwrap() as usize)
+                    && self.response_bytes.len() == (self.response_bytes_length.unwrap() as usize)
                 {
                     self.status = ModbusSerialStatus::Idle;
                     self.response_ready = true;
 
-                    return Poll::Ready(Ok(true));
+                    return Poll::Ready(Ok(self.response_ready));
                 }
 
                 match self.serial.read() {
                     Ok(next_byte) => {
-                        response_bytes
+                        self.response_bytes
                             .push(next_byte)
-                            .map_err(|err| ModbusSerialError::FixedVec(err))?;
+                            .map_err(|_err| ModbusSerialError::Vec)?;
 
-                        if self.response_bytes_length.is_none() && response_bytes.len() > 6 {
+                        if self.response_bytes_length.is_none() && self.response_bytes.len() > 6 {
                             let response_bytes_length = guess_response_frame_len(
-                                response_bytes.as_slice(),
+                                self.response_bytes.as_slice(),
                                 ModbusProto::Rtu,
                             )
                             .map_err(|err| ModbusSerialError::Modbus(err))?;

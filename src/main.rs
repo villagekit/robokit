@@ -73,7 +73,7 @@ mod app {
 
         let commands = [
             Command::MainSpindle(SpindleSetMessage {
-                status: SpindleStatus::On { rpm: 50 },
+                status: SpindleStatus::On { rpm: 1000 },
             }),
             Command::GreenLed(LedBlinkMessage {
                 duration: 50000.micros(),
