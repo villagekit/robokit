@@ -762,11 +762,13 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 [[package]]
 name = "stepper"
 version = "0.5.0"
-source = "git+https://github.com/ahdinosaur/stepper?rev=f30b83b#f30b83b2b9c6fab31dbf978f3d10ea7849033531"
+source = "git+https://github.com/ahdinosaur/stepper?rev=e46468e#e46468efcf754bb96762d4822dfdddf6182be858"
 dependencies = [
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0-alpha.6",
  "embedded-time",
+ "fugit",
+ "fugit-timer",
  "nb 1.0.0",
  "num-traits",
  "paste",
