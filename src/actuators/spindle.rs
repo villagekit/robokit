@@ -238,8 +238,6 @@ where
 
         // check if speed has been reached
         if let Some(current_rpm) = self.current_rpm {
-            defmt::println!("current rpm: {}", current_rpm);
-
             // if rpm within error bounds
             let desired_rpm = self.desired_rpm();
             if abs(current_rpm - desired_rpm) < RPM_ERROR_BOUND {
