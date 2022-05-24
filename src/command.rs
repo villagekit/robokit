@@ -2,6 +2,7 @@ use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use fugit_timer::Timer;
+use heapless::Vec;
 use stm32f7xx_hal::{
     gpio::{self, Alternate, Floating, Input, Output, Pin, PushPull},
     pac,
@@ -114,7 +115,7 @@ pub enum CommandCenterError {
 }
 
 pub struct CommandCenter {
-    pub active_command: Option<Command>,
+    pub active_commands: Vec<Command, 8>,
     pub actuators: CommandCenterActuators,
     pub sensors: CommandCenterSensors,
 }
@@ -182,7 +183,7 @@ impl CommandCenter {
         let user_button = Switch::new(gpioc.pc13.into_floating_input());
 
         Self {
-            active_command: None,
+            active_commands: Vec::new(),
             actuators: CommandCenterActuators {
                 green_led,
                 blue_led,
@@ -215,7 +216,7 @@ impl ActorReceive<Command> for CommandCenter {
             }
         }
 
-        self.active_command = Some(*command);
+        self.active_commands.push(*command).unwrap();
     }
 }
 
@@ -253,33 +254,41 @@ impl ActorPoll for CommandCenter {
     type Error = ActuatorError;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        match self.active_command {
-            None => Poll::Ready(Ok(())),
-            Some(Command::GreenLed(_)) => self
-                .actuators
-                .green_led
-                .poll()
-                .map_err(|err| ActuatorError::GreenLed(err)),
-            Some(Command::BlueLed(_)) => self
-                .actuators
-                .blue_led
-                .poll()
-                .map_err(|err| ActuatorError::BlueLed(err)),
-            Some(Command::RedLed(_)) => self
-                .actuators
-                .red_led
-                .poll()
-                .map_err(|err| ActuatorError::RedLed(err)),
-            Some(Command::XAxis(_)) => self
-                .actuators
-                .x_axis
-                .poll()
-                .map_err(|err| ActuatorError::XAxis(err)),
-            Some(Command::MainSpindle(_)) => self
-                .actuators
-                .main_spindle
-                .poll()
-                .map_err(|err| ActuatorError::MainSpindle(err)),
-        }
+        self.active_commands
+            .iter()
+            .map(|active_command| match active_command {
+                Command::GreenLed(_) => self
+                    .actuators
+                    .green_led
+                    .poll()
+                    .map_err(|err| ActuatorError::GreenLed(err)),
+                Command::BlueLed(_) => self
+                    .actuators
+                    .blue_led
+                    .poll()
+                    .map_err(|err| ActuatorError::BlueLed(err)),
+                Command::RedLed(_) => self
+                    .actuators
+                    .red_led
+                    .poll()
+                    .map_err(|err| ActuatorError::RedLed(err)),
+                Command::XAxis(_) => self
+                    .actuators
+                    .x_axis
+                    .poll()
+                    .map_err(|err| ActuatorError::XAxis(err)),
+                Command::MainSpindle(_) => self
+                    .actuators
+                    .main_spindle
+                    .poll()
+                    .map_err(|err| ActuatorError::MainSpindle(err)),
+            })
+            .fold(Poll::Ready(Ok(())), |sofar, next| {
+                if let Poll::Ready(Ok(())) = sofar {
+                    next
+                } else {
+                    sofar
+                }
+            })
     }
 }
