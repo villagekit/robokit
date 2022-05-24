@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
-use fugit::TimerDurationU32 as TimerDuration;
+use fugit::{TimerDurationU32 as TimerDuration, TimerInstantU32 as TimerInstant};
 use fugit_timer::Timer as FugitTimer;
 use stepper::{
     compat, drivers,
@@ -18,7 +18,7 @@ use crate::actor::{ActorPoll, ActorReceive};
 pub type AxisMotionProfile = ramp_maker::Trapezoidal<f64>;
 pub type AxisMotionControl<Driver, Timer, const FREQ: u32> = SoftwareMotionControl<
     Driver,
-    Timer,
+    StepperTimer<Timer, FREQ>,
     AxisMotionProfile,
     DelayToTicks<TimerDuration<FREQ>, FREQ>,
     FREQ,
@@ -79,7 +79,7 @@ where
     pub fn new_dq542ma(
         dir: PinDir,
         step: PinStep,
-        mut timer: Timer,
+        timer: Timer,
         max_acceleration_in_millimeters_per_sec_per_sec: f64,
         steps_per_millimeter: f64,
     ) -> Self {
@@ -89,12 +89,13 @@ where
 
         let compat_dir = compat::Pin(dir);
         let compat_step = compat::Pin(step);
+        let mut stepper_timer = StepperTimer(timer);
 
         let stepper = Stepper::from_driver(drivers::dq542ma::DQ542MA::new())
-            .enable_direction_control(compat_dir, Direction::Forward, &mut timer)
+            .enable_direction_control(compat_dir, Direction::Forward, &mut stepper_timer)
             .unwrap()
             .enable_step_control(compat_step)
-            .enable_motion_control((timer, profile, DelayToTicks::new()));
+            .enable_motion_control((stepper_timer, profile, DelayToTicks::new()));
 
         Axis {
             stepper: stepper,
@@ -254,5 +255,39 @@ where
                 }
             }
         }
+    }
+}
+
+pub struct StepperTimer<Timer, const FREQ: u32>(pub Timer);
+
+impl<Timer, const FREQ: u32> FugitTimer<FREQ> for StepperTimer<Timer, FREQ>
+where
+    Timer: FugitTimer<FREQ>,
+{
+    type Error = Timer::Error;
+
+    fn now(&mut self) -> TimerInstant<FREQ> {
+        self.0.now()
+    }
+
+    fn start(&mut self, mut duration: TimerDuration<FREQ>) -> Result<(), Self::Error> {
+        // wait to discard any interrupt events that triggered before we started.
+        self.0.wait().ok();
+
+        // if below minimum, set to minimum: 2 ticks
+        let minimum_duration = TimerDuration::<FREQ>::from_ticks(2);
+        if duration < minimum_duration {
+            duration = minimum_duration;
+        }
+
+        self.start(duration)
+    }
+
+    fn cancel(&mut self) -> Result<(), Self::Error> {
+        self.0.cancel()
+    }
+
+    fn wait(&mut self) -> nb::Result<(), Self::Error> {
+        self.0.wait()
     }
 }
