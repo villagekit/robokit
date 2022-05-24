@@ -96,7 +96,6 @@ where
                             self.modbus.parse_u16(&mut result)?;
                             let rpm_in_u16 = result.get(0).unwrap();
                             let rpm_in_i16 = u16_to_i16(*rpm_in_u16);
-                            defmt::println!("rpm: {}", rpm_in_i16);
                             self.current_rpm = Some(rpm_in_i16);
                         }
                     };
@@ -107,52 +106,40 @@ where
                         // setup next modbus request
                         match self.modbus_requests.pop_front().unwrap() {
                             JmcHsv57ModbusRequest::InitControlMode => {
-                                defmt::println!("init control mode");
-
                                 // set P01-01 (0x0065) to 1
                                 self.modbus_response_type =
                                     Some(JmcHsv57ModbusResponseType::InitControlMode);
                                 self.modbus.set_holding(0x0065, 1)?;
                             }
                             JmcHsv57ModbusRequest::InitSpeedSource => {
-                                defmt::println!("init speed source");
-
                                 // set P04-01 (0x0191) to 1
                                 self.modbus_response_type =
                                     Some(JmcHsv57ModbusResponseType::InitSpeedSource);
                                 self.modbus.set_holding(0x0191, 1)?;
                             }
                             JmcHsv57ModbusRequest::InitAcceleration { ms_per_1000_rpm } => {
-                                defmt::println!("init acceleration: {}", ms_per_1000_rpm);
-
                                 // set P04-14 (0x019E) to unit 1ms/1000rpm
                                 self.modbus_response_type =
                                     Some(JmcHsv57ModbusResponseType::InitAcceleration);
                                 self.modbus.set_holding(0x019E, ms_per_1000_rpm)?;
                             }
                             JmcHsv57ModbusRequest::InitDeceleration { ms_per_1000_rpm } => {
-                                defmt::println!("init deceleration: {}", ms_per_1000_rpm);
-
                                 // set P04-15 (0x019F) to unit 1ms/1000rpm
                                 self.modbus_response_type =
                                     Some(JmcHsv57ModbusResponseType::InitDeceleration);
                                 self.modbus.set_holding(0x019F, ms_per_1000_rpm)?;
                             }
                             JmcHsv57ModbusRequest::SetSpeed { rpm } => {
-                                defmt::println!("set speed: {}", rpm);
-
                                 // set P04-02 (0x0192) to rpm (-6000 to 6000)
                                 self.modbus_response_type =
                                     Some(JmcHsv57ModbusResponseType::SetSpeed);
                                 self.modbus.set_holding(0x0192, rpm)?;
                             }
                             JmcHsv57ModbusRequest::GetSpeed => {
-                                defmt::println!("get speed");
-
                                 // get d08.F.SP (0x0842) for rpm
                                 self.modbus_response_type =
                                     Some(JmcHsv57ModbusResponseType::GetSpeed);
-                                self.modbus.get_inputs(0x0842, 1)?;
+                                self.modbus.get_holdings(0x0842, 1)?;
                             }
                         };
 
@@ -208,10 +195,6 @@ where
         }
 
         if !self.has_initialized {
-            defmt::println!("init spindle");
-
-            /*
-
             // initialize spindle over modbus
             self.modbus_requests
                 .push_back(JmcHsv57ModbusRequest::InitControlMode)
@@ -232,7 +215,6 @@ where
                     ms_per_1000_rpm: ACCELERATION_IN_MS_PER_1000_RPM,
                 })
                 .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
-            */
 
             self.has_initialized = true;
 
@@ -241,8 +223,6 @@ where
 
         if let Some(next_spindle_status) = self.next_spindle_status {
             if next_spindle_status != self.spindle_status {
-                defmt::println!("set spindle speed");
-
                 self.spindle_status = next_spindle_status;
 
                 // set speed over modbus
@@ -268,7 +248,6 @@ where
         }
 
         // get speed over modbus
-        defmt::println!("get spindle speed");
         self.modbus_requests
             .push_back(JmcHsv57ModbusRequest::GetSpeed)
             .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;

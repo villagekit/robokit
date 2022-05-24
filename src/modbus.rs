@@ -1,6 +1,6 @@
 use core::fmt::Debug;
 use core::task::Poll;
-use defmt::{Debug2Format, Format};
+use defmt::Format;
 use embedded_hal::serial::{Read, Write};
 use heapless::Vec;
 use nb;
@@ -80,6 +80,18 @@ where
     ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
         self.request
             .generate_get_discretes(reg, count, &mut self.request_bytes)
+            .map_err(|err| ModbusSerialError::Modbus(err))?;
+        self.status = ModbusSerialStatus::Writing;
+        Ok(())
+    }
+
+    pub fn get_holdings(
+        &mut self,
+        reg: u16,
+        count: u16,
+    ) -> Result<(), ModbusSerialErrorAlias<Serial>> {
+        self.request
+            .generate_get_holdings(reg, count, &mut self.request_bytes)
             .map_err(|err| ModbusSerialError::Modbus(err))?;
         self.status = ModbusSerialStatus::Writing;
         Ok(())
@@ -180,9 +192,6 @@ where
             ModbusSerialStatus::Idle => Poll::Ready(Ok(self.response_ready)),
             ModbusSerialStatus::Writing => {
                 if let Some(next_byte) = self.request_bytes.get(self.request_bytes_index) {
-                    defmt::println!("request bytes: {}", Debug2Format(&self.request_bytes));
-                    defmt::println!("write: {}", next_byte);
-
                     match self.serial.write(*next_byte) {
                         Ok(()) => {
                             self.request_bytes_index += 1;
@@ -197,8 +206,6 @@ where
                 } else {
                     match self.serial.flush() {
                         Ok(()) => {
-                            defmt::println!("flushed");
-
                             self.request_bytes_index = 0;
                             self.request_bytes.clear();
 
@@ -219,7 +226,7 @@ where
             ModbusSerialStatus::Reading => {
                 // if we've read enough, stop reading and return result
                 if self.response_bytes_length.is_some()
-                    && self.response_bytes.len() > (self.response_bytes_length.unwrap() as usize)
+                    && self.response_bytes.len() == (self.response_bytes_length.unwrap() as usize)
                 {
                     self.status = ModbusSerialStatus::Idle;
                     self.response_ready = true;
@@ -229,8 +236,6 @@ where
 
                 match self.serial.read() {
                     Ok(next_byte) => {
-                        defmt::println!("read: {}", next_byte);
-
                         self.response_bytes
                             .push(next_byte)
                             .map_err(|_err| ModbusSerialError::Vec)?;
