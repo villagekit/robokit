@@ -26,7 +26,7 @@ nb = "1"
 num = { version = "0.3", default-features = false }
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 ramp-maker = { version = "0.2", features = ["libm"] }
-rmodbus = { git = "https://github.com/villagekit/rmodbus", rev = "b0f87a3", default-features = false, features = ["nostd"] }
+rmodbus = { version = "0.6.1", default-features = false, features = ["nostd", "heapless"] }
 stepper = { git = "https://github.com/ahdinosaur/stepper", rev = "f30b83b", features = ["dq542ma"] }
 stm32f7 = { version = "0.14", features = ["stm32f7x7", "rt"] }
 stm32f7xx-hal = { git = "https://github.com/ahdinosaur/stm32f7xx-hal", rev = "9591f53", features = ["stm32f767", "rtic"] }

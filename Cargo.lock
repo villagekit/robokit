@@ -666,8 +666,9 @@ dependencies = [
 
 [[package]]
 name = "rmodbus"
-version = "0.6.0"
-source = "git+https://github.com/villagekit/rmodbus?rev=b0f87a3#b0f87a3d0bc4fb1d1e6e96eb4854edd95ff92d4c"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "949faae8ec81d2b9df7caaedcadb594641fcb4f6b87f960325fd2ba58c4b5997"
 dependencies = [
  "fixedvec",
  "heapless",
