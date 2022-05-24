@@ -1,15 +1,10 @@
-use core::convert::Infallible;
 use core::fmt::Debug;
 use core::marker::PhantomData;
-use core::ops;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
-use fugit::{TimerDuration, TimerDurationU32};
+use fugit::{TimerDurationU32 as TimerDuration, TimerInstantU32 as TimerInstant};
 use fugit_timer::Timer as FugitTimer;
-use nb;
-use stepper::embedded_hal::timer::nb::CountDown;
-use stepper::embedded_time::{duration::*, ConversionError};
 use stepper::{
     compat, drivers,
     motion_control::{self, SoftwareMotionControl},
@@ -25,7 +20,8 @@ pub type AxisMotionControl<Driver, Timer, const TIMER_HZ: u32> = SoftwareMotionC
     Driver,
     StepperTimer<Timer, TIMER_HZ>,
     AxisMotionProfile,
-    DelayToTicks<TimerDurationU32<TIMER_HZ>, TIMER_HZ>,
+    DelayToTicks<TimerDuration<TIMER_HZ>, TIMER_HZ>,
+    TIMER_HZ,
 >;
 
 pub type AxisDriverDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> = AxisMotionControl<
@@ -94,13 +90,13 @@ where
 
         let compat_dir = compat::Pin(dir);
         let compat_step = compat::Pin(step);
-        let mut compat_timer = StepperTimer(timer);
+        let mut stepper_timer = StepperTimer(timer);
 
         let stepper = Stepper::from_driver(drivers::dq542ma::DQ542MA::new())
-            .enable_direction_control(compat_dir, Direction::Forward, &mut compat_timer)
+            .enable_direction_control(compat_dir, Direction::Forward, &mut stepper_timer)
             .unwrap()
             .enable_step_control(compat_step)
-            .enable_motion_control((compat_timer, profile, DelayToTicks::new()));
+            .enable_motion_control((stepper_timer, profile, DelayToTicks::new()));
 
         Axis {
             stepper: stepper,
@@ -131,14 +127,13 @@ impl<Time, const TIMER_HZ: u32> DelayToTicks<Time, TIMER_HZ> {
     }
 }
 
-impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64> for DelayToTicks<Time, TIMER_HZ> {
-    type Ticks = StepperTicks<TIMER_HZ>;
+impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64, TIMER_HZ> for DelayToTicks<Time, TIMER_HZ> {
     type Error = core::convert::Infallible;
 
-    fn delay_to_ticks(&self, delay: f64) -> Result<Self::Ticks, Self::Error> {
-        let ticks = TimerDurationU32::<TIMER_HZ>::from_ticks((delay * (TIMER_HZ as f64)) as u32);
+    fn delay_to_ticks(&self, delay: f64) -> Result<TimerDuration<TIMER_HZ>, Self::Error> {
+        let ticks = TimerDuration::<TIMER_HZ>::from_ticks((delay * (TIMER_HZ as f64)) as u32);
 
-        Ok(StepperTicks::<TIMER_HZ>(ticks))
+        Ok(ticks)
     }
 }
 
@@ -267,108 +262,34 @@ where
 
 pub struct StepperTimer<Timer, const TIMER_HZ: u32>(pub Timer);
 
-impl<Timer, const TIMER_HZ: u32> CountDown for StepperTimer<Timer, TIMER_HZ>
+impl<Timer, const TIMER_HZ: u32> FugitTimer<TIMER_HZ> for StepperTimer<Timer, TIMER_HZ>
 where
     Timer: FugitTimer<TIMER_HZ>,
 {
-    type Error = Infallible;
+    type Error = Timer::Error;
 
-    type Time = StepperTicks<TIMER_HZ>;
+    fn now(&mut self) -> TimerInstant<TIMER_HZ> {
+        self.0.now()
+    }
 
-    fn start<Ticks>(&mut self, ticks: Ticks) -> Result<(), Self::Error>
-    where
-        Ticks: Into<Self::Time>,
-    {
-        /*
-        // subtract time spent between now and previous timer
-        let sofar_ticks = self.0.now().ticks();
-        let wait_ticks = ticks.into().0.ticks();
-        let mut ticks = if wait_ticks <= sofar_ticks {
-            0
-        } else {
-            wait_ticks - sofar_ticks
-        };
-        if ticks > 50 {
-            defmt::println!("timer: {} - {} = {}", wait_ticks, sofar_ticks, ticks);
-        }
-        */
-
-        let mut ticks = ticks.into().0.ticks();
-
+    fn start(&mut self, mut duration: TimerDuration<TIMER_HZ>) -> Result<(), Self::Error> {
         // wait to discard any interrupt events that triggered before we started.
         self.0.wait().ok();
 
         // if below minimum, set to minimum: 2 ticks
-        if ticks < 2 {
-            ticks = 2;
+        let minimum_duration = TimerDuration::<TIMER_HZ>::from_ticks(2);
+        if duration < minimum_duration {
+            duration = minimum_duration;
         }
 
-        self.0
-            .start(TimerDuration::<u32, TIMER_HZ>::from_ticks(ticks))
-            .unwrap();
-        Ok(())
+        self.0.start(duration)
+    }
+
+    fn cancel(&mut self) -> Result<(), Self::Error> {
+        self.0.cancel()
     }
 
     fn wait(&mut self) -> nb::Result<(), Self::Error> {
-        match self.0.wait() {
-            Ok(()) => {
-                /*
-                // start another timer to count time between now and next timer
-                self.0
-                    .start(TimerDuration::<u32, TIMER_HZ>::from_ticks(65535))
-                    .unwrap();
-                */
-
-                Ok(())
-            }
-            Err(nb::Error::WouldBlock) => return Err(nb::Error::WouldBlock),
-            Err(nb::Error::Other(_)) => {
-                unreachable!("Caught error from infallible method")
-            }
-        }
-    }
-}
-
-pub struct StepperTicks<const TIMER_HZ: u32>(pub TimerDuration<u32, TIMER_HZ>);
-
-macro_rules! impl_embedded_time_conversions {
-    ($($duration:ident,)*) => {
-        $(
-            impl<const TIMER_HZ: u32> TryFrom<embedded_time::duration::$duration>
-                for StepperTicks<TIMER_HZ>
-            {
-                type Error = ConversionError;
-
-                fn try_from(duration: embedded_time::duration::$duration)
-                    -> Result<Self, Self::Error>
-                {
-                    let ticks = duration.into_ticks::<u32>(Fraction::new(1, TIMER_HZ))?;
-                    Ok(Self(TimerDuration::<u32, TIMER_HZ>::from_ticks(ticks)))
-                }
-            }
-        )*
-    };
-}
-
-impl_embedded_time_conversions!(
-    Nanoseconds,
-    Microseconds,
-    Milliseconds,
-    Seconds,
-    Minutes,
-    Hours,
-);
-
-impl<const TIMER_HZ: u32> ops::Sub for StepperTicks<TIMER_HZ> {
-    type Output = Self;
-
-    fn sub(self, other: Self) -> Self::Output {
-        StepperTicks(self.0 - other.0)
-    }
-}
-
-impl<const TIMER_HZ: u32> defmt::Format for StepperTicks<TIMER_HZ> {
-    fn format(&self, f: defmt::Formatter) {
-        self.0.format(f)
+        self.0.wait()
     }
 }
