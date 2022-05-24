@@ -667,7 +667,7 @@ dependencies = [
 [[package]]
 name = "rmodbus"
 version = "0.6.0"
-source = "git+https://github.com/villagekit/rmodbus?rev=95f2718#95f27181865c207c99dc54ad1759ccf524d09e3e"
+source = "git+https://github.com/villagekit/rmodbus?rev=b0f87a3#b0f87a3d0bc4fb1d1e6e96eb4854edd95ff92d4c"
 dependencies = [
  "fixedvec",
  "heapless",
