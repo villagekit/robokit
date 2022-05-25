@@ -280,7 +280,7 @@ where
             duration = minimum_duration;
         }
 
-        self.start(duration)
+        self.0.start(duration)
     }
 
     fn cancel(&mut self) -> Result<(), Self::Error> {
