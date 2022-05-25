@@ -2,7 +2,7 @@ use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use fugit_timer::Timer;
-use heapless::Vec;
+use heapless::Deque;
 use stm32f7xx_hal::{
     gpio::{self, Alternate, Floating, Input, Output, Pin, PushPull},
     pac,
@@ -109,7 +109,7 @@ pub enum SensorError {
 }
 
 pub struct CommandCenter {
-    pub active_commands: Vec<Command, 8>,
+    pub active_commands: Deque<Command, 8>,
     pub actuators: CommandCenterActuators,
     pub sensors: CommandCenterSensors,
 }
@@ -144,7 +144,7 @@ impl CommandCenter {
         let main_spindle = Spindle::new(main_spindle_driver);
 
         Self {
-            active_commands: Vec::new(),
+            active_commands: Deque::new(),
             actuators: CommandCenterActuators {
                 green_led,
                 blue_led,
@@ -189,12 +189,18 @@ impl ActorReceive<Command> for CommandCenter {
             }
         }
 
-        self.active_commands.push(*command).unwrap();
+        self.active_commands.push_back(*command).unwrap();
     }
 }
 
 impl CommandCenter {
     pub fn sense(&mut self) -> Result<(), SensorError> {
+        let axis_limit_min_message = AxisLimitMessage {
+            side: AxisLimitSide::Min,
+            status: AxisLimitStatus::Under,
+        };
+        self.actuators.x_axis.receive(&axis_limit_min_message);
+        /*
         if let Some(axis_limit_update) = self
             .sensors
             .x_axis_limit_min
@@ -211,7 +217,14 @@ impl CommandCenter {
             };
             self.actuators.x_axis.receive(&axis_limit_min_message);
         }
+        */
 
+        let axis_limit_max_message = AxisLimitMessage {
+            side: AxisLimitSide::Max,
+            status: AxisLimitStatus::Under,
+        };
+        self.actuators.x_axis.receive(&axis_limit_max_message);
+        /*
         if let Some(axis_limit_update) = self
             .sensors
             .x_axis_limit_max
@@ -228,6 +241,7 @@ impl CommandCenter {
             };
             self.actuators.x_axis.receive(&axis_limit_max_message);
         }
+        */
 
         Ok(())
     }
@@ -237,9 +251,10 @@ impl ActorPoll for CommandCenter {
     type Error = ActuatorError;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        self.active_commands
-            .iter()
-            .map(|active_command| match active_command {
+        let num_commands = self.active_commands.len();
+        for _command_index in 0..num_commands {
+            let command = self.active_commands.pop_front().unwrap();
+            let result = match command {
                 Command::GreenLed(_) => self
                     .actuators
                     .green_led
@@ -265,13 +280,25 @@ impl ActorPoll for CommandCenter {
                     .main_spindle
                     .poll()
                     .map_err(|err| ActuatorError::MainSpindle(err)),
-            })
-            .fold(Poll::Ready(Ok(())), |sofar, next| {
-                if let Poll::Ready(Ok(())) = sofar {
-                    next
-                } else {
-                    sofar
+            };
+
+            match result {
+                Poll::Ready(Ok(())) => {}
+                Poll::Ready(Err(err)) => {
+                    self.active_commands.push_back(command).unwrap();
+
+                    return Poll::Ready(Err(err));
                 }
-            })
+                Poll::Pending => {
+                    self.active_commands.push_back(command).unwrap();
+                }
+            }
+        }
+
+        if self.active_commands.len() == 0 {
+            Poll::Ready(Ok(()))
+        } else {
+            Poll::Pending
+        }
     }
 }

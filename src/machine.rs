@@ -110,7 +110,7 @@ impl ActorReceive<ToggleMessage> for Machine {
             MachineState::RunLoop { .. } => MachineState::Stop,
             MachineState::Stop => MachineState::Start,
             MachineState::StopLoop => MachineState::Start,
-        }
+        };
     }
 }
 
@@ -151,7 +151,10 @@ impl ActorPoll for Machine {
                 Poll::Pending
             }
             MachineState::Run { command_index } => {
-                let command = &self.run_commands[command_index];
+                let command = self
+                    .run_commands
+                    .get(command_index)
+                    .expect("Unexpected run command index");
 
                 defmt::println!("Run: {}", command);
 
@@ -165,11 +168,11 @@ impl ActorPoll for Machine {
                 Poll::Ready(Ok(())) => {
                     let next_command_index = command_index + 1;
 
-                    if next_command_index > self.run_commands.len() {
+                    if next_command_index >= self.run_commands.len() {
                         self.state = MachineState::Stop;
                     } else {
                         self.state = MachineState::Run {
-                            command_index: command_index + 1,
+                            command_index: next_command_index,
                         };
                     }
 

@@ -24,12 +24,12 @@ mod app {
     use gridbot::{
         actor::{ActorPoll, ActorReceive, ActorSense},
         command::{CommandCenter, CommandCenterResources},
-        machine::{Machine, ToggleMessage},
+        machine::{Machine, StopMessage, ToggleMessage},
         sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus},
     };
 
     type UserButtonPin = Pin<'C', 13, Input<Floating>>;
-    type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
+    // type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
     type UserButton = Switch<UserButtonPin, SwitchActiveHigh>;
 
     #[shared]
@@ -144,7 +144,14 @@ mod app {
             }
 
             if let Poll::Ready(Err(err)) = machine.poll() {
-                defmt::panic!("Unexpected actuator error: {:?}", Debug2Format(&err));
+                defmt::println!("Unexpected error: {}", Debug2Format(&err));
+
+                machine.receive(&StopMessage {});
+                loop {
+                    match machine.poll() {
+                        _ => {}
+                    }
+                }
             }
 
             iwdg.feed();
