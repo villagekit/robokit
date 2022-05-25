@@ -6,15 +6,8 @@ use heapless::Vec;
 use stm32f7xx_hal::{
     gpio::{self, Alternate, Floating, Input, Output, Pin, PushPull},
     pac,
-    prelude::*,
-    rcc::{BusTimerClock, Clocks},
-    serial::{
-        Config as SerialConfig, Oversampling as SerialOversampling, Parity as SerialParity, Serial,
-    },
-    timer::{
-        counter::{Counter, CounterUs},
-        TimerExt,
-    },
+    serial::Serial,
+    timer::counter::{Counter, CounterUs},
 };
 
 use crate::actor::{ActorPoll, ActorReceive, ActorSense};
@@ -65,21 +58,26 @@ pub enum Command {
 }
 
 /* sensors */
-type UserButtonPin = Pin<'C', 13, Input<Floating>>;
-type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
+type XAxisLimitMinPin = Pin<'F', 15, Input<Floating>>; // D2
+type XAxisLimitMinError = SwitchError<<XAxisLimitMinPin as InputPin>::Error>;
+type XAxisLimitMin = Switch<XAxisLimitMinPin, SwitchActiveHigh>;
+type XAxisLimitMaxPin = Pin<'E', 13, Input<Floating>>; // D3
+type XAxisLimitMaxError = SwitchError<<XAxisLimitMaxPin as InputPin>::Error>;
+type XAxisLimitMax = Switch<XAxisLimitMaxPin, SwitchActiveHigh>;
 
-#[allow(non_snake_case)]
-pub struct CommandCenterResources<'a> {
-    pub GPIOB: pac::GPIOB,
-    pub GPIOC: pac::GPIOC,
-    pub GPIOD: pac::GPIOD,
-    pub GPIOG: pac::GPIOG,
-    pub TIM3: pac::TIM3,
-    pub TIM9: pac::TIM9,
-    pub TIM10: pac::TIM10,
-    pub TIM11: pac::TIM11,
-    pub USART2: pac::USART2,
-    pub clocks: &'a Clocks,
+pub struct CommandCenterResources {
+    pub green_led_pin: GreenLedPin,
+    pub green_led_timer: GreenLedTimer,
+    pub blue_led_pin: BlueLedPin,
+    pub blue_led_timer: BlueLedTimer,
+    pub red_led_pin: RedLedPin,
+    pub red_led_timer: RedLedTimer,
+    pub x_axis_dir_pin: XAxisDirPin,
+    pub x_axis_step_pin: XAxisStepPin,
+    pub x_axis_timer: XAxisTimer,
+    pub x_axis_limit_min_pin: XAxisLimitMinPin,
+    pub x_axis_limit_max_pin: XAxisLimitMaxPin,
+    pub main_spindle_serial: MainSpindleSerial,
 }
 
 pub struct CommandCenterActuators {
@@ -100,18 +98,14 @@ pub enum ActuatorError {
 }
 
 pub struct CommandCenterSensors {
-    pub user_button: Switch<UserButtonPin, SwitchActiveHigh>,
+    pub x_axis_limit_min: XAxisLimitMin,
+    pub x_axis_limit_max: XAxisLimitMax,
 }
 
 #[derive(Debug)]
 pub enum SensorError {
-    UserButton(UserButtonError),
-}
-
-#[derive(Debug)]
-pub enum CommandCenterError {
-    Actuator(ActuatorError),
-    Sensor(SensorError),
+    XAxisLimitMin(XAxisLimitMinError),
+    XAxisLimitMax(XAxisLimitMaxError),
 }
 
 pub struct CommandCenter {
@@ -121,29 +115,10 @@ pub struct CommandCenter {
 }
 
 impl CommandCenter {
-    pub fn new(resources: CommandCenterResources) -> Self {
-        let gpiob = resources.GPIOB.split();
-        let gpioc = resources.GPIOC.split();
-        let gpiod = resources.GPIOD.split();
-        let gpiog = resources.GPIOG.split();
-
-        let green_led = Led::new(
-            gpiob.pb0.into_push_pull_output(),
-            resources.TIM9.counter_us(resources.clocks),
-        );
-        let blue_led = Led::new(
-            gpiob.pb7.into_push_pull_output(),
-            resources.TIM10.counter_us(resources.clocks),
-        );
-        let red_led = Led::new(
-            gpiob.pb14.into_push_pull_output(),
-            resources.TIM11.counter_us(resources.clocks),
-        );
-
-        defmt::println!(
-            "Stepper timer clock: {}",
-            <pac::TIM3 as BusTimerClock>::timer_clock(resources.clocks)
-        );
+    pub fn new(res: CommandCenterResources) -> Self {
+        let green_led = Led::new(res.green_led_pin, res.green_led_timer);
+        let blue_led = Led::new(res.blue_led_pin, res.blue_led_timer);
+        let red_led = Led::new(res.red_led_pin, res.red_led_timer);
 
         let max_acceleration_in_millimeters_per_sec_per_sec = 20_f64;
 
@@ -156,31 +131,17 @@ impl CommandCenter {
         defmt::println!("Steps per mm: {}", steps_per_millimeter);
 
         let x_axis = Axis::new_dq542ma(
-            gpiog.pg9.into_push_pull_output(),
-            gpiog.pg14.into_push_pull_output(),
-            resources.TIM3.counter(resources.clocks),
+            res.x_axis_dir_pin,
+            res.x_axis_step_pin,
+            res.x_axis_timer,
             max_acceleration_in_millimeters_per_sec_per_sec,
             steps_per_millimeter,
         );
+        let x_axis_limit_min = Switch::new(res.x_axis_limit_min_pin);
+        let x_axis_limit_max = Switch::new(res.x_axis_limit_max_pin);
 
-        let tx = gpiod.pd5.into_alternate();
-        let rx = gpiod.pd6.into_alternate();
-        let main_spindle_serial = Serial::new(
-            resources.USART2,
-            (tx, rx),
-            &resources.clocks,
-            SerialConfig {
-                baud_rate: 57600.bps(),
-                oversampling: SerialOversampling::By16,
-                character_match: None,
-                sysclock: false,
-                parity: SerialParity::ParityEven,
-            },
-        );
-        let main_spindle_driver = SpindleDriverJmcHsv57::new(main_spindle_serial);
+        let main_spindle_driver = SpindleDriverJmcHsv57::new(res.main_spindle_serial);
         let main_spindle = Spindle::new(main_spindle_driver);
-
-        let user_button = Switch::new(gpioc.pc13.into_floating_input());
 
         Self {
             active_commands: Vec::new(),
@@ -191,13 +152,16 @@ impl CommandCenter {
                 x_axis,
                 main_spindle,
             },
-            sensors: CommandCenterSensors { user_button },
+            sensors: CommandCenterSensors {
+                x_axis_limit_min,
+                x_axis_limit_max,
+            },
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub enum ResetMessage {}
+pub struct ResetMessage {}
 
 impl ActorReceive<ResetMessage> for CommandCenter {
     fn receive(&mut self, _message: &ResetMessage) {
@@ -230,24 +194,34 @@ impl ActorReceive<Command> for CommandCenter {
 }
 
 impl CommandCenter {
-    pub fn update(&mut self) -> Result<(), SensorError> {
-        let axis_limit_min_message = AxisLimitMessage {
-            side: AxisLimitSide::Min,
-            status: AxisLimitStatus::Under,
-        };
-        self.actuators.x_axis.receive(&axis_limit_min_message);
-
-        if let Some(user_button_update) = self
+    pub fn sense(&mut self) -> Result<(), SensorError> {
+        if let Some(axis_limit_update) = self
             .sensors
-            .user_button
+            .x_axis_limit_min
             .sense()
-            .map_err(|err| SensorError::UserButton(err))?
+            .map_err(|err| SensorError::XAxisLimitMin(err))?
         {
-            let axis_limit_status = match user_button_update.status {
+            let axis_limit_status = match axis_limit_update.status {
                 SwitchStatus::On => AxisLimitStatus::Over,
                 SwitchStatus::Off => AxisLimitStatus::Under,
             };
+            let axis_limit_min_message = AxisLimitMessage {
+                side: AxisLimitSide::Min,
+                status: axis_limit_status,
+            };
+            self.actuators.x_axis.receive(&axis_limit_min_message);
+        }
 
+        if let Some(axis_limit_update) = self
+            .sensors
+            .x_axis_limit_max
+            .sense()
+            .map_err(|err| SensorError::XAxisLimitMax(err))?
+        {
+            let axis_limit_status = match axis_limit_update.status {
+                SwitchStatus::On => AxisLimitStatus::Over,
+                SwitchStatus::Off => AxisLimitStatus::Under,
+            };
             let axis_limit_max_message = AxisLimitMessage {
                 side: AxisLimitSide::Max,
                 status: axis_limit_status,

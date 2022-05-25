@@ -4,7 +4,7 @@
 pub mod actor;
 pub mod actuators;
 pub mod command;
-pub mod control;
+pub mod machine;
 pub mod modbus;
 pub mod sensors;
 pub mod util;
