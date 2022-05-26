@@ -17,7 +17,7 @@ mod app {
             Config as SerialConfig, Oversampling as SerialOversampling, Parity as SerialParity,
             Serial,
         },
-        timer::monotonic::MonoTimerUs,
+        timer::{monotonic::MonoTimerUs, Counter},
         watchdog,
     };
 
@@ -26,7 +26,11 @@ mod app {
         command::{CommandCenter, CommandCenterResources},
         machine::{Machine, StopMessage, ToggleMessage},
         sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus},
+        timer::{tick, SubTimer},
     };
+
+    const TICK_TIMER_HZ: u32 = 1_000_000;
+    type TickTimer = Counter<pac::TIM5, TICK_TIMER_HZ>;
 
     type UserButtonPin = Pin<'C', 13, Input<Floating>>;
     // type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
@@ -37,6 +41,7 @@ mod app {
 
     #[local]
     struct Local {
+        tick_timer: TickTimer,
         user_button: UserButton,
         machine: Machine,
         iwdg: watchdog::IndependentWatchdog,
@@ -61,12 +66,16 @@ mod app {
         let gpiof = ctx.device.GPIOF.split();
         let gpiog = ctx.device.GPIOG.split();
 
+        let tick_timer = ctx.device.TIM5.counter_us(&clocks);
+
+        let user_button = Switch::new(gpioc.pc13.into_floating_input());
+
         let green_led_pin = gpiob.pb0.into_push_pull_output();
-        let green_led_timer = ctx.device.TIM9.counter_us(&clocks);
+        let green_led_timer = SubTimer::<TICK_TIMER_HZ>::new();
         let blue_led_pin = gpiob.pb7.into_push_pull_output();
-        let blue_led_timer = ctx.device.TIM10.counter_us(&clocks);
+        let blue_led_timer = SubTimer::<TICK_TIMER_HZ>::new();
         let red_led_pin = gpiob.pb14.into_push_pull_output();
-        let red_led_timer = ctx.device.TIM11.counter_us(&clocks);
+        let red_led_timer = SubTimer::<TICK_TIMER_HZ>::new();
 
         defmt::println!(
             "Stepper timer clock: {}",
@@ -95,8 +104,6 @@ mod app {
             },
         );
 
-        let user_button = Switch::new(gpioc.pc13.into_floating_input());
-
         let command_center = CommandCenter::new(CommandCenterResources {
             green_led_pin,
             green_led_timer,
@@ -118,6 +125,7 @@ mod app {
         (
             Shared {},
             Local {
+                tick_timer,
                 user_button,
                 iwdg,
                 machine,
@@ -126,8 +134,9 @@ mod app {
         )
     }
 
-    #[idle(local = [user_button, machine, iwdg])]
+    #[idle(local = [tick_timer, user_button, machine, iwdg])]
     fn idle(ctx: idle::Context) -> ! {
+        let tick_timer = ctx.local.tick_timer;
         let user_button = ctx.local.user_button;
         let iwdg = ctx.local.iwdg;
         let machine = ctx.local.machine;
@@ -135,6 +144,8 @@ mod app {
         iwdg.start(2.millis());
 
         loop {
+            tick::<TickTimer, TICK_TIMER_HZ>(tick_timer, u32::MAX).unwrap();
+
             if let Some(user_button_update) =
                 user_button.sense().expect("Error reading user button")
             {

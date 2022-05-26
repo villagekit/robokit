@@ -18,20 +18,21 @@ use crate::actuators::axis::{
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 use crate::actuators::spindle::{Spindle, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage};
 use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
+use crate::timer::SubTimer;
 
 /* actuators */
 
 const LED_TIMER_FREQ: u32 = 1_000_000;
 type GreenLedPin = Pin<'B', 0, Output<PushPull>>;
-type GreenLedTimer = CounterUs<pac::TIM9>;
+type GreenLedTimer = SubTimer<LED_TIMER_FREQ>;
 type GreenLedError =
     LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<LED_TIMER_FREQ>>::Error>;
 type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
-type BlueLedTimer = CounterUs<pac::TIM10>;
+type BlueLedTimer = SubTimer<LED_TIMER_FREQ>;
 type BlueLedError =
     LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<LED_TIMER_FREQ>>::Error>;
 type RedLedPin = Pin<'B', 14, Output<PushPull>>;
-type RedLedTimer = CounterUs<pac::TIM11>;
+type RedLedTimer = SubTimer<LED_TIMER_FREQ>;
 type RedLedError =
     LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<LED_TIMER_FREQ>>::Error>;
 
