@@ -30,6 +30,7 @@ mod app {
     };
 
     const TICK_TIMER_HZ: u32 = 1_000_000;
+    const TICK_TIMER_MAX: u32 = u32::MAX;
     type TickTimer = Counter<pac::TIM5, TICK_TIMER_HZ>;
 
     type UserButtonPin = Pin<'C', 13, Input<Floating>>;
@@ -144,7 +145,7 @@ mod app {
         iwdg.start(2.millis());
 
         loop {
-            tick::<TickTimer, TICK_TIMER_HZ>(tick_timer, u32::MAX).unwrap();
+            tick(tick_timer, TICK_TIMER_MAX).unwrap();
 
             if let Some(user_button_update) =
                 user_button.sense().expect("Error reading user button")

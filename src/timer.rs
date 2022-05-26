@@ -81,23 +81,34 @@ impl<const TIMER_HZ: u32> Timer<TIMER_HZ> for SubTimer<TIMER_HZ> {
     }
 
     fn cancel(&mut self) -> Result<(), Self::Error> {
-        self.state = SubTimerState::Stop;
+        match self.state {
+            SubTimerState::Stop => Err(SubTimerError::NoStart),
+            SubTimerState::Start { .. } => {
+                self.state = SubTimerState::Stop;
 
-        Ok(())
+                Ok(())
+            }
+        }
     }
 
     fn wait(&mut self) -> nb::Result<(), Self::Error> {
         let now = self.now();
 
-        if let SubTimerState::Start { start, duration } = self.state {
-            let wait_duration = now - start;
-            if wait_duration < duration {
-                Err(nb::Error::WouldBlock)
-            } else {
-                Ok(())
+        match self.state {
+            SubTimerState::Stop => Err(nb::Error::Other(SubTimerError::NoStart)),
+            SubTimerState::Start { start, duration } => {
+                let duration_ticks = duration.ticks();
+                let now_ticks = now.ticks();
+                let start_ticks = start.ticks();
+
+                // https://playground.arduino.cc/Code/TimingRollover/
+                let wait_ticks = now_ticks.wrapping_sub(start_ticks);
+                if wait_ticks < duration_ticks {
+                    Err(nb::Error::WouldBlock)
+                } else {
+                    Ok(())
+                }
             }
-        } else {
-            Err(nb::Error::Other(SubTimerError::NoStart))
         }
     }
 }

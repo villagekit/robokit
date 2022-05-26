@@ -82,9 +82,6 @@ where
         if let Some(state) = self.state {
             match state.status {
                 LedBlinkStatus::Start => {
-                    // wait to discard any interrupt events that triggered before we started.
-                    self.timer.wait().ok();
-
                     // start timer
                     self.timer
                         .start(state.duration)
