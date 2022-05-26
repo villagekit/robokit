@@ -2,6 +2,9 @@
 // https://github.com/khoih-prog/STM32_TimerInterrupt/blob/main/src/STM32_ISR_Timer-Impl.h
 // https://playground.arduino.cc/Code/TimingRollover/
 
+extern crate alloc;
+
+use alloc::rc::Rc;
 use core::cell::RefCell;
 use defmt::Format;
 use fugit::{TimerDurationU32 as TimerDuration, TimerInstantU32 as TimerInstant};
@@ -15,26 +18,27 @@ where
 {
     pub timer: T,
     pub timer_bits: u32,
-    pub sub_timers: Vec<RefCell<SubTimer<TIMER_HZ>>, 16>,
+    pub sub_timers: Vec<Rc<RefCell<SubTimer<TIMER_HZ>>>, 16>,
 }
 
 impl<T, const TIMER_HZ: u32> SuperTimer<T, TIMER_HZ>
 where
     T: Timer<TIMER_HZ>,
 {
-    pub fn sub(&mut self) -> &RefCell<SubTimer<TIMER_HZ>> {
-        let now = self.timer.now();
+    pub fn sub(&mut self) -> Rc<RefCell<SubTimer<TIMER_HZ>>> {
         let sub_timer = SubTimer {
             now: None,
             state: SubTimerState::Stop,
         };
         let sub_timer_cell = RefCell::new(sub_timer);
-        self.sub_timers.push(sub_timer_cell);
-        &sub_timer_cell
+        let sub_timer_rc = Rc::new(sub_timer_cell);
+        self.sub_timers.push(sub_timer_rc.clone()).unwrap();
+        sub_timer_rc.clone()
     }
 
     pub fn start(&mut self) -> Result<(), T::Error> {
-        self.timer.start(self.max_timer_duration())
+        let max_timer_duration = self.max_timer_duration();
+        self.timer.start(max_timer_duration)
     }
 
     pub fn cancel(&mut self) -> Result<(), T::Error> {
@@ -46,11 +50,12 @@ where
             Ok(()) => {
                 defmt::panic!("SuperTimer overflow!");
             }
-            Err(nb::Error::Other(err)) => Err(nb::Error::WouldBlock),
+            Err(nb::Error::Other(err)) => Err(nb::Error::Other(err)),
             Err(nb::Error::WouldBlock) => {
-                self.tick_sub_timers(self.timer.now());
-                self.cancel();
-                self.start();
+                let now = self.timer.now();
+                self.tick_sub_timers(now);
+                self.cancel()?;
+                self.start()?;
 
                 Err(nb::Error::WouldBlock)
             }
@@ -72,8 +77,8 @@ where
 
 #[derive(Clone, Copy, Debug, Format)]
 pub struct SubTimer<const TIMER_HZ: u32> {
-    pub now: Option<TimerInstant<TIMER_HZ>>,
-    pub state: SubTimerState<TIMER_HZ>,
+    now: Option<TimerInstant<TIMER_HZ>>,
+    state: SubTimerState<TIMER_HZ>,
 }
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -86,6 +91,13 @@ enum SubTimerState<const TIMER_HZ: u32> {
 }
 
 impl<const TIMER_HZ: u32> SubTimer<TIMER_HZ> {
+    pub fn new() -> Self {
+        Self {
+            now: None,
+            state: SubTimerState::Stop,
+        }
+    }
+
     pub fn tick(&mut self, now: TimerInstant<TIMER_HZ>) {
         self.now = Some(now);
     }
