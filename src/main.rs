@@ -14,8 +14,8 @@ mod app {
         prelude::*,
         rcc::BusTimerClock,
         serial::{
-            Config as SerialConfig, Oversampling as SerialOversampling, Parity as SerialParity,
-            Serial,
+            Config as SerialConfig, DataBits as SerialDataBits, Oversampling as SerialOversampling,
+            Parity as SerialParity, Serial,
         },
         timer::monotonic::MonoTimerUs,
         watchdog,
@@ -88,10 +88,10 @@ mod app {
             &clocks,
             SerialConfig {
                 baud_rate: 57600.bps(),
-                oversampling: SerialOversampling::By16,
-                character_match: None,
-                sysclock: false,
                 parity: SerialParity::ParityEven,
+                // Using 8 bits of data + 1 for even parity
+                data_bits: SerialDataBits::Bits9,
+                ..Default::default()
             },
         );
 
