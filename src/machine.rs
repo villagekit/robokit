@@ -32,46 +32,42 @@ pub struct Machine {
 
 impl Machine {
     pub fn new(command_center: CommandCenter) -> Self {
-        let run_commands: [Command; 6] = [
+        let run_commands: [Command; 8] = [
             Command::GreenLed(LedBlinkMessage {
                 duration: 50.millis(),
             }),
             Command::BlueLed(LedBlinkMessage {
-                duration: 50.millis(),
+                duration: 100.millis(),
             }),
             Command::RedLed(LedBlinkMessage {
-                duration: 50.millis(),
+                duration: 200.millis(),
             }),
-            /*
             Command::XAxis(AxisMoveMessage {
                 max_velocity_in_millimeters_per_sec: 40_f64,
                 distance_in_millimeters: 40_f64,
             }),
-            */
             Command::RedLed(LedBlinkMessage {
-                duration: 50000.micros(),
+                duration: 50.millis(),
             }),
             Command::BlueLed(LedBlinkMessage {
-                duration: 50000.micros(),
+                duration: 100.millis(),
             }),
             Command::GreenLed(LedBlinkMessage {
-                duration: 50000.micros(),
+                duration: 200.millis(),
             }),
-            /*
             Command::XAxis(AxisMoveMessage {
                 max_velocity_in_millimeters_per_sec: 40_f64,
                 distance_in_millimeters: -40_f64,
             }),
-            */
         ];
 
-        let start_commands: [Command; 0] = [/*Command::MainSpindle(SpindleSetMessage {
+        let start_commands: [Command; 1] = [Command::MainSpindle(SpindleSetMessage {
             status: SpindleStatus::On { rpm: 1000 },
-        })*/];
+        })];
 
-        let stop_commands: [Command; 0] = [/*Command::MainSpindle(SpindleSetMessage {
+        let stop_commands: [Command; 1] = [Command::MainSpindle(SpindleSetMessage {
             status: SpindleStatus::Off,
-        })*/];
+        })];
 
         Self {
             command_center,

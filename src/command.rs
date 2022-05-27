@@ -7,7 +7,7 @@ use stm32f7xx_hal::{
     gpio::{self, Alternate, Floating, Input, Output, Pin, PushPull},
     pac,
     serial::Serial,
-    timer::counter::{Counter, CounterUs},
+    timer::counter::Counter,
 };
 
 use crate::actor::{ActorPoll, ActorReceive, ActorSense};
