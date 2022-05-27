@@ -33,9 +33,15 @@ pub struct Machine {
 impl Machine {
     pub fn new(command_center: CommandCenter) -> Self {
         let run_commands: [Command; 6] = [
-            Command::GreenLed(LedBlinkMessage { duration: 1.secs() }),
-            Command::BlueLed(LedBlinkMessage { duration: 2.secs() }),
-            Command::RedLed(LedBlinkMessage { duration: 4.secs() }),
+            Command::GreenLed(LedBlinkMessage {
+                duration: 50.millis(),
+            }),
+            Command::BlueLed(LedBlinkMessage {
+                duration: 50.millis(),
+            }),
+            Command::RedLed(LedBlinkMessage {
+                duration: 50.millis(),
+            }),
             /*
             Command::XAxis(AxisMoveMessage {
                 max_velocity_in_millimeters_per_sec: 40_f64,

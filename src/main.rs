@@ -34,8 +34,9 @@ mod app {
     type TickTimer = Counter<pac::TIM5, TICK_TIMER_HZ>;
 
     type UserButtonPin = Pin<'C', 13, Input<Floating>>;
+    type UserButtonTimer = SubTimer<TICK_TIMER_HZ>;
     // type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
-    type UserButton = Switch<UserButtonPin, SwitchActiveHigh>;
+    type UserButton = Switch<UserButtonPin, SwitchActiveHigh, UserButtonTimer, TICK_TIMER_HZ>;
 
     #[shared]
     struct Shared {}
@@ -70,7 +71,9 @@ mod app {
         let mut tick_timer = ctx.device.TIM5.counter_us(&clocks);
         timer_setup(&mut tick_timer, TICK_TIMER_MAX).unwrap();
 
-        let user_button = Switch::new(gpioc.pc13.into_floating_input());
+        let user_button_pin = gpioc.pc13.into_floating_input();
+        let user_button_timer = SubTimer::<TICK_TIMER_HZ>::new();
+        let user_button = Switch::new(user_button_pin, user_button_timer);
 
         let green_led_pin = gpiob.pb0.into_push_pull_output();
         let green_led_timer = SubTimer::<TICK_TIMER_HZ>::new();
@@ -89,7 +92,9 @@ mod app {
         let x_axis_timer = ctx.device.TIM3.counter(&clocks);
 
         let x_axis_limit_min_pin = gpiof.pf15.into_floating_input();
+        let x_axis_limit_min_timer = SubTimer::<TICK_TIMER_HZ>::new();
         let x_axis_limit_max_pin = gpioe.pe13.into_floating_input();
+        let x_axis_limit_max_timer = SubTimer::<TICK_TIMER_HZ>::new();
 
         let main_spindle_serial_tx = gpiod.pd5.into_alternate();
         let main_spindle_serial_rx = gpiod.pd6.into_alternate();
@@ -117,7 +122,9 @@ mod app {
             x_axis_step_pin,
             x_axis_timer,
             x_axis_limit_min_pin,
+            x_axis_limit_min_timer,
             x_axis_limit_max_pin,
+            x_axis_limit_max_timer,
             main_spindle_serial,
         });
         let machine = Machine::new(command_center);

@@ -22,19 +22,20 @@ use crate::timer::SubTimer;
 
 /* actuators */
 
-const LED_TIMER_FREQ: u32 = 1_000_000;
+const MAIN_TIMER_FREQ: u32 = 1_000_000;
+
 type GreenLedPin = Pin<'B', 0, Output<PushPull>>;
-type GreenLedTimer = SubTimer<LED_TIMER_FREQ>;
+type GreenLedTimer = SubTimer<MAIN_TIMER_FREQ>;
 type GreenLedError =
-    LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<LED_TIMER_FREQ>>::Error>;
+    LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<MAIN_TIMER_FREQ>>::Error>;
 type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
-type BlueLedTimer = SubTimer<LED_TIMER_FREQ>;
+type BlueLedTimer = SubTimer<MAIN_TIMER_FREQ>;
 type BlueLedError =
-    LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<LED_TIMER_FREQ>>::Error>;
+    LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<MAIN_TIMER_FREQ>>::Error>;
 type RedLedPin = Pin<'B', 14, Output<PushPull>>;
-type RedLedTimer = SubTimer<LED_TIMER_FREQ>;
+type RedLedTimer = SubTimer<MAIN_TIMER_FREQ>;
 type RedLedError =
-    LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<LED_TIMER_FREQ>>::Error>;
+    LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<MAIN_TIMER_FREQ>>::Error>;
 
 const X_AXIS_TIMER_FREQ: u32 = 1_000_000;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
@@ -51,20 +52,30 @@ type MainSpindleError = SpindleError<MainSpindleDriver>;
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum Command {
-    GreenLed(LedBlinkMessage<LED_TIMER_FREQ>),
-    BlueLed(LedBlinkMessage<LED_TIMER_FREQ>),
-    RedLed(LedBlinkMessage<LED_TIMER_FREQ>),
+    GreenLed(LedBlinkMessage<MAIN_TIMER_FREQ>),
+    BlueLed(LedBlinkMessage<MAIN_TIMER_FREQ>),
+    RedLed(LedBlinkMessage<MAIN_TIMER_FREQ>),
     XAxis(AxisMoveMessage),
     MainSpindle(SpindleSetMessage),
 }
 
 /* sensors */
 type XAxisLimitMinPin = Pin<'F', 15, Input<Floating>>; // D2
-type XAxisLimitMinError = SwitchError<<XAxisLimitMinPin as InputPin>::Error>;
-type XAxisLimitMin = Switch<XAxisLimitMinPin, SwitchActiveHigh>;
+type XAxisLimitMinTimer = SubTimer<MAIN_TIMER_FREQ>;
+type XAxisLimitMinError = SwitchError<
+    <XAxisLimitMinPin as InputPin>::Error,
+    <XAxisLimitMinTimer as Timer<MAIN_TIMER_FREQ>>::Error,
+>;
+type XAxisLimitMin =
+    Switch<XAxisLimitMinPin, SwitchActiveHigh, XAxisLimitMinTimer, MAIN_TIMER_FREQ>;
 type XAxisLimitMaxPin = Pin<'E', 13, Input<Floating>>; // D3
-type XAxisLimitMaxError = SwitchError<<XAxisLimitMaxPin as InputPin>::Error>;
-type XAxisLimitMax = Switch<XAxisLimitMaxPin, SwitchActiveHigh>;
+type XAxisLimitMaxTimer = SubTimer<MAIN_TIMER_FREQ>;
+type XAxisLimitMaxError = SwitchError<
+    <XAxisLimitMaxPin as InputPin>::Error,
+    <XAxisLimitMaxTimer as Timer<MAIN_TIMER_FREQ>>::Error,
+>;
+type XAxisLimitMax =
+    Switch<XAxisLimitMaxPin, SwitchActiveHigh, XAxisLimitMaxTimer, MAIN_TIMER_FREQ>;
 
 pub struct CommandCenterResources {
     pub green_led_pin: GreenLedPin,
@@ -77,14 +88,16 @@ pub struct CommandCenterResources {
     pub x_axis_step_pin: XAxisStepPin,
     pub x_axis_timer: XAxisTimer,
     pub x_axis_limit_min_pin: XAxisLimitMinPin,
+    pub x_axis_limit_min_timer: XAxisLimitMinTimer,
     pub x_axis_limit_max_pin: XAxisLimitMaxPin,
+    pub x_axis_limit_max_timer: XAxisLimitMaxTimer,
     pub main_spindle_serial: MainSpindleSerial,
 }
 
 pub struct CommandCenterActuators {
-    pub green_led: Led<GreenLedPin, GreenLedTimer, LED_TIMER_FREQ>,
-    pub blue_led: Led<BlueLedPin, BlueLedTimer, LED_TIMER_FREQ>,
-    pub red_led: Led<RedLedPin, RedLedTimer, LED_TIMER_FREQ>,
+    pub green_led: Led<GreenLedPin, GreenLedTimer, MAIN_TIMER_FREQ>,
+    pub blue_led: Led<BlueLedPin, BlueLedTimer, MAIN_TIMER_FREQ>,
+    pub red_led: Led<RedLedPin, RedLedTimer, MAIN_TIMER_FREQ>,
     pub x_axis: Axis<XAxisDriver>,
     pub main_spindle: Spindle<MainSpindleDriver>,
 }
@@ -138,8 +151,8 @@ impl CommandCenter {
             max_acceleration_in_millimeters_per_sec_per_sec,
             steps_per_millimeter,
         );
-        let x_axis_limit_min = Switch::new(res.x_axis_limit_min_pin);
-        let x_axis_limit_max = Switch::new(res.x_axis_limit_max_pin);
+        let x_axis_limit_min = Switch::new(res.x_axis_limit_min_pin, res.x_axis_limit_min_timer);
+        let x_axis_limit_max = Switch::new(res.x_axis_limit_max_pin, res.x_axis_limit_max_timer);
 
         let main_spindle_driver = SpindleDriverJmcHsv57::new(res.main_spindle_serial);
         let main_spindle = Spindle::new(main_spindle_driver);
