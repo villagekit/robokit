@@ -30,6 +30,12 @@ pub fn exit() -> ! {
     }
 }
 
+use stm32f7xx_hal::{pac, timer::Counter};
+
+pub const TICK_TIMER_HZ: u32 = 1_000_000;
+pub const TICK_TIMER_MAX: u32 = u32::MAX;
+pub type TickTimer = Counter<pac::TIM5, TICK_TIMER_HZ>;
+
 // defmt-test 0.3.0 has the limitation that this `#[tests]` attribute can only be used
 // once within a crate. the module can be in any file but there can only be at most
 // one `#[tests]` module in this library crate

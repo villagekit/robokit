@@ -19,23 +19,22 @@ use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 use crate::actuators::spindle::{Spindle, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage};
 use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
 use crate::timer::SubTimer;
+use crate::TICK_TIMER_HZ;
 
 /* actuators */
 
-const MAIN_TIMER_FREQ: u32 = 1_000_000;
-
 type GreenLedPin = Pin<'B', 0, Output<PushPull>>;
-type GreenLedTimer = SubTimer<MAIN_TIMER_FREQ>;
+type GreenLedTimer = SubTimer<TICK_TIMER_HZ>;
 type GreenLedError =
-    LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<MAIN_TIMER_FREQ>>::Error>;
+    LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
 type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
-type BlueLedTimer = SubTimer<MAIN_TIMER_FREQ>;
+type BlueLedTimer = SubTimer<TICK_TIMER_HZ>;
 type BlueLedError =
-    LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<MAIN_TIMER_FREQ>>::Error>;
+    LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
 type RedLedPin = Pin<'B', 14, Output<PushPull>>;
-type RedLedTimer = SubTimer<MAIN_TIMER_FREQ>;
+type RedLedTimer = SubTimer<TICK_TIMER_HZ>;
 type RedLedError =
-    LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<MAIN_TIMER_FREQ>>::Error>;
+    LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
 
 const X_AXIS_TIMER_FREQ: u32 = 1_000_000;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
@@ -52,30 +51,28 @@ type MainSpindleError = SpindleError<MainSpindleDriver>;
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum Command {
-    GreenLed(LedBlinkMessage<MAIN_TIMER_FREQ>),
-    BlueLed(LedBlinkMessage<MAIN_TIMER_FREQ>),
-    RedLed(LedBlinkMessage<MAIN_TIMER_FREQ>),
+    GreenLed(LedBlinkMessage<TICK_TIMER_HZ>),
+    BlueLed(LedBlinkMessage<TICK_TIMER_HZ>),
+    RedLed(LedBlinkMessage<TICK_TIMER_HZ>),
     XAxis(AxisMoveMessage),
     MainSpindle(SpindleSetMessage),
 }
 
 /* sensors */
 type XAxisLimitMinPin = Pin<'F', 15, Input<Floating>>; // D2
-type XAxisLimitMinTimer = SubTimer<MAIN_TIMER_FREQ>;
+type XAxisLimitMinTimer = SubTimer<TICK_TIMER_HZ>;
 type XAxisLimitMinError = SwitchError<
     <XAxisLimitMinPin as InputPin>::Error,
-    <XAxisLimitMinTimer as Timer<MAIN_TIMER_FREQ>>::Error,
+    <XAxisLimitMinTimer as Timer<TICK_TIMER_HZ>>::Error,
 >;
-type XAxisLimitMin =
-    Switch<XAxisLimitMinPin, SwitchActiveHigh, XAxisLimitMinTimer, MAIN_TIMER_FREQ>;
+type XAxisLimitMin = Switch<XAxisLimitMinPin, SwitchActiveHigh, XAxisLimitMinTimer, TICK_TIMER_HZ>;
 type XAxisLimitMaxPin = Pin<'E', 13, Input<Floating>>; // D3
-type XAxisLimitMaxTimer = SubTimer<MAIN_TIMER_FREQ>;
+type XAxisLimitMaxTimer = SubTimer<TICK_TIMER_HZ>;
 type XAxisLimitMaxError = SwitchError<
     <XAxisLimitMaxPin as InputPin>::Error,
-    <XAxisLimitMaxTimer as Timer<MAIN_TIMER_FREQ>>::Error,
+    <XAxisLimitMaxTimer as Timer<TICK_TIMER_HZ>>::Error,
 >;
-type XAxisLimitMax =
-    Switch<XAxisLimitMaxPin, SwitchActiveHigh, XAxisLimitMaxTimer, MAIN_TIMER_FREQ>;
+type XAxisLimitMax = Switch<XAxisLimitMaxPin, SwitchActiveHigh, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
 
 pub struct CommandCenterResources {
     pub green_led_pin: GreenLedPin,
@@ -95,9 +92,9 @@ pub struct CommandCenterResources {
 }
 
 pub struct CommandCenterActuators {
-    pub green_led: Led<GreenLedPin, GreenLedTimer, MAIN_TIMER_FREQ>,
-    pub blue_led: Led<BlueLedPin, BlueLedTimer, MAIN_TIMER_FREQ>,
-    pub red_led: Led<RedLedPin, RedLedTimer, MAIN_TIMER_FREQ>,
+    pub green_led: Led<GreenLedPin, GreenLedTimer, TICK_TIMER_HZ>,
+    pub blue_led: Led<BlueLedPin, BlueLedTimer, TICK_TIMER_HZ>,
+    pub red_led: Led<RedLedPin, RedLedTimer, TICK_TIMER_HZ>,
     pub x_axis: Axis<XAxisDriver>,
     pub main_spindle: Spindle<MainSpindleDriver>,
 }

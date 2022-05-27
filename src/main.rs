@@ -27,11 +27,8 @@ mod app {
         machine::{Machine, StopMessage, ToggleMessage},
         sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus},
         timer::{setup as timer_setup, tick as timer_tick, SubTimer},
+        TickTimer, TICK_TIMER_HZ, TICK_TIMER_MAX,
     };
-
-    const TICK_TIMER_HZ: u32 = 1_000_000;
-    const TICK_TIMER_MAX: u32 = u32::MAX;
-    type TickTimer = Counter<pac::TIM5, TICK_TIMER_HZ>;
 
     type UserButtonPin = Pin<'C', 13, Input<Floating>>;
     type UserButtonTimer = SubTimer<TICK_TIMER_HZ>;
