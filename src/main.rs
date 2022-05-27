@@ -26,7 +26,7 @@ mod app {
         command::{CommandCenter, CommandCenterResources},
         machine::{Machine, StopMessage, ToggleMessage},
         sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus},
-        timer::{tick, SubTimer},
+        timer::{setup as timer_setup, tick as timer_tick, SubTimer},
     };
 
     const TICK_TIMER_HZ: u32 = 1_000_000;
@@ -67,7 +67,8 @@ mod app {
         let gpiof = ctx.device.GPIOF.split();
         let gpiog = ctx.device.GPIOG.split();
 
-        let tick_timer = ctx.device.TIM5.counter_us(&clocks);
+        let mut tick_timer = ctx.device.TIM5.counter_us(&clocks);
+        timer_setup(&mut tick_timer, TICK_TIMER_MAX).unwrap();
 
         let user_button = Switch::new(gpioc.pc13.into_floating_input());
 
@@ -145,7 +146,7 @@ mod app {
         iwdg.start(2.millis());
 
         loop {
-            tick(tick_timer, TICK_TIMER_MAX).unwrap();
+            timer_tick(tick_timer, TICK_TIMER_MAX).unwrap();
 
             if let Some(user_button_update) =
                 user_button.sense().expect("Error reading user button")

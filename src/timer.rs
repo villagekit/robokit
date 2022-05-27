@@ -10,6 +10,15 @@ use nb;
 
 static TIME: AtomicU32 = AtomicU32::new(0);
 
+pub fn setup<T, const TIMER_HZ: u32>(timer: &mut T, max_ticks: u32) -> Result<(), T::Error>
+where
+    T: Timer<TIMER_HZ>,
+{
+    let max_duration = TimerDuration::<TIMER_HZ>::from_ticks(max_ticks);
+    timer.start(max_duration)?;
+    Ok(())
+}
+
 pub fn tick<T, const TIMER_HZ: u32>(timer: &mut T, max_ticks: u32) -> Result<(), T::Error>
 where
     T: Timer<TIMER_HZ>,
@@ -20,8 +29,7 @@ where
 
     match timer.wait() {
         Ok(()) => {
-            let max_duration = TimerDuration::<TIMER_HZ>::from_ticks(max_ticks);
-            timer.start(max_duration)?;
+            setup(timer, max_ticks)?;
         }
         Err(nb::Error::WouldBlock) => {}
         Err(nb::Error::Other(err)) => return Err(err),
@@ -103,10 +111,10 @@ impl<const TIMER_HZ: u32> Timer<TIMER_HZ> for SubTimer<TIMER_HZ> {
 
                 // https://playground.arduino.cc/Code/TimingRollover/
                 let wait_ticks = now_ticks.wrapping_sub(start_ticks);
-                if wait_ticks < duration_ticks {
-                    Err(nb::Error::WouldBlock)
-                } else {
+                if wait_ticks > duration_ticks {
                     Ok(())
+                } else {
+                    Err(nb::Error::WouldBlock)
                 }
             }
         }
