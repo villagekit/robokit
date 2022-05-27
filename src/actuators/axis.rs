@@ -21,20 +21,20 @@ use stepper::{
 use crate::actor::{ActorPoll, ActorReceive};
 
 pub type AxisMotionProfile = ramp_maker::Trapezoidal<f64>;
-pub type AxisMotionControl<Driver, Timer, const FREQ: u32> = SoftwareMotionControl<
+pub type AxisMotionControl<Driver, Timer, const TIMER_HZ: u32> = SoftwareMotionControl<
     Driver,
-    StepperTimer<Timer, FREQ>,
+    StepperTimer<Timer, TIMER_HZ>,
     AxisMotionProfile,
-    DelayToTicks<TimerDurationU32<FREQ>, FREQ>,
+    DelayToTicks<TimerDurationU32<TIMER_HZ>, TIMER_HZ>,
 >;
 
-pub type AxisDriverDQ542MA<PinDir, PinStep, Timer, const FREQ: u32> = AxisMotionControl<
+pub type AxisDriverDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> = AxisMotionControl<
     drivers::dq542ma::DQ542MA<(), compat::Pin<PinStep>, compat::Pin<PinDir>>,
     Timer,
-    FREQ,
+    TIMER_HZ,
 >;
-pub type AxisDriverErrorDQ542MA<PinDir, PinStep, Timer, const FREQ: u32> =
-    <AxisDriverDQ542MA<PinDir, PinStep, Timer, FREQ> as MotionControl>::Error;
+pub type AxisDriverErrorDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> =
+    <AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ> as MotionControl>::Error;
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
 #[derive(Clone, Copy, Debug, Format)]
@@ -71,14 +71,15 @@ where
     limit_max: Option<AxisLimitStatus>,
 }
 
-impl<PinDir, PinStep, Timer, const FREQ: u32> Axis<AxisDriverDQ542MA<PinDir, PinStep, Timer, FREQ>>
+impl<PinDir, PinStep, Timer, const TIMER_HZ: u32>
+    Axis<AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ>>
 where
     PinDir: OutputPin,
     <PinDir as OutputPin>::Error: Debug,
     PinStep: OutputPin,
     <PinStep as OutputPin>::Error: Debug,
-    Timer: FugitTimer<FREQ>,
-    <AxisDriverDQ542MA<PinDir, PinStep, Timer, FREQ> as MotionControl>::Error: Debug,
+    Timer: FugitTimer<TIMER_HZ>,
+    <AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
 {
     pub fn new_dq542ma(
         dir: PinDir,
@@ -112,32 +113,32 @@ where
     }
 }
 
-impl<Driver, Timer, const FREQ: u32> Axis<AxisMotionControl<Driver, Timer, FREQ>>
+impl<Driver, Timer, const TIMER_HZ: u32> Axis<AxisMotionControl<Driver, Timer, TIMER_HZ>>
 where
     Driver: SetDirection + Step,
-    Timer: FugitTimer<FREQ>,
+    Timer: FugitTimer<TIMER_HZ>,
 {
     pub fn get_real_position(&mut self) -> f64 {
         (self.stepper.driver_mut().current_step() as f64) / self.steps_per_millimeter
     }
 }
 
-pub struct DelayToTicks<Time, const FREQ: u32>(PhantomData<Time>);
+pub struct DelayToTicks<Time, const TIMER_HZ: u32>(PhantomData<Time>);
 
-impl<Time, const FREQ: u32> DelayToTicks<Time, FREQ> {
+impl<Time, const TIMER_HZ: u32> DelayToTicks<Time, TIMER_HZ> {
     pub fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<Time, const FREQ: u32> motion_control::DelayToTicks<f64> for DelayToTicks<Time, FREQ> {
-    type Ticks = StepperTicks<FREQ>;
+impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64> for DelayToTicks<Time, TIMER_HZ> {
+    type Ticks = StepperTicks<TIMER_HZ>;
     type Error = core::convert::Infallible;
 
     fn delay_to_ticks(&self, delay: f64) -> Result<Self::Ticks, Self::Error> {
-        let ticks = TimerDurationU32::<FREQ>::from_ticks((delay * (FREQ as f64)) as u32);
+        let ticks = TimerDurationU32::<TIMER_HZ>::from_ticks((delay * (TIMER_HZ as f64)) as u32);
 
-        Ok(StepperTicks::<FREQ>(ticks))
+        Ok(StepperTicks::<TIMER_HZ>(ticks))
     }
 }
 
@@ -147,11 +148,11 @@ pub struct AxisMoveMessage {
     pub distance_in_millimeters: f64,
 }
 
-impl<Driver, Timer, const FREQ: u32> ActorReceive<AxisMoveMessage>
-    for Axis<AxisMotionControl<Driver, Timer, FREQ>>
+impl<Driver, Timer, const TIMER_HZ: u32> ActorReceive<AxisMoveMessage>
+    for Axis<AxisMotionControl<Driver, Timer, TIMER_HZ>>
 where
     Driver: SetDirection + Step,
-    Timer: FugitTimer<FREQ>,
+    Timer: FugitTimer<TIMER_HZ>,
 {
     fn receive(&mut self, action: &AxisMoveMessage) {
         let max_velocity_in_steps_per_sec =
@@ -204,13 +205,14 @@ pub enum AxisError<DriverError: Debug> {
 }
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html#
-impl<Driver, Timer, const FREQ: u32> ActorPoll for Axis<AxisMotionControl<Driver, Timer, FREQ>>
+impl<Driver, Timer, const TIMER_HZ: u32> ActorPoll
+    for Axis<AxisMotionControl<Driver, Timer, TIMER_HZ>>
 where
     Driver: SetDirection + Step,
-    Timer: FugitTimer<FREQ>,
-    <AxisMotionControl<Driver, Timer, FREQ> as MotionControl>::Error: Debug,
+    Timer: FugitTimer<TIMER_HZ>,
+    <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
 {
-    type Error = AxisError<<AxisMotionControl<Driver, Timer, FREQ> as MotionControl>::Error>;
+    type Error = AxisError<<AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error>;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         // limit: min
@@ -263,15 +265,15 @@ where
     }
 }
 
-pub struct StepperTimer<Timer, const FREQ: u32>(pub Timer);
+pub struct StepperTimer<Timer, const TIMER_HZ: u32>(pub Timer);
 
-impl<Timer, const FREQ: u32> CountDown for StepperTimer<Timer, FREQ>
+impl<Timer, const TIMER_HZ: u32> CountDown for StepperTimer<Timer, TIMER_HZ>
 where
-    Timer: FugitTimer<FREQ>,
+    Timer: FugitTimer<TIMER_HZ>,
 {
     type Error = Infallible;
 
-    type Time = StepperTicks<FREQ>;
+    type Time = StepperTicks<TIMER_HZ>;
 
     fn start<Ticks>(&mut self, ticks: Ticks) -> Result<(), Self::Error>
     where
@@ -302,7 +304,7 @@ where
         }
 
         self.0
-            .start(TimerDuration::<u32, FREQ>::from_ticks(ticks))
+            .start(TimerDuration::<u32, TIMER_HZ>::from_ticks(ticks))
             .unwrap();
         Ok(())
     }
@@ -313,7 +315,7 @@ where
                 /*
                 // start another timer to count time between now and next timer
                 self.0
-                    .start(TimerDuration::<u32, FREQ>::from_ticks(65535))
+                    .start(TimerDuration::<u32, TIMER_HZ>::from_ticks(65535))
                     .unwrap();
                 */
 
@@ -327,21 +329,21 @@ where
     }
 }
 
-pub struct StepperTicks<const FREQ: u32>(pub TimerDuration<u32, FREQ>);
+pub struct StepperTicks<const TIMER_HZ: u32>(pub TimerDuration<u32, TIMER_HZ>);
 
 macro_rules! impl_embedded_time_conversions {
     ($($duration:ident,)*) => {
         $(
-            impl<const FREQ: u32> TryFrom<embedded_time::duration::$duration>
-                for StepperTicks<FREQ>
+            impl<const TIMER_HZ: u32> TryFrom<embedded_time::duration::$duration>
+                for StepperTicks<TIMER_HZ>
             {
                 type Error = ConversionError;
 
                 fn try_from(duration: embedded_time::duration::$duration)
                     -> Result<Self, Self::Error>
                 {
-                    let ticks = duration.into_ticks::<u32>(Fraction::new(1, FREQ))?;
-                    Ok(Self(TimerDuration::<u32, FREQ>::from_ticks(ticks)))
+                    let ticks = duration.into_ticks::<u32>(Fraction::new(1, TIMER_HZ))?;
+                    Ok(Self(TimerDuration::<u32, TIMER_HZ>::from_ticks(ticks)))
                 }
             }
         )*
@@ -357,7 +359,7 @@ impl_embedded_time_conversions!(
     Hours,
 );
 
-impl<const FREQ: u32> ops::Sub for StepperTicks<FREQ> {
+impl<const TIMER_HZ: u32> ops::Sub for StepperTicks<TIMER_HZ> {
     type Output = Self;
 
     fn sub(self, other: Self) -> Self::Output {
@@ -365,7 +367,7 @@ impl<const FREQ: u32> ops::Sub for StepperTicks<FREQ> {
     }
 }
 
-impl<const FREQ: u32> defmt::Format for StepperTicks<FREQ> {
+impl<const TIMER_HZ: u32> defmt::Format for StepperTicks<TIMER_HZ> {
     fn format(&self, f: defmt::Formatter) {
         self.0.format(f)
     }

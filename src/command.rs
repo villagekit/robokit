@@ -36,13 +36,13 @@ type RedLedTimer = SubTimer<TICK_TIMER_HZ>;
 type RedLedError =
     LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
 
-const X_AXIS_TIMER_FREQ: u32 = 1_000_000;
+const X_AXIS_TIMER_HZ: u32 = 1_000_000;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
 type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
-type XAxisTimer = Counter<pac::TIM3, X_AXIS_TIMER_FREQ>;
-type XAxisDriver = AxisDriverDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_FREQ>;
+type XAxisTimer = Counter<pac::TIM3, X_AXIS_TIMER_HZ>;
+type XAxisDriver = AxisDriverDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_HZ>;
 type XAxisDriverError =
-    AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_FREQ>;
+    AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_HZ>;
 type XAxisError = AxisError<XAxisDriverError>;
 
 type MainSpindleSerial = Serial<pac::USART2, (gpio::PD5<Alternate<7>>, gpio::PD6<Alternate<7>>)>;
