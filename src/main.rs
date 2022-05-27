@@ -26,12 +26,14 @@ mod app {
         command::{CommandCenter, CommandCenterResources},
         machine::{Machine, StopMessage, ToggleMessage},
         sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus},
-        timer::{setup as timer_setup, tick as timer_tick, SubTimer},
-        TickTimer, TICK_TIMER_HZ, TICK_TIMER_MAX,
+        timer::{setup as timer_setup, tick as timer_tick, SubTimer, TICK_TIMER_HZ},
     };
 
+    pub const TICK_TIMER_MAX: u32 = u32::MAX;
+    pub type TickTimer = Counter<pac::TIM5, TICK_TIMER_HZ>;
+
     type UserButtonPin = Pin<'C', 13, Input<Floating>>;
-    type UserButtonTimer = SubTimer<TICK_TIMER_HZ>;
+    type UserButtonTimer = SubTimer;
     // type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
     type UserButton = Switch<UserButtonPin, SwitchActiveHigh, UserButtonTimer, TICK_TIMER_HZ>;
 
@@ -69,15 +71,15 @@ mod app {
         timer_setup(&mut tick_timer, TICK_TIMER_MAX).unwrap();
 
         let user_button_pin = gpioc.pc13.into_floating_input();
-        let user_button_timer = SubTimer::<TICK_TIMER_HZ>::new();
+        let user_button_timer = SubTimer::new();
         let user_button = Switch::new(user_button_pin, user_button_timer);
 
         let green_led_pin = gpiob.pb0.into_push_pull_output();
-        let green_led_timer = SubTimer::<TICK_TIMER_HZ>::new();
+        let green_led_timer = SubTimer::new();
         let blue_led_pin = gpiob.pb7.into_push_pull_output();
-        let blue_led_timer = SubTimer::<TICK_TIMER_HZ>::new();
+        let blue_led_timer = SubTimer::new();
         let red_led_pin = gpiob.pb14.into_push_pull_output();
-        let red_led_timer = SubTimer::<TICK_TIMER_HZ>::new();
+        let red_led_timer = SubTimer::new();
 
         defmt::println!(
             "Stepper timer clock: {}",
@@ -89,9 +91,9 @@ mod app {
         let x_axis_timer = ctx.device.TIM3.counter(&clocks);
 
         let x_axis_limit_min_pin = gpiof.pf15.into_floating_input();
-        let x_axis_limit_min_timer = SubTimer::<TICK_TIMER_HZ>::new();
+        let x_axis_limit_min_timer = SubTimer::new();
         let x_axis_limit_max_pin = gpioe.pe13.into_floating_input();
-        let x_axis_limit_max_timer = SubTimer::<TICK_TIMER_HZ>::new();
+        let x_axis_limit_max_timer = SubTimer::new();
 
         let main_spindle_serial_tx = gpiod.pd5.into_alternate();
         let main_spindle_serial_rx = gpiod.pd6.into_alternate();

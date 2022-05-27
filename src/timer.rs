@@ -8,20 +8,21 @@ use fugit::{TimerDurationU32 as TimerDuration, TimerInstantU32 as TimerInstant};
 use fugit_timer::Timer;
 use nb;
 
+pub const TICK_TIMER_HZ: u32 = 1_000_000;
 static TIME: AtomicU32 = AtomicU32::new(0);
 
-pub fn setup<T, const TIMER_HZ: u32>(timer: &mut T, max_ticks: u32) -> Result<(), T::Error>
+pub fn setup<T>(timer: &mut T, max_ticks: u32) -> Result<(), T::Error>
 where
-    T: Timer<TIMER_HZ>,
+    T: Timer<TICK_TIMER_HZ>,
 {
-    let max_duration = TimerDuration::<TIMER_HZ>::from_ticks(max_ticks);
+    let max_duration = TimerDuration::<TICK_TIMER_HZ>::from_ticks(max_ticks);
     timer.start(max_duration)?;
     Ok(())
 }
 
-pub fn tick<T, const TIMER_HZ: u32>(timer: &mut T, max_ticks: u32) -> Result<(), T::Error>
+pub fn tick<T>(timer: &mut T, max_ticks: u32) -> Result<(), T::Error>
 where
-    T: Timer<TIMER_HZ>,
+    T: Timer<TICK_TIMER_HZ>,
 {
     let time_instant = timer.now();
     let time_ticks = time_instant.ticks();
@@ -38,26 +39,26 @@ where
     Ok(())
 }
 
-pub fn now<const TIMER_HZ: u32>() -> TimerInstant<TIMER_HZ> {
+pub fn now() -> TimerInstant<TICK_TIMER_HZ> {
     let time_ticks = TIME.load(Ordering::SeqCst);
-    TimerInstant::<TIMER_HZ>::from_ticks(time_ticks)
+    TimerInstant::from_ticks(time_ticks)
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub struct SubTimer<const TIMER_HZ: u32> {
-    state: SubTimerState<TIMER_HZ>,
+pub struct SubTimer {
+    state: SubTimerState,
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-enum SubTimerState<const TIMER_HZ: u32> {
+enum SubTimerState {
     Stop,
     Start {
-        start: TimerInstant<TIMER_HZ>,
-        duration: TimerDuration<TIMER_HZ>,
+        start: TimerInstant<TICK_TIMER_HZ>,
+        duration: TimerDuration<TICK_TIMER_HZ>,
     },
 }
 
-impl<const TIMER_HZ: u32> SubTimer<TIMER_HZ> {
+impl SubTimer {
     pub fn new() -> Self {
         Self {
             state: SubTimerState::Stop,
@@ -70,14 +71,14 @@ pub enum SubTimerError {
     NoStart,
 }
 
-impl<const TIMER_HZ: u32> Timer<TIMER_HZ> for SubTimer<TIMER_HZ> {
+impl Timer<TICK_TIMER_HZ> for SubTimer {
     type Error = SubTimerError;
 
-    fn now(&mut self) -> TimerInstant<TIMER_HZ> {
+    fn now(&mut self) -> TimerInstant<TICK_TIMER_HZ> {
         now()
     }
 
-    fn start(&mut self, duration: TimerDuration<TIMER_HZ>) -> Result<(), Self::Error> {
+    fn start(&mut self, duration: TimerDuration<TICK_TIMER_HZ>) -> Result<(), Self::Error> {
         let now = self.now();
 
         self.state = SubTimerState::Start {

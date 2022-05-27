@@ -18,21 +18,20 @@ use crate::actuators::axis::{
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 use crate::actuators::spindle::{Spindle, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage};
 use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
-use crate::timer::SubTimer;
-use crate::TICK_TIMER_HZ;
+use crate::timer::{SubTimer, TICK_TIMER_HZ};
 
 /* actuators */
 
 type GreenLedPin = Pin<'B', 0, Output<PushPull>>;
-type GreenLedTimer = SubTimer<TICK_TIMER_HZ>;
+type GreenLedTimer = SubTimer;
 type GreenLedError =
     LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
 type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
-type BlueLedTimer = SubTimer<TICK_TIMER_HZ>;
+type BlueLedTimer = SubTimer;
 type BlueLedError =
     LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
 type RedLedPin = Pin<'B', 14, Output<PushPull>>;
-type RedLedTimer = SubTimer<TICK_TIMER_HZ>;
+type RedLedTimer = SubTimer;
 type RedLedError =
     LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
 
@@ -60,14 +59,14 @@ pub enum Command {
 
 /* sensors */
 type XAxisLimitMinPin = Pin<'F', 15, Input<Floating>>; // D2
-type XAxisLimitMinTimer = SubTimer<TICK_TIMER_HZ>;
+type XAxisLimitMinTimer = SubTimer;
 type XAxisLimitMinError = SwitchError<
     <XAxisLimitMinPin as InputPin>::Error,
     <XAxisLimitMinTimer as Timer<TICK_TIMER_HZ>>::Error,
 >;
 type XAxisLimitMin = Switch<XAxisLimitMinPin, SwitchActiveHigh, XAxisLimitMinTimer, TICK_TIMER_HZ>;
 type XAxisLimitMaxPin = Pin<'E', 13, Input<Floating>>; // D3
-type XAxisLimitMaxTimer = SubTimer<TICK_TIMER_HZ>;
+type XAxisLimitMaxTimer = SubTimer;
 type XAxisLimitMaxError = SwitchError<
     <XAxisLimitMaxPin as InputPin>::Error,
     <XAxisLimitMaxTimer as Timer<TICK_TIMER_HZ>>::Error,
