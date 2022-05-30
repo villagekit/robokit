@@ -15,26 +15,26 @@ pub enum LedBlinkStatus {
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub struct LedBlinkState<const FREQ: u32> {
+pub struct LedBlinkState<const TIMER_HZ: u32> {
     status: LedBlinkStatus,
-    duration: TimerDuration<FREQ>,
+    duration: TimerDuration<TIMER_HZ>,
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub struct Led<P, T, const FREQ: u32>
+pub struct Led<P, T, const TIMER_HZ: u32>
 where
     P: OutputPin,
-    T: Timer<FREQ>,
+    T: Timer<TIMER_HZ>,
 {
     pin: P,
     timer: T,
-    state: Option<LedBlinkState<FREQ>>,
+    state: Option<LedBlinkState<TIMER_HZ>>,
 }
 
-impl<P, T, const FREQ: u32> Led<P, T, FREQ>
+impl<P, T, const TIMER_HZ: u32> Led<P, T, TIMER_HZ>
 where
     P: OutputPin,
-    T: Timer<FREQ>,
+    T: Timer<TIMER_HZ>,
 {
     pub fn new(pin: P, timer: T) -> Self {
         Led {
@@ -46,16 +46,16 @@ where
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub struct LedBlinkMessage<const FREQ: u32> {
-    pub duration: TimerDuration<FREQ>,
+pub struct LedBlinkMessage<const TIMER_HZ: u32> {
+    pub duration: TimerDuration<TIMER_HZ>,
 }
 
-impl<P, T, const FREQ: u32> ActorReceive<LedBlinkMessage<FREQ>> for Led<P, T, FREQ>
+impl<P, T, const TIMER_HZ: u32> ActorReceive<LedBlinkMessage<TIMER_HZ>> for Led<P, T, TIMER_HZ>
 where
     P: OutputPin,
-    T: Timer<FREQ>,
+    T: Timer<TIMER_HZ>,
 {
-    fn receive(&mut self, action: &LedBlinkMessage<FREQ>) {
+    fn receive(&mut self, action: &LedBlinkMessage<TIMER_HZ>) {
         self.state = Some(LedBlinkState {
             status: LedBlinkStatus::Start,
             duration: action.duration,
@@ -69,11 +69,11 @@ pub enum LedError<PinError: Debug, TimerError: Debug> {
     Timer(TimerError),
 }
 
-impl<P, T, const FREQ: u32> ActorPoll for Led<P, T, FREQ>
+impl<P, T, const TIMER_HZ: u32> ActorPoll for Led<P, T, TIMER_HZ>
 where
     P: OutputPin,
     P::Error: Debug,
-    T: Timer<FREQ>,
+    T: Timer<TIMER_HZ>,
     T::Error: Debug,
 {
     type Error = LedError<P::Error, T::Error>;
@@ -82,9 +82,6 @@ where
         if let Some(state) = self.state {
             match state.status {
                 LedBlinkStatus::Start => {
-                    // wait to discard any interrupt events that triggered before we started.
-                    self.timer.wait().ok();
-
                     // start timer
                     self.timer
                         .start(state.duration)

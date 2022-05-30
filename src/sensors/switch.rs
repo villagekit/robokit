@@ -3,6 +3,9 @@
 use core::marker::PhantomData;
 use defmt::Format;
 use embedded_hal::digital::v2::InputPin;
+use fugit::{MillisDurationU32 as MillisDuration, TimerDurationU32 as TimerDuration};
+use fugit_timer::Timer;
+use nb;
 
 use crate::actor::ActorSense;
 
@@ -21,24 +24,30 @@ pub struct SwitchActiveLow;
 pub struct SwitchActiveHigh;
 
 #[derive(Copy, Clone, Debug, Format)]
-pub struct Switch<Pin, ActiveLevel>
+pub struct Switch<Pin, ActiveLevel, Tim, const TIMER_HZ: u32>
 where
     Pin: InputPin,
+    Tim: Timer<TIMER_HZ>,
 {
     pin: Pin,
+    timer: Tim,
     current_status: Option<SwitchStatus>,
     active_level: PhantomData<ActiveLevel>,
+    is_debouncing: bool,
 }
 
-impl<Pin, ActiveLevel> Switch<Pin, ActiveLevel>
+impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> Switch<Pin, ActiveLevel, Tim, TIMER_HZ>
 where
     Pin: InputPin,
+    Tim: Timer<TIMER_HZ>,
 {
-    pub fn new(pin: Pin) -> Self {
+    pub fn new(pin: Pin, timer: Tim) -> Self {
         Switch {
             pin,
+            timer,
             current_status: None,
             active_level: PhantomData::<ActiveLevel>,
+            is_debouncing: false,
         }
     }
 }
@@ -49,9 +58,10 @@ pub trait InputSwitch {
     fn is_active(&self) -> Result<bool, Self::Error>;
 }
 
-impl<Pin> InputSwitch for Switch<Pin, SwitchActiveLow>
+impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch for Switch<Pin, SwitchActiveLow, Tim, TIMER_HZ>
 where
     Pin: InputPin,
+    Tim: Timer<TIMER_HZ>,
 {
     type Error = <Pin as InputPin>::Error;
 
@@ -60,9 +70,10 @@ where
     }
 }
 
-impl<Pin> InputSwitch for Switch<Pin, SwitchActiveHigh>
+impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch for Switch<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
 where
     Pin: InputPin,
+    Tim: Timer<TIMER_HZ>,
 {
     type Error = <Pin as InputPin>::Error;
 
@@ -72,19 +83,33 @@ where
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub enum SwitchError<PinError> {
+pub enum SwitchError<PinError, TimerError> {
     Pin(PinError),
+    Timer(TimerError),
 }
 
-impl<Pin, ActiveLevel> ActorSense for Switch<Pin, ActiveLevel>
+impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> ActorSense
+    for Switch<Pin, ActiveLevel, Tim, TIMER_HZ>
 where
     Self: InputSwitch,
     Pin: InputPin,
+    Tim: Timer<TIMER_HZ>,
 {
     type Message = SwitchUpdate;
-    type Error = SwitchError<<Self as InputSwitch>::Error>;
+    type Error = SwitchError<<Self as InputSwitch>::Error, Tim::Error>;
 
     fn sense(&mut self) -> Result<Option<SwitchUpdate>, Self::Error> {
+        if self.is_debouncing {
+            match self.timer.wait() {
+                Ok(()) => {
+                    self.timer.cancel().map_err(|err| SwitchError::Timer(err))?;
+                    self.is_debouncing = false;
+                }
+                Err(nb::Error::WouldBlock) => return Ok(None),
+                Err(nb::Error::Other(err)) => return Err(SwitchError::Timer(err)),
+            }
+        }
+
         let is_active = self.is_active().map_err(|err| SwitchError::Pin(err))?;
 
         let status = if is_active {
@@ -95,6 +120,13 @@ where
 
         if Some(status) != self.current_status {
             self.current_status = Some(status);
+
+            let debounce_duration: TimerDuration<TIMER_HZ> =
+                MillisDuration::from_ticks(50).convert();
+            self.is_debouncing = true;
+            self.timer
+                .start(debounce_duration)
+                .map_err(|err| SwitchError::Timer(err))?;
 
             Ok(Some(SwitchUpdate { status }))
         } else {

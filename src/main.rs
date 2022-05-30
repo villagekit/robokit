@@ -17,7 +17,7 @@ mod app {
             Config as SerialConfig, Oversampling as SerialOversampling, Parity as SerialParity,
             Serial,
         },
-        timer::monotonic::MonoTimerUs,
+        timer::{monotonic::MonoTimerUs, Counter},
         watchdog,
     };
 
@@ -26,17 +26,23 @@ mod app {
         command::{CommandCenter, CommandCenterResources},
         machine::{Machine, StopMessage, ToggleMessage},
         sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus},
+        timer::{setup as timer_setup, tick as timer_tick, SubTimer, TICK_TIMER_HZ},
     };
 
+    pub const TICK_TIMER_MAX: u32 = u32::MAX;
+    pub type TickTimer = Counter<pac::TIM5, TICK_TIMER_HZ>;
+
     type UserButtonPin = Pin<'C', 13, Input<Floating>>;
+    type UserButtonTimer = SubTimer;
     // type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
-    type UserButton = Switch<UserButtonPin, SwitchActiveHigh>;
+    type UserButton = Switch<UserButtonPin, SwitchActiveHigh, UserButtonTimer, TICK_TIMER_HZ>;
 
     #[shared]
     struct Shared {}
 
     #[local]
     struct Local {
+        tick_timer: TickTimer,
         user_button: UserButton,
         machine: Machine,
         iwdg: watchdog::IndependentWatchdog,
@@ -61,12 +67,19 @@ mod app {
         let gpiof = ctx.device.GPIOF.split();
         let gpiog = ctx.device.GPIOG.split();
 
+        let mut tick_timer = ctx.device.TIM5.counter_us(&clocks);
+        timer_setup(&mut tick_timer, TICK_TIMER_MAX).unwrap();
+
+        let user_button_pin = gpioc.pc13.into_floating_input();
+        let user_button_timer = SubTimer::new();
+        let user_button = Switch::new(user_button_pin, user_button_timer);
+
         let green_led_pin = gpiob.pb0.into_push_pull_output();
-        let green_led_timer = ctx.device.TIM9.counter_us(&clocks);
+        let green_led_timer = SubTimer::new();
         let blue_led_pin = gpiob.pb7.into_push_pull_output();
-        let blue_led_timer = ctx.device.TIM10.counter_us(&clocks);
+        let blue_led_timer = SubTimer::new();
         let red_led_pin = gpiob.pb14.into_push_pull_output();
-        let red_led_timer = ctx.device.TIM11.counter_us(&clocks);
+        let red_led_timer = SubTimer::new();
 
         defmt::println!(
             "Stepper timer clock: {}",
@@ -78,7 +91,9 @@ mod app {
         let x_axis_timer = ctx.device.TIM3.counter(&clocks);
 
         let x_axis_limit_min_pin = gpiof.pf15.into_floating_input();
+        let x_axis_limit_min_timer = SubTimer::new();
         let x_axis_limit_max_pin = gpioe.pe13.into_floating_input();
+        let x_axis_limit_max_timer = SubTimer::new();
 
         let main_spindle_serial_tx = gpiod.pd5.into_alternate();
         let main_spindle_serial_rx = gpiod.pd6.into_alternate();
@@ -95,8 +110,6 @@ mod app {
             },
         );
 
-        let user_button = Switch::new(gpioc.pc13.into_floating_input());
-
         let command_center = CommandCenter::new(CommandCenterResources {
             green_led_pin,
             green_led_timer,
@@ -108,7 +121,9 @@ mod app {
             x_axis_step_pin,
             x_axis_timer,
             x_axis_limit_min_pin,
+            x_axis_limit_min_timer,
             x_axis_limit_max_pin,
+            x_axis_limit_max_timer,
             main_spindle_serial,
         });
         let machine = Machine::new(command_center);
@@ -118,6 +133,7 @@ mod app {
         (
             Shared {},
             Local {
+                tick_timer,
                 user_button,
                 iwdg,
                 machine,
@@ -126,8 +142,9 @@ mod app {
         )
     }
 
-    #[idle(local = [user_button, machine, iwdg])]
+    #[idle(local = [tick_timer, user_button, machine, iwdg])]
     fn idle(ctx: idle::Context) -> ! {
+        let tick_timer = ctx.local.tick_timer;
         let user_button = ctx.local.user_button;
         let iwdg = ctx.local.iwdg;
         let machine = ctx.local.machine;
@@ -135,6 +152,8 @@ mod app {
         iwdg.start(2.millis());
 
         loop {
+            timer_tick(tick_timer, TICK_TIMER_MAX).unwrap();
+
             if let Some(user_button_update) =
                 user_button.sense().expect("Error reading user button")
             {

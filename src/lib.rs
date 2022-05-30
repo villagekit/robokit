@@ -7,6 +7,7 @@ pub mod command;
 pub mod machine;
 pub mod modbus;
 pub mod sensors;
+pub mod timer;
 pub mod util;
 
 use defmt_rtt as _; // global logger
