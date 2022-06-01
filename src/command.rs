@@ -146,6 +146,7 @@ impl CommandCenter {
             res.x_axis_timer,
             max_acceleration_in_millimeters_per_sec_per_sec,
             steps_per_millimeter,
+            AxisLimitSide::Min,
         );
         let x_axis_limit_min = Switch::new(res.x_axis_limit_min_pin, res.x_axis_limit_min_timer);
         let x_axis_limit_max = Switch::new(res.x_axis_limit_max_pin, res.x_axis_limit_max_timer);
