@@ -16,7 +16,7 @@ With [`rustup`](https://rustup.rs) installed, install the toolchain:
 ( https://docs.rust-embedded.org/cortex-m-quickstart/cortex_m_quickstart/ )
 
 ```shell
-rustup target add thumbv7em-none-eabi
+rustup target add thumbv7em-none-eabihf
 ```
 
 ### Binary utils
