@@ -255,9 +255,9 @@ dependencies = [
 
 [[package]]
 name = "embedded-hal"
-version = "1.0.0-alpha.6"
+version = "1.0.0-alpha.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "570e765da7319a256dfe1542f14501a53f74e020b68aa666a98b1ad31a614c7e"
+checksum = "c3babfc7fd332142a0b11aebf592992f211f4e01b6222fb04b03aba1bd80018d"
 dependencies = [
  "nb 1.0.0",
 ]
@@ -761,12 +761,14 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "stepper"
-version = "0.5.0"
-source = "git+https://github.com/ahdinosaur/stepper?rev=f30b83b#f30b83b2b9c6fab31dbf978f3d10ea7849033531"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aeee62efac83a6232a45b2f1d6a054fd09c359e0114949c95bf9d60db39e866b"
 dependencies = [
  "embedded-hal 0.2.7",
- "embedded-hal 1.0.0-alpha.6",
- "embedded-time",
+ "embedded-hal 1.0.0-alpha.8",
+ "fugit",
+ "fugit-timer",
  "nb 1.0.0",
  "num-traits",
  "paste",
@@ -797,8 +799,9 @@ dependencies = [
 
 [[package]]
 name = "stm32f7xx-hal"
-version = "0.6.0"
-source = "git+https://github.com/stm32-rs/stm32f7xx-hal?rev=1df0671#1df0671e66166c66001149c5ddb1ce5534b2efc6"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d08fe820a44178d54abe658856fa01569a99cf76a881fa271c0fb18d055a651c"
 dependencies = [
  "as-slice",
  "bare-metal 1.0.0",
