@@ -61,6 +61,10 @@ impl Machine {
             }),
         ];
 
+        let start_commands: [Command; 0] = [];
+        let stop_commands: [Command; 0] = [];
+
+        /*
         let start_commands: [Command; 1] = [Command::MainSpindle(SpindleSetMessage {
             status: SpindleStatus::On { rpm: 1000 },
         })];
@@ -68,6 +72,7 @@ impl Machine {
         let stop_commands: [Command; 1] = [Command::MainSpindle(SpindleSetMessage {
             status: SpindleStatus::Off,
         })];
+        */
 
         Self {
             command_center,
