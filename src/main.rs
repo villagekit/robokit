@@ -89,9 +89,9 @@ mod app {
         let x_axis_step_pin = gpiog.pg14.into_push_pull_output();
         let x_axis_timer = ctx.device.TIM3.counter(&clocks);
 
-        let x_axis_limit_min_pin = gpiof.pf15.into_floating_input();
+        let x_axis_limit_min_pin = gpiof.pf15.into_pull_up_input();
         let x_axis_limit_min_timer = SubTimer::new();
-        let x_axis_limit_max_pin = gpioe.pe13.into_floating_input();
+        let x_axis_limit_max_pin = gpioe.pe13.into_pull_up_input();
         let x_axis_limit_max_timer = SubTimer::new();
 
         let main_spindle_serial_tx = gpiod.pd5.into_alternate();

@@ -4,7 +4,7 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 use fugit_timer::Timer;
 use heapless::Deque;
 use stm32f7xx_hal::{
-    gpio::{self, Alternate, Floating, Input, Output, Pin, PushPull},
+    gpio::{self, Alternate, Input, Output, Pin, PullUp, PushPull},
     pac,
     serial::Serial,
     timer::counter::Counter,
@@ -17,7 +17,7 @@ use crate::actuators::axis::{
 };
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 use crate::actuators::spindle::{Spindle, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage};
-use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
+use crate::sensors::switch::{Switch, SwitchActiveLow, SwitchError, SwitchStatus};
 use crate::timer::{SubTimer, TICK_TIMER_HZ};
 
 /* actuators */
@@ -58,20 +58,20 @@ pub enum Command {
 }
 
 /* sensors */
-type XAxisLimitMinPin = Pin<'F', 15, Input<Floating>>; // D2
+type XAxisLimitMinPin = Pin<'F', 15, Input<PullUp>>; // D2
 type XAxisLimitMinTimer = SubTimer;
 type XAxisLimitMinError = SwitchError<
     <XAxisLimitMinPin as InputPin>::Error,
     <XAxisLimitMinTimer as Timer<TICK_TIMER_HZ>>::Error,
 >;
-type XAxisLimitMin = Switch<XAxisLimitMinPin, SwitchActiveHigh, XAxisLimitMinTimer, TICK_TIMER_HZ>;
-type XAxisLimitMaxPin = Pin<'E', 13, Input<Floating>>; // D3
+type XAxisLimitMin = Switch<XAxisLimitMinPin, SwitchActiveLow, XAxisLimitMinTimer, TICK_TIMER_HZ>;
+type XAxisLimitMaxPin = Pin<'E', 13, Input<PullUp>>; // D3
 type XAxisLimitMaxTimer = SubTimer;
 type XAxisLimitMaxError = SwitchError<
     <XAxisLimitMaxPin as InputPin>::Error,
     <XAxisLimitMaxTimer as Timer<TICK_TIMER_HZ>>::Error,
 >;
-type XAxisLimitMax = Switch<XAxisLimitMaxPin, SwitchActiveHigh, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
+type XAxisLimitMax = Switch<XAxisLimitMaxPin, SwitchActiveLow, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
 
 pub struct CommandCenterResources {
     pub green_led_pin: GreenLedPin,
@@ -205,12 +205,6 @@ impl ActorReceive<Command> for CommandCenter {
 
 impl CommandCenter {
     pub fn sense(&mut self) -> Result<(), SensorError> {
-        let axis_limit_min_message = AxisLimitMessage {
-            side: AxisLimitSide::Min,
-            status: AxisLimitStatus::Under,
-        };
-        self.actuators.x_axis.receive(&axis_limit_min_message);
-        /*
         if let Some(axis_limit_update) = self
             .sensors
             .x_axis_limit_min
@@ -227,14 +221,7 @@ impl CommandCenter {
             };
             self.actuators.x_axis.receive(&axis_limit_min_message);
         }
-        */
 
-        let axis_limit_max_message = AxisLimitMessage {
-            side: AxisLimitSide::Max,
-            status: AxisLimitStatus::Under,
-        };
-        self.actuators.x_axis.receive(&axis_limit_max_message);
-        /*
         if let Some(axis_limit_update) = self
             .sensors
             .x_axis_limit_max
@@ -251,7 +238,6 @@ impl CommandCenter {
             };
             self.actuators.x_axis.receive(&axis_limit_max_message);
         }
-        */
 
         Ok(())
     }
