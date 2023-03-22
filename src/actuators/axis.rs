@@ -15,7 +15,8 @@ use stepper::{
 
 use crate::actor::{ActorPoll, ActorReceive};
 
-pub type AxisMotionProfile = ramp_maker::Trapezoidal<f64>;
+type AxisVelocity = f64;
+pub type AxisMotionProfile = ramp_maker::Trapezoidal<AxisVelocity>;
 pub type AxisMotionControl<Driver, Timer, const TIMER_HZ: u32> = SoftwareMotionControl<
     Driver,
     StepperTimer<Timer, TIMER_HZ>,
@@ -34,9 +35,9 @@ pub type AxisDriverErrorDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> =
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
 #[derive(Clone, Copy, Debug, Format)]
-enum AxisMoveState<Velocity> {
+enum AxisMoveState {
     Initial {
-        max_velocity_in_steps_per_sec: Velocity,
+        max_velocity_in_steps_per_sec: AxisVelocity,
         target_step: i32,
     },
     Progress,
@@ -44,17 +45,17 @@ enum AxisMoveState<Velocity> {
 
 #[derive(Clone, Copy, Debug, Format)]
 enum AxisHomeState {
-    Initial,
+    Initial {
+        max_velocity_in_steps_per_sec: AxisVelocity,
+    },
     Progress,
     Done,
 }
 
-static HOMING_VELOCITY_IN_STEPS_PER_SEC: f64 = 10_f64;
-
 #[derive(Clone, Copy, Debug, Format)]
-enum AxisState<Velocity> {
+enum AxisState {
     Idle,
-    Moving(AxisMoveState<Velocity>),
+    Moving(AxisMoveState),
     Homing(AxisHomeState),
 }
 
@@ -76,7 +77,7 @@ where
 {
     stepper: Stepper<Driver>,
     steps_per_millimeter: f64,
-    state: AxisState<<Driver as MotionControl>::Velocity>,
+    state: AxisState,
     logical_position: f64,
     limit_min: Option<AxisLimitStatus>,
     limit_max: Option<AxisLimitStatus>,
@@ -116,7 +117,7 @@ where
             .enable_motion_control((stepper_timer, profile, DelayToTicks::new()));
 
         Axis {
-            stepper: stepper,
+            stepper,
             steps_per_millimeter,
             state: AxisState::Idle,
             logical_position: 0_f64,
@@ -145,7 +146,9 @@ impl<Time, const TIMER_HZ: u32> DelayToTicks<Time, TIMER_HZ> {
     }
 }
 
-impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64, TIMER_HZ> for DelayToTicks<Time, TIMER_HZ> {
+impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64, TIMER_HZ>
+    for DelayToTicks<Time, TIMER_HZ>
+{
     type Error = core::convert::Infallible;
 
     fn delay_to_ticks(&self, delay: f64) -> Result<TimerDuration<TIMER_HZ>, Self::Error> {
@@ -157,7 +160,7 @@ impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64, TIMER_HZ> for 
 
 #[derive(Clone, Copy, Debug, Format)]
 pub struct AxisMoveMessage {
-    pub max_velocity_in_millimeters_per_sec: f64,
+    pub max_velocity_in_millimeters_per_sec: AxisVelocity,
     pub distance_in_millimeters: f64,
 }
 
@@ -211,14 +214,21 @@ where
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub struct AxisHomeMessage {}
+pub struct AxisHomeMessage {
+    pub max_velocity_in_millimeters_per_sec: AxisVelocity,
+}
 
 impl<Driver> ActorReceive<AxisHomeMessage> for Axis<Driver>
 where
     Driver: MotionControl,
 {
-    fn receive(&mut self, _action: &AxisHomeMessage) {
-        self.state = AxisState::Homing(AxisHomeState::Initial);
+    fn receive(&mut self, action: &AxisHomeMessage) {
+        let max_velocity_in_steps_per_sec =
+            action.max_velocity_in_millimeters_per_sec * self.steps_per_millimeter;
+
+        self.state = AxisState::Homing(AxisHomeState::Initial {
+            max_velocity_in_steps_per_sec,
+        });
     }
 }
 
@@ -299,9 +309,11 @@ where
                 };
 
                 match home_state {
-                    AxisHomeState::Initial => {
+                    AxisHomeState::Initial {
+                        max_velocity_in_steps_per_sec,
+                    } => {
                         driver
-                            .move_to_position(HOMING_VELOCITY_IN_STEPS_PER_SEC, target_step)
+                            .move_to_position(max_velocity_in_steps_per_sec, target_step)
                             .map_err(|err| AxisError::Driver(err))?;
                         self.state = AxisState::Homing(AxisHomeState::Progress);
                         Poll::Pending

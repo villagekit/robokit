@@ -62,14 +62,18 @@ impl Machine {
         ];
 
         let start_commands: [Command; 2] = [
-            Command::XAxisHome(AxisHomeMessage {}),
+            Command::XAxisHome(AxisHomeMessage {
+                max_velocity_in_millimeters_per_sec: 40_f64,
+            }),
             Command::MainSpindleSet(SpindleSetMessage {
                 status: SpindleStatus::On { rpm: 1000 },
             }),
         ];
 
         let stop_commands: [Command; 2] = [
-            Command::XAxisHome(AxisHomeMessage {}),
+            Command::XAxisHome(AxisHomeMessage {
+                max_velocity_in_millimeters_per_sec: 40_f64,
+            }),
             Command::MainSpindleSet(SpindleSetMessage {
                 status: SpindleStatus::Off,
             }),

@@ -3,6 +3,7 @@ use defmt::Format;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use fugit_timer::Timer;
 use heapless::Deque;
+use stepper::traits::MotionControl;
 use stm32f7xx_hal::{
     gpio::{self, Alternate, Floating, Input, Output, Pin, PushPull},
     pac,
@@ -187,19 +188,22 @@ impl ActorReceive<ResetMessage> for CommandCenter {
 impl ActorReceive<Command> for CommandCenter {
     fn receive(&mut self, command: &Command) {
         match command {
-            Command::GreenLed(message) => {
+            Command::GreenLedBlink(message) => {
                 self.actuators.green_led.receive(message);
             }
-            Command::BlueLed(message) => {
+            Command::BlueLedBlink(message) => {
                 self.actuators.blue_led.receive(message);
             }
-            Command::RedLed(message) => {
+            Command::RedLedBlink(message) => {
                 self.actuators.red_led.receive(message);
             }
-            Command::XAxis(message) => {
+            Command::XAxisMove(message) => {
                 self.actuators.x_axis.receive(message);
             }
-            Command::MainSpindle(message) => {
+            Command::XAxisHome(message) => {
+                self.actuators.x_axis.receive(message);
+            }
+            Command::MainSpindleSet(message) => {
                 self.actuators.main_spindle.receive(message);
             }
         }
@@ -256,27 +260,32 @@ impl ActorPoll for CommandCenter {
         for _command_index in 0..num_commands {
             let command = self.active_commands.pop_front().unwrap();
             let result = match command {
-                Command::GreenLed(_) => self
+                Command::GreenLedBlink(_) => self
                     .actuators
                     .green_led
                     .poll()
                     .map_err(|err| ActuatorError::GreenLed(err)),
-                Command::BlueLed(_) => self
+                Command::BlueLedBlink(_) => self
                     .actuators
                     .blue_led
                     .poll()
                     .map_err(|err| ActuatorError::BlueLed(err)),
-                Command::RedLed(_) => self
+                Command::RedLedBlink(_) => self
                     .actuators
                     .red_led
                     .poll()
                     .map_err(|err| ActuatorError::RedLed(err)),
-                Command::XAxis(_) => self
+                Command::XAxisMove(_) => self
                     .actuators
                     .x_axis
                     .poll()
                     .map_err(|err| ActuatorError::XAxis(err)),
-                Command::MainSpindle(_) => self
+                Command::XAxisHome(_) => self
+                    .actuators
+                    .x_axis
+                    .poll()
+                    .map_err(|err| ActuatorError::XAxis(err)),
+                Command::MainSpindleSet(_) => self
                     .actuators
                     .main_spindle
                     .poll()
