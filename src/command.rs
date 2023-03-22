@@ -10,7 +10,6 @@ use stm32f7xx_hal::{
     timer::counter::Counter,
 };
 
-use crate::actor::{ActorPoll, ActorReceive, ActorSense};
 use crate::actuators::axis::{
     Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisLimitMessage, AxisLimitSide,
     AxisLimitStatus, AxisMoveMessage,
@@ -19,6 +18,10 @@ use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 use crate::actuators::spindle::{Spindle, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage};
 use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
 use crate::timer::{SubTimer, TICK_TIMER_HZ};
+use crate::{
+    actor::{ActorPoll, ActorReceive, ActorSense},
+    actuators::axis::AxisHomeMessage,
+};
 
 /* actuators */
 
@@ -50,11 +53,12 @@ type MainSpindleError = SpindleError<MainSpindleDriver>;
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum Command {
-    GreenLed(LedBlinkMessage<TICK_TIMER_HZ>),
-    BlueLed(LedBlinkMessage<TICK_TIMER_HZ>),
-    RedLed(LedBlinkMessage<TICK_TIMER_HZ>),
-    XAxis(AxisMoveMessage),
-    MainSpindle(SpindleSetMessage),
+    GreenLedBlink(LedBlinkMessage<TICK_TIMER_HZ>),
+    BlueLedBlink(LedBlinkMessage<TICK_TIMER_HZ>),
+    RedLedBlink(LedBlinkMessage<TICK_TIMER_HZ>),
+    XAxisMove(AxisMoveMessage),
+    XAxisHome(AxisHomeMessage),
+    MainSpindleSet(SpindleSetMessage),
 }
 
 /* sensors */
@@ -206,12 +210,6 @@ impl ActorReceive<Command> for CommandCenter {
 
 impl CommandCenter {
     pub fn sense(&mut self) -> Result<(), SensorError> {
-        let axis_limit_min_message = AxisLimitMessage {
-            side: AxisLimitSide::Min,
-            status: AxisLimitStatus::Under,
-        };
-        self.actuators.x_axis.receive(&axis_limit_min_message);
-        /*
         if let Some(axis_limit_update) = self
             .sensors
             .x_axis_limit_min
@@ -228,14 +226,7 @@ impl CommandCenter {
             };
             self.actuators.x_axis.receive(&axis_limit_min_message);
         }
-        */
 
-        let axis_limit_max_message = AxisLimitMessage {
-            side: AxisLimitSide::Max,
-            status: AxisLimitStatus::Under,
-        };
-        self.actuators.x_axis.receive(&axis_limit_max_message);
-        /*
         if let Some(axis_limit_update) = self
             .sensors
             .x_axis_limit_max
@@ -252,7 +243,6 @@ impl CommandCenter {
             };
             self.actuators.x_axis.receive(&axis_limit_max_message);
         }
-        */
 
         Ok(())
     }
