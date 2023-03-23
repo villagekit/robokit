@@ -5,7 +5,7 @@ use fugit_timer::Timer;
 use heapless::Deque;
 use stepper::traits::MotionControl;
 use stm32f7xx_hal::{
-    gpio::{self, Alternate, Floating, Input, Output, Pin, PushPull},
+    gpio::{self, Alternate, Input, Output, Pin, PullUp, PushPull},
     pac,
     serial::Serial,
     timer::counter::Counter,
@@ -17,7 +17,7 @@ use crate::actuators::axis::{
 };
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 use crate::actuators::spindle::{Spindle, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage};
-use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
+use crate::sensors::switch::{Switch, SwitchActiveLow, SwitchError, SwitchStatus};
 use crate::timer::{SubTimer, TICK_TIMER_HZ};
 use crate::{
     actor::{ActorPoll, ActorReceive, ActorSense},
@@ -63,20 +63,20 @@ pub enum Command {
 }
 
 /* sensors */
-type XAxisLimitMinPin = Pin<'F', 15, Input<Floating>>; // D2
+type XAxisLimitMinPin = Pin<'F', 15, Input<PullUp>>; // D2
 type XAxisLimitMinTimer = SubTimer;
 type XAxisLimitMinError = SwitchError<
     <XAxisLimitMinPin as InputPin>::Error,
     <XAxisLimitMinTimer as Timer<TICK_TIMER_HZ>>::Error,
 >;
-type XAxisLimitMin = Switch<XAxisLimitMinPin, SwitchActiveHigh, XAxisLimitMinTimer, TICK_TIMER_HZ>;
-type XAxisLimitMaxPin = Pin<'E', 13, Input<Floating>>; // D3
+type XAxisLimitMin = Switch<XAxisLimitMinPin, SwitchActiveLow, XAxisLimitMinTimer, TICK_TIMER_HZ>;
+type XAxisLimitMaxPin = Pin<'F', 14, Input<PullUp>>; // D4
 type XAxisLimitMaxTimer = SubTimer;
 type XAxisLimitMaxError = SwitchError<
     <XAxisLimitMaxPin as InputPin>::Error,
     <XAxisLimitMaxTimer as Timer<TICK_TIMER_HZ>>::Error,
 >;
-type XAxisLimitMax = Switch<XAxisLimitMaxPin, SwitchActiveHigh, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
+type XAxisLimitMax = Switch<XAxisLimitMaxPin, SwitchActiveLow, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
 
 pub struct CommandCenterResources {
     pub green_led_pin: GreenLedPin,
@@ -137,11 +137,18 @@ impl CommandCenter {
 
         let max_acceleration_in_millimeters_per_sec_per_sec = 20_f64;
 
+        /*
         let steps_per_revolution = 6400_f64;
         let leadscrew_starts = 4_f64;
         let leadscrew_pitch = 2_f64;
         let millimeters_per_revolution = leadscrew_starts * leadscrew_pitch;
         let steps_per_millimeter = steps_per_revolution / millimeters_per_revolution;
+        */
+
+        // https://www.makerstore.com.au/product/gear-m1/
+        let steps_per_revolution = 6400_f64;
+        let millimeters_per_revolution = 125.66_f64;
+        let steps_per_millimeter = steps_per_revolution * (1_f64 / millimeters_per_revolution);
 
         defmt::println!("Steps per mm: {}", steps_per_millimeter);
 
@@ -220,6 +227,7 @@ impl CommandCenter {
             .sense()
             .map_err(|err| SensorError::XAxisLimitMin(err))?
         {
+            // defmt::println!("limit min: {}", axis_limit_update);
             let axis_limit_status = match axis_limit_update.status {
                 SwitchStatus::On => AxisLimitStatus::Over,
                 SwitchStatus::Off => AxisLimitStatus::Under,
@@ -237,6 +245,7 @@ impl CommandCenter {
             .sense()
             .map_err(|err| SensorError::XAxisLimitMax(err))?
         {
+            // defmt::println!("limit max: {}", axis_limit_update);
             let axis_limit_status = match axis_limit_update.status {
                 SwitchStatus::On => AxisLimitStatus::Over,
                 SwitchStatus::Off => AxisLimitStatus::Under,

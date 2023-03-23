@@ -62,7 +62,6 @@ mod app {
         let gpiob = ctx.device.GPIOB.split();
         let gpioc = ctx.device.GPIOC.split();
         let gpiod = ctx.device.GPIOD.split();
-        let gpioe = ctx.device.GPIOE.split();
         let gpiof = ctx.device.GPIOF.split();
         let gpiog = ctx.device.GPIOG.split();
 
@@ -89,9 +88,9 @@ mod app {
         let x_axis_step_pin = gpiog.pg14.into_push_pull_output();
         let x_axis_timer = ctx.device.TIM3.counter(&clocks);
 
-        let x_axis_limit_min_pin = gpiof.pf15.into_floating_input();
+        let x_axis_limit_min_pin = gpiof.pf15.into_pull_up_input();
         let x_axis_limit_min_timer = SubTimer::new();
-        let x_axis_limit_max_pin = gpioe.pe13.into_floating_input();
+        let x_axis_limit_max_pin = gpiof.pf14.into_pull_up_input();
         let x_axis_limit_max_timer = SubTimer::new();
 
         let main_spindle_serial_tx = gpiod.pd5.into_alternate();

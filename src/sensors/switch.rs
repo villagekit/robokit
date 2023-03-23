@@ -112,17 +112,16 @@ where
 
         let is_active = self.is_active().map_err(|err| SwitchError::Pin(err))?;
 
-        let status = if is_active {
-            SwitchStatus::On
-        } else {
-            SwitchStatus::Off
+        let status = match is_active {
+            true => SwitchStatus::On,
+            false => SwitchStatus::Off,
         };
 
         if Some(status) != self.current_status {
             self.current_status = Some(status);
 
             let debounce_duration: TimerDuration<TIMER_HZ> =
-                MillisDuration::from_ticks(50).convert();
+                MillisDuration::from_ticks(2).convert();
             self.is_debouncing = true;
             self.timer
                 .start(debounce_duration)

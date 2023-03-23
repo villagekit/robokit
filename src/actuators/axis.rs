@@ -303,15 +303,17 @@ where
             AxisState::Homing(home_state) => {
                 let driver = self.stepper.driver_mut();
 
-                let target_step = match self.home_side {
-                    AxisLimitSide::Min => i32::MIN,
-                    AxisLimitSide::Max => i32::MAX,
-                };
-
                 match home_state {
                     AxisHomeState::Initial {
                         max_velocity_in_steps_per_sec,
                     } => {
+                        driver
+                            .reset_position(0)
+                            .map_err(|err| AxisError::Driver(err))?;
+                        let target_step = match self.home_side {
+                            AxisLimitSide::Min => i32::MIN + 1,
+                            AxisLimitSide::Max => i32::MAX - 1,
+                        };
                         driver
                             .move_to_position(max_velocity_in_steps_per_sec, target_step)
                             .map_err(|err| AxisError::Driver(err))?;
