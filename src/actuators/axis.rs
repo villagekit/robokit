@@ -79,6 +79,7 @@ where
     steps_per_millimeter: f64,
     state: AxisState,
     logical_position: f64,
+    move_direction: Option<Direction>,
     limit_min: Option<AxisLimitStatus>,
     limit_max: Option<AxisLimitStatus>,
     home_side: AxisLimitSide,
@@ -121,6 +122,7 @@ where
             steps_per_millimeter,
             state: AxisState::Idle,
             logical_position: 0_f64,
+            move_direction: None,
             limit_min: None,
             limit_max: None,
             home_side,
@@ -183,6 +185,15 @@ where
 
         // NOTE(mw) hmm... is this the best way to do this?
         self.logical_position = next_logical_position;
+
+        // NOTE(mw): We do this because stepper doesn't immediately set direction after
+        //   .move_to_position()
+        let direction = if step_difference < 0 {
+            Direction::Backward
+        } else {
+            Direction::Forward
+        };
+        self.move_direction = Some(direction);
 
         self.state = AxisState::Moving(AxisMoveState::Initial {
             max_velocity_in_steps_per_sec,
@@ -275,18 +286,21 @@ where
                         Poll::Pending
                     }
                     AxisMoveState::Progress => {
-                        match driver.current_direction() {
+                        match self.move_direction {
                             // limit: max
-                            Direction::Forward => {
+                            Some(Direction::Forward) => {
                                 if let Some(AxisLimitStatus::Over) = self.limit_max {
                                     return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Max)));
                                 }
                             }
                             // limit: min
-                            Direction::Backward => {
+                            Some(Direction::Backward) => {
                                 if let Some(AxisLimitStatus::Over) = self.limit_min {
                                     return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Min)));
                                 }
+                            }
+                            None => {
+                                return Poll::Ready(Err(AxisError::Unexpected));
                             }
                         }
 
@@ -295,6 +309,7 @@ where
                             Poll::Pending
                         } else {
                             self.state = AxisState::Idle;
+                            self.move_direction = None;
                             Poll::Ready(Ok(()))
                         }
                     }
