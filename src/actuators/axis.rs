@@ -40,7 +40,10 @@ enum AxisMoveState {
         max_velocity_in_steps_per_sec: AxisVelocity,
         target_step: i32,
     },
-    Progress,
+    Motion {
+        #[defmt(Debug2Format)]
+        direction: Direction,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -79,7 +82,6 @@ where
     steps_per_millimeter: f64,
     state: AxisState,
     logical_position: f64,
-    move_direction: Option<Direction>,
     limit_min: Option<AxisLimitStatus>,
     limit_max: Option<AxisLimitStatus>,
     home_side: AxisLimitSide,
@@ -122,7 +124,6 @@ where
             steps_per_millimeter,
             state: AxisState::Idle,
             logical_position: 0_f64,
-            move_direction: None,
             limit_min: None,
             limit_max: None,
             home_side,
@@ -185,15 +186,6 @@ where
 
         // NOTE(mw) hmm... is this the best way to do this?
         self.logical_position = next_logical_position;
-
-        // NOTE(mw): We do this because stepper doesn't immediately set direction after
-        //   .move_to_position()
-        let direction = if step_difference < 0 {
-            Direction::Backward
-        } else {
-            Direction::Forward
-        };
-        self.move_direction = Some(direction);
 
         self.state = AxisState::Moving(AxisMoveState::Initial {
             max_velocity_in_steps_per_sec,
@@ -279,28 +271,36 @@ where
                         max_velocity_in_steps_per_sec,
                         target_step,
                     } => {
+                        // NOTE(mw): We do this because stepper doesn't immediately set direction after
+                        //   .move_to_position(), we need the direction right away.
+                        let current_step = driver.current_step();
+                        let step_difference = target_step - current_step;
+                        let direction = if step_difference < 0 {
+                            Direction::Backward
+                        } else {
+                            Direction::Forward
+                        };
+
                         driver
                             .move_to_position(max_velocity_in_steps_per_sec, target_step)
                             .map_err(|err| AxisError::Driver(err))?;
-                        self.state = AxisState::Moving(AxisMoveState::Progress);
+
+                        self.state = AxisState::Moving(AxisMoveState::Motion { direction });
                         Poll::Pending
                     }
-                    AxisMoveState::Progress => {
-                        match self.move_direction {
+                    AxisMoveState::Motion { direction } => {
+                        match direction {
                             // limit: max
-                            Some(Direction::Forward) => {
+                            Direction::Forward => {
                                 if let Some(AxisLimitStatus::Over) = self.limit_max {
                                     return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Max)));
                                 }
                             }
                             // limit: min
-                            Some(Direction::Backward) => {
+                            Direction::Backward => {
                                 if let Some(AxisLimitStatus::Over) = self.limit_min {
                                     return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Min)));
                                 }
-                            }
-                            None => {
-                                return Poll::Ready(Err(AxisError::Unexpected));
                             }
                         }
 
@@ -309,7 +309,6 @@ where
                             Poll::Pending
                         } else {
                             self.state = AxisState::Idle;
-                            self.move_direction = None;
                             Poll::Ready(Ok(()))
                         }
                     }
