@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Error};
 use core::task::Poll;
 use defmt::Format;
 use fugit::ExtU32;
@@ -121,9 +122,7 @@ pub enum MachineError {
 }
 
 impl ActorPoll for Machine {
-    type Error = MachineError;
-
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
         self.command_center
             .sense()
             .map_err(|err| MachineError::Sensor(err))?;

@@ -1,5 +1,6 @@
 // https://github.com/robert-budde/iHSV-Servo-Tool/blob/master/iHSV_Properties.py
 
+use anyhow::{anyhow, Error};
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
@@ -183,11 +184,11 @@ where
         self.next_spindle_status = Some(status);
     }
 
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
         match self.handle_modbus() {
             Poll::Pending => return Poll::Pending,
             Poll::Ready(Err(err)) => {
-                return Poll::Ready(Err(SpindleDriverJmcHsv57Error::ModbusSerial(err)))
+                return Poll::Ready(Err(anyhow!(SpindleDriverJmcHsv57Error::ModbusSerial(err))))
             }
             Poll::Ready(Ok(())) => {
                 // pass through
@@ -198,23 +199,27 @@ where
             // initialize spindle over modbus
             self.modbus_requests
                 .push_back(JmcHsv57ModbusRequest::InitControlMode)
-                .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
+                .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)
+                .map_err(Error::msg)?;
 
             self.modbus_requests
                 .push_back(JmcHsv57ModbusRequest::InitSpeedSource)
-                .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
+                .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)
+                .map_err(Error::msg)?;
 
             self.modbus_requests
                 .push_back(JmcHsv57ModbusRequest::InitAcceleration {
                     ms_per_1000_rpm: ACCELERATION_IN_MS_PER_1000_RPM,
                 })
-                .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
+                .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)
+                .map_err(Error::msg)?;
 
             self.modbus_requests
                 .push_back(JmcHsv57ModbusRequest::InitDeceleration {
                     ms_per_1000_rpm: ACCELERATION_IN_MS_PER_1000_RPM,
                 })
-                .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
+                .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)
+                .map_err(Error::msg)?;
 
             self.has_initialized = true;
 
@@ -230,7 +235,8 @@ where
                 let rpm_in_u16 = i16_to_u16(rpm_in_i16);
                 self.modbus_requests
                     .push_back(JmcHsv57ModbusRequest::SetSpeed { rpm: rpm_in_u16 })
-                    .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
+                    .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)
+                    .map_err(Error::msg)?;
 
                 return Poll::Pending;
             }
@@ -248,7 +254,8 @@ where
         // get speed over modbus
         self.modbus_requests
             .push_back(JmcHsv57ModbusRequest::GetSpeed)
-            .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)?;
+            .map_err(|_| SpindleDriverJmcHsv57Error::QueueFull)
+            .map_err(Error::msg)?;
 
         return Poll::Pending;
     }
@@ -290,9 +297,7 @@ impl<Driver> ActorPoll for Spindle<Driver>
 where
     Driver: SpindleDriver,
 {
-    type Error = Driver::Error;
-
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
         self.driver.poll()
     }
 }

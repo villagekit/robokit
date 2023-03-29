@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Context, Error};
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
@@ -6,6 +7,8 @@ use fugit::TimerDurationU32 as TimerDuration;
 use fugit_timer::Timer;
 
 use crate::actor::{ActorPoll, ActorReceive};
+
+pub trait Led<const TIMER_HZ: u32>: ActorReceive<LedBlinkMessage<TIMER_HZ>> + ActorPoll {}
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum LedBlinkStatus {
@@ -21,7 +24,7 @@ pub struct LedBlinkState<const TIMER_HZ: u32> {
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub struct Led<P, T, const TIMER_HZ: u32>
+pub struct LedDevice<P, T, const TIMER_HZ: u32>
 where
     P: OutputPin,
     T: Timer<TIMER_HZ>,
@@ -31,13 +34,13 @@ where
     state: Option<LedBlinkState<TIMER_HZ>>,
 }
 
-impl<P, T, const TIMER_HZ: u32> Led<P, T, TIMER_HZ>
+impl<P, T, const TIMER_HZ: u32> LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
     T: Timer<TIMER_HZ>,
 {
     pub fn new(pin: P, timer: T) -> Self {
-        Led {
+        Self {
             pin,
             timer,
             state: None,
@@ -50,7 +53,8 @@ pub struct LedBlinkMessage<const TIMER_HZ: u32> {
     pub duration: TimerDuration<TIMER_HZ>,
 }
 
-impl<P, T, const TIMER_HZ: u32> ActorReceive<LedBlinkMessage<TIMER_HZ>> for Led<P, T, TIMER_HZ>
+impl<P, T, const TIMER_HZ: u32> ActorReceive<LedBlinkMessage<TIMER_HZ>>
+    for LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
     T: Timer<TIMER_HZ>,
@@ -69,26 +73,28 @@ pub enum LedError<PinError: Debug, TimerError: Debug> {
     Timer(TimerError),
 }
 
-impl<P, T, const TIMER_HZ: u32> ActorPoll for Led<P, T, TIMER_HZ>
+impl<P, T, const TIMER_HZ: u32> ActorPoll for LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
     P::Error: Debug,
     T: Timer<TIMER_HZ>,
     T::Error: Debug,
 {
-    type Error = LedError<P::Error, T::Error>;
-
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
         if let Some(state) = self.state {
             match state.status {
                 LedBlinkStatus::Start => {
                     // start timer
                     self.timer
                         .start(state.duration)
-                        .map_err(|err| LedError::Timer(err))?;
+                        .context("Failed to start timer.")
+                        .map_err(Error::msg)?;
 
                     // turn led on
-                    self.pin.set_high().map_err(|err| LedError::Pin(err))?;
+                    self.pin
+                        .set_high()
+                        .context("Failed to set pin high.")
+                        .map_err(Error::msg)?;
 
                     // update state
                     self.state = Some(LedBlinkState {
@@ -99,7 +105,7 @@ where
                     Poll::Pending
                 }
                 LedBlinkStatus::Wait => match self.timer.wait() {
-                    Err(nb::Error::Other(err)) => Poll::Ready(Err(LedError::Timer(err))),
+                    Err(nb::Error::Other(err)) => Poll::Ready(anyhow!(err)),
                     Err(nb::Error::WouldBlock) => Poll::Pending,
                     Ok(()) => {
                         self.state = Some(LedBlinkState {
@@ -111,7 +117,10 @@ where
                     }
                 },
                 LedBlinkStatus::Done => {
-                    self.pin.set_low().map_err(|err| LedError::Pin(err))?;
+                    self.pin
+                        .set_low()
+                        .context("Failed to set pin low.")
+                        .map_err(Error::msg)?;
 
                     self.state = None;
 

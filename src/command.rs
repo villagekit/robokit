@@ -1,3 +1,5 @@
+use alloc::boxed::Box;
+use anyhow::{anyhow, Error};
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -74,8 +76,8 @@ type XAxisLimitMaxError = SwitchError<
 type XAxisLimitMax = Switch<XAxisLimitMaxPin, SwitchActiveHigh, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
 
 pub struct CommandCenterResources {
-    pub green_led_pin: GreenLedPin,
-    pub green_led_timer: GreenLedTimer,
+    pub green_led: Box<dyn Led<TICK_TIMER_HZ>>,
+    /*
     pub blue_led_pin: BlueLedPin,
     pub blue_led_timer: BlueLedTimer,
     pub red_led_pin: RedLedPin,
@@ -88,14 +90,17 @@ pub struct CommandCenterResources {
     pub x_axis_limit_max_pin: XAxisLimitMaxPin,
     pub x_axis_limit_max_timer: XAxisLimitMaxTimer,
     pub main_spindle_serial: MainSpindleSerial,
+    */
 }
 
 pub struct CommandCenterActuators {
-    pub green_led: Led<GreenLedPin, GreenLedTimer, TICK_TIMER_HZ>,
+    pub green_led: Box<dyn Led<TICK_TIMER_HZ>>,
+    /*
     pub blue_led: Led<BlueLedPin, BlueLedTimer, TICK_TIMER_HZ>,
     pub red_led: Led<RedLedPin, RedLedTimer, TICK_TIMER_HZ>,
     pub x_axis: Axis<XAxisDriver>,
     pub main_spindle: Spindle<MainSpindleDriver>,
+    */
 }
 
 #[derive(Debug)]
@@ -157,10 +162,12 @@ impl CommandCenter {
             active_commands: Deque::new(),
             actuators: CommandCenterActuators {
                 green_led,
+                /*
                 blue_led,
                 red_led,
                 x_axis,
                 main_spindle,
+                */
             },
             sensors: CommandCenterSensors {
                 x_axis_limit_min,
@@ -258,38 +265,16 @@ impl CommandCenter {
 }
 
 impl ActorPoll for CommandCenter {
-    type Error = ActuatorError;
-
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
         let num_commands = self.active_commands.len();
         for _command_index in 0..num_commands {
             let command = self.active_commands.pop_front().unwrap();
             let result = match command {
-                Command::GreenLed(_) => self
-                    .actuators
-                    .green_led
-                    .poll()
-                    .map_err(|err| ActuatorError::GreenLed(err)),
-                Command::BlueLed(_) => self
-                    .actuators
-                    .blue_led
-                    .poll()
-                    .map_err(|err| ActuatorError::BlueLed(err)),
-                Command::RedLed(_) => self
-                    .actuators
-                    .red_led
-                    .poll()
-                    .map_err(|err| ActuatorError::RedLed(err)),
-                Command::XAxis(_) => self
-                    .actuators
-                    .x_axis
-                    .poll()
-                    .map_err(|err| ActuatorError::XAxis(err)),
-                Command::MainSpindle(_) => self
-                    .actuators
-                    .main_spindle
-                    .poll()
-                    .map_err(|err| ActuatorError::MainSpindle(err)),
+                Command::GreenLed(_) => self.actuators.green_led.poll().map_err(Error::msg),
+                Command::BlueLed(_) => self.actuators.blue_led.poll().map_err(Error::msg),
+                Command::RedLed(_) => self.actuators.red_led.poll().map_err(Error::msg),
+                Command::XAxis(_) => self.actuators.x_axis.poll().map_err(Error::msg),
+                Command::MainSpindle(_) => self.actuators.main_spindle.poll().map_err(Error::msg),
             };
 
             match result {

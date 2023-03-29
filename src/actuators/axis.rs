@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Error};
 use core::fmt::Debug;
 use core::marker::PhantomData;
 use core::task::Poll;
@@ -127,7 +128,9 @@ impl<Time, const TIMER_HZ: u32> DelayToTicks<Time, TIMER_HZ> {
     }
 }
 
-impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64, TIMER_HZ> for DelayToTicks<Time, TIMER_HZ> {
+impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64, TIMER_HZ>
+    for DelayToTicks<Time, TIMER_HZ>
+{
     type Error = core::convert::Infallible;
 
     fn delay_to_ticks(&self, delay: f64) -> Result<TimerDuration<TIMER_HZ>, Self::Error> {
@@ -207,16 +210,14 @@ where
     Timer: FugitTimer<TIMER_HZ>,
     <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
 {
-    type Error = AxisError<<AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error>;
-
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
         // limit: min
         if let None = self.limit_min {
             return Poll::Ready(Err(AxisError::Unexpected));
         }
         if let Some(AxisLimitStatus::Over) = self.limit_min {
             if let Direction::Backward = self.stepper.driver_mut().current_direction() {
-                return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Min)));
+                return Poll::Ready(Err(anyhow!(AxisError::Limit(AxisLimitSide::Min))));
             }
         }
 
@@ -226,7 +227,7 @@ where
         }
         if let Some(AxisLimitStatus::Over) = self.limit_max {
             if let Direction::Forward = self.stepper.driver_mut().current_direction() {
-                return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Max)));
+                return Poll::Ready(Err(anyhow!(AxisError::Limit(AxisLimitSide::Max))));
             }
         }
 
@@ -239,7 +240,8 @@ where
                 self.stepper
                     .driver_mut()
                     .move_to_position(max_velocity_in_steps_per_sec, target_step)
-                    .map_err(|err| AxisError::Driver(err))?;
+                    .map_err(|err| AxisError::Driver(err))
+                    .map_err(Error::msg)?;
                 self.state = AxisState::Moving;
                 Poll::Pending
             }
@@ -248,7 +250,8 @@ where
                     .stepper
                     .driver_mut()
                     .update()
-                    .map_err(|err| AxisError::Driver(err))?;
+                    .map_err(|err| AxisError::Driver(err))
+                    .map_err(Error::msg)?;
                 if still_moving {
                     Poll::Pending
                 } else {
