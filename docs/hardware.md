@@ -60,6 +60,8 @@ Where input is 24V and output is 3.3V:
 
 ### Limit Switch
 
+https://www.makerstore.com.au/product/elec-micro-kit/
+
 With opto-coupler above:
 
 ```
