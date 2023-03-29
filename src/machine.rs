@@ -5,9 +5,12 @@ use heapless::Vec;
 
 use crate::{
     actor::{ActorPoll, ActorReceive},
-    actuators::axis::AxisMoveMessage,
-    actuators::spindle::{SpindleSetMessage, SpindleStatus},
+    actuators::axis::AxisMoveRelativeMessage,
     actuators::{axis::AxisHomeMessage, led::LedBlinkMessage},
+    actuators::{
+        axis::AxisMoveAbsoluteMessage,
+        spindle::{SpindleSetMessage, SpindleStatus},
+    },
     command::{ActuatorError, Command, CommandCenter, ResetMessage, SensorError},
 };
 
@@ -42,7 +45,7 @@ impl Machine {
             Command::RedLedBlink(LedBlinkMessage {
                 duration: 200.millis(),
             }),
-            Command::XAxisMove(AxisMoveMessage {
+            Command::XAxisMoveRelative(AxisMoveRelativeMessage {
                 max_velocity_in_millimeters_per_sec: 10_f64,
                 distance_in_millimeters: 40_f64,
             }),
@@ -55,7 +58,7 @@ impl Machine {
             Command::GreenLedBlink(LedBlinkMessage {
                 duration: 200.millis(),
             }),
-            Command::XAxisMove(AxisMoveMessage {
+            Command::XAxisMoveRelative(AxisMoveRelativeMessage {
                 max_velocity_in_millimeters_per_sec: 10_f64,
                 distance_in_millimeters: -40_f64,
             }),
@@ -64,6 +67,7 @@ impl Machine {
         let start_commands: [Command; 1] = [
             Command::XAxisHome(AxisHomeMessage {
                 max_velocity_in_millimeters_per_sec: 10_f64,
+                back_off_distance_in_millimeters: 0.1_f64,
             }),
             /*
             Command::MainSpindleSet(SpindleSetMessage {
@@ -72,12 +76,11 @@ impl Machine {
             */
         ];
 
-        let stop_commands: [Command; 0] = [
-            /*
-            Command::XAxisHome(AxisHomeMessage {
+        let stop_commands: [Command; 1] = [
+            Command::XAxisMoveAbsolute(AxisMoveAbsoluteMessage {
                 max_velocity_in_millimeters_per_sec: 10_f64,
+                position_in_millimeters: 0_f64,
             }),
-            */
             /*
             Command::MainSpindleSet(SpindleSetMessage {
                 status: SpindleStatus::Off,

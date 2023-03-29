@@ -3,7 +3,6 @@ use defmt::Format;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use fugit_timer::Timer;
 use heapless::Deque;
-use stepper::traits::MotionControl;
 use stm32f7xx_hal::{
     gpio::{self, Alternate, Input, Output, Pin, PullUp, PushPull},
     pac,
@@ -13,7 +12,7 @@ use stm32f7xx_hal::{
 
 use crate::actuators::axis::{
     Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisLimitMessage, AxisLimitSide,
-    AxisLimitStatus, AxisMoveMessage,
+    AxisLimitStatus, AxisMoveAbsoluteMessage, AxisMoveRelativeMessage,
 };
 use crate::actuators::led::{Led, LedBlinkMessage, LedError};
 use crate::actuators::spindle::{Spindle, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage};
@@ -57,7 +56,8 @@ pub enum Command {
     GreenLedBlink(LedBlinkMessage<TICK_TIMER_HZ>),
     BlueLedBlink(LedBlinkMessage<TICK_TIMER_HZ>),
     RedLedBlink(LedBlinkMessage<TICK_TIMER_HZ>),
-    XAxisMove(AxisMoveMessage),
+    XAxisMoveRelative(AxisMoveRelativeMessage),
+    XAxisMoveAbsolute(AxisMoveAbsoluteMessage),
     XAxisHome(AxisHomeMessage),
     MainSpindleSet(SpindleSetMessage),
 }
@@ -204,7 +204,10 @@ impl ActorReceive<Command> for CommandCenter {
             Command::RedLedBlink(message) => {
                 self.actuators.red_led.receive(message);
             }
-            Command::XAxisMove(message) => {
+            Command::XAxisMoveRelative(message) => {
+                self.actuators.x_axis.receive(message);
+            }
+            Command::XAxisMoveAbsolute(message) => {
                 self.actuators.x_axis.receive(message);
             }
             Command::XAxisHome(message) => {
@@ -284,7 +287,12 @@ impl ActorPoll for CommandCenter {
                     .red_led
                     .poll()
                     .map_err(|err| ActuatorError::RedLed(err)),
-                Command::XAxisMove(_) => self
+                Command::XAxisMoveRelative(_) => self
+                    .actuators
+                    .x_axis
+                    .poll()
+                    .map_err(|err| ActuatorError::XAxis(err)),
+                Command::XAxisMoveAbsolute(_) => self
                     .actuators
                     .x_axis
                     .poll()
