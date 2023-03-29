@@ -44,7 +44,7 @@ impl Machine {
             }),
             Command::XAxisMove(AxisMoveMessage {
                 max_velocity_in_millimeters_per_sec: 10_f64,
-                distance_in_millimeters: 120_f64,
+                distance_in_millimeters: 40_f64,
             }),
             Command::RedLedBlink(LedBlinkMessage {
                 duration: 50.millis(),
@@ -57,7 +57,7 @@ impl Machine {
             }),
             Command::XAxisMove(AxisMoveMessage {
                 max_velocity_in_millimeters_per_sec: 10_f64,
-                distance_in_millimeters: -120_f64,
+                distance_in_millimeters: -40_f64,
             }),
         ];
 
@@ -72,10 +72,12 @@ impl Machine {
             */
         ];
 
-        let stop_commands: [Command; 1] = [
+        let stop_commands: [Command; 0] = [
+            /*
             Command::XAxisHome(AxisHomeMessage {
                 max_velocity_in_millimeters_per_sec: 10_f64,
             }),
+            */
             /*
             Command::MainSpindleSet(SpindleSetMessage {
                 status: SpindleStatus::Off,
