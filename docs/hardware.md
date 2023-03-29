@@ -1,25 +1,101 @@
 # Hardware Notes
 
-## Input Circuit
-
-Components:
-
-- Pull-up Resistor -> 5V:
-  - Value: 10kΩ
-  - Reasoning: Better than pull-up resistor built-in to micro-controller (which is 50kΩ)
-- Inline Resistor -> Sensor Signal:
-  - Value: 120Ω
-  - Reasoning: ???
-- Capacitor -> GND:
-  - Reasoning: To smooth signal, minimize noise
-  - Value: 100nF
-- Schmitt Trigger
-  - Reasoning: 
-  - Value: "74LS14 Hex Schmitt Trigger IC" ???
-
 ## Concepts
 
 - [Electrical ("Galvanic") Isolation](https://en.wikipedia.org/wiki/Galvanic_isolation)
+- Pull-up resistor (10k Ω)
+- Capacitor as low-pass filter (100nF)
+- Schmitt Trigger
+- Inline resistor between sensor and mcu (120? Ω)
+
+## Components
+
+### Opto-coupler
+
+https://www.aliexpress.com/item/32651786932.html
+
+```
+graph LR
+    subgraph Optocoupler
+        direction LR
+
+        subgraph Input Stage
+            Input+ --> R1[Resistor #1] --> OI
+            Input+ --> R2[Resistor #2] --> D1[Input Status LED]
+            Input- --> D1
+            Input- --> OI
+        end
+
+        OI[Optocoupler - LED side] --> OO[Optocoupler - Phototransistor side]
+
+        subgraph Output Stage
+            OO --> OVCC[Output VCC]
+            OO --> Output
+            Output --> D2[Output Status LED] --> R3[Resistor #3] --> OGND[Output Ground]
+            Output --> R4[Resistor #4] --> OGND
+        end
+    end
+```
+
+Where input is 5V and output is 24V:
+
+- R1 = 270 Ω
+- R2 = 270 Ω
+- R3 = 2.2K Ω
+- R4 = 10K Ω
+
+Where input is 3.3V and output is 24V:
+
+- R1 = 330 Ω
+- R2 = 330 Ω
+- R3 = 3.9K Ω
+- R4 = 100K Ω
+
+Where input is 24V and output is 3.3V:
+
+- R1 = 2.2K Ω
+- R2 = 3.9K Ω
+- R3 = 330 Ω
+- R4 = 10K Ω
+
+### Limit Switch
+
+With opto-coupler above:
+
+```
+graph LR
+    subgraph Optocoupler
+        direction LR
+
+        subgraph Input Stage
+            Input+
+            Input-
+
+            OI
+        end
+
+        OI[Optocoupler - LED side] --> OO[Optocoupler - Phototransistor side]
+
+        subgraph Output Stage
+            Output
+            OO
+        end
+    end
+
+    subgraph Limit Switch
+        LSC[Limit Switch Common]
+        LSNC[Limit Switch NC]
+    end
+
+    subgraph Microcontroller
+        MInput[GPIO Input]
+    end
+     
+    IVCC[Input VCC] --> LSC
+    LSNC --> Input+
+    IGND[Input Ground] --> Input-
+    Output --> MInput
+```
 
 ## Resources
 
