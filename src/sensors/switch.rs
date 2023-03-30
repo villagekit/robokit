@@ -1,5 +1,6 @@
 // inspired by https://github.com/rubberduck203/switch-hal
 
+use core::fmt::Debug;
 use core::marker::PhantomData;
 use defmt::Format;
 use embedded_hal::digital::v2::InputPin;
@@ -8,6 +9,8 @@ use fugit_timer::Timer;
 use nb;
 
 use crate::actor::ActorSense;
+
+pub trait AnyInputSwitch: ActorSense<SwitchUpdate> {}
 
 #[derive(Copy, Clone, Debug, Format, PartialEq)]
 pub enum SwitchStatus {
@@ -24,7 +27,7 @@ pub struct SwitchActiveLow;
 pub struct SwitchActiveHigh;
 
 #[derive(Copy, Clone, Debug, Format)]
-pub struct Switch<Pin, ActiveLevel, Tim, const TIMER_HZ: u32>
+pub struct SwitchDevice<Pin, ActiveLevel, Tim, const TIMER_HZ: u32>
 where
     Pin: InputPin,
     Tim: Timer<TIMER_HZ>,
@@ -36,13 +39,13 @@ where
     is_debouncing: bool,
 }
 
-impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> Switch<Pin, ActiveLevel, Tim, TIMER_HZ>
+impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> SwitchDevice<Pin, ActiveLevel, Tim, TIMER_HZ>
 where
     Pin: InputPin,
     Tim: Timer<TIMER_HZ>,
 {
     pub fn new(pin: Pin, timer: Tim) -> Self {
-        Switch {
+        Self {
             pin,
             timer,
             current_status: None,
@@ -52,15 +55,37 @@ where
     }
 }
 
+impl<Pin, Tim, const TIMER_HZ: u32> SwitchDevice<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
+where
+    Pin: InputPin,
+    Tim: Timer<TIMER_HZ>,
+{
+    pub fn new_active_high(pin: Pin, timer: Tim) -> Self {
+        SwitchDevice::<Pin, SwitchActiveHigh, Tim, TIMER_HZ>::new(pin, timer)
+    }
+}
+
+impl<Pin, Tim, const TIMER_HZ: u32> SwitchDevice<Pin, SwitchActiveLow, Tim, TIMER_HZ>
+where
+    Pin: InputPin,
+    Tim: Timer<TIMER_HZ>,
+{
+    pub fn new_active_low(pin: Pin, timer: Tim) -> Self {
+        SwitchDevice::<Pin, SwitchActiveLow, Tim, TIMER_HZ>::new(pin, timer)
+    }
+}
+
 pub trait InputSwitch {
-    type Error;
+    type Error: Debug;
 
     fn is_active(&self) -> Result<bool, Self::Error>;
 }
 
-impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch for Switch<Pin, SwitchActiveLow, Tim, TIMER_HZ>
+impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch
+    for SwitchDevice<Pin, SwitchActiveLow, Tim, TIMER_HZ>
 where
     Pin: InputPin,
+    Pin::Error: Debug,
     Tim: Timer<TIMER_HZ>,
 {
     type Error = <Pin as InputPin>::Error;
@@ -70,9 +95,11 @@ where
     }
 }
 
-impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch for Switch<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
+impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch
+    for SwitchDevice<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
 where
     Pin: InputPin,
+    Pin::Error: Debug,
     Tim: Timer<TIMER_HZ>,
 {
     type Error = <Pin as InputPin>::Error;
@@ -83,19 +110,18 @@ where
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub enum SwitchError<PinError, TimerError> {
+pub enum SwitchError<PinError: Debug, TimerError: Debug> {
     Pin(PinError),
     Timer(TimerError),
 }
 
-impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> ActorSense
-    for Switch<Pin, ActiveLevel, Tim, TIMER_HZ>
+impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> ActorSense<SwitchUpdate>
+    for SwitchDevice<Pin, ActiveLevel, Tim, TIMER_HZ>
 where
     Self: InputSwitch,
     Pin: InputPin,
     Tim: Timer<TIMER_HZ>,
 {
-    type Message = SwitchUpdate;
     type Error = SwitchError<<Self as InputSwitch>::Error, Tim::Error>;
 
     fn sense(&mut self) -> Result<Option<SwitchUpdate>, Self::Error> {
@@ -133,4 +159,22 @@ where
             Ok(None)
         }
     }
+}
+
+impl<Pin, Tim, const TIMER_HZ: u32> AnyInputSwitch
+    for SwitchDevice<Pin, SwitchActiveLow, Tim, TIMER_HZ>
+where
+    Pin: InputPin,
+    Pin::Error: Debug,
+    Tim: Timer<TIMER_HZ>,
+{
+}
+
+impl<Pin, Tim, const TIMER_HZ: u32> AnyInputSwitch
+    for SwitchDevice<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
+where
+    Pin: InputPin,
+    Pin::Error: Debug,
+    Tim: Timer<TIMER_HZ>,
+{
 }
