@@ -14,7 +14,9 @@ use stepper::{
 };
 
 use crate::actor::{ActorPoll, ActorReceive, ActorSense};
-use crate::sensors::switch::{Switch, SwitchStatus, SwitchUpdate};
+use crate::sensors::switch::{AnyInputSwitch, SwitchStatus, SwitchUpdate};
+
+pub trait AnyAxis: ActorReceive<AxisMoveMessage> + ActorPoll {}
 
 pub type AxisMotionProfile = ramp_maker::Trapezoidal<f64>;
 pub type AxisMotionControl<Driver, Timer, const TIMER_HZ: u32> = SoftwareMotionControl<
@@ -34,8 +36,6 @@ pub type AxisDriverErrorDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> =
     <AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ> as MotionControl>::Error;
 
 type GetLimitSenseError<Limit> = <Limit as ActorSense<SwitchUpdate>>::Error;
-
-pub trait Axis: ActorReceive<AxisMoveMessage> + ActorPoll {}
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
 #[derive(Clone, Copy, Debug, Format)]
@@ -63,8 +63,8 @@ pub enum AxisLimitStatus {
 pub struct AxisDevice<Driver, LimitMin, LimitMax>
 where
     Driver: MotionControl,
-    LimitMin: Switch,
-    LimitMax: Switch,
+    LimitMin: AnyInputSwitch,
+    LimitMax: AnyInputSwitch,
 {
     stepper: Stepper<Driver>,
     steps_per_millimeter: f64,
@@ -76,15 +76,15 @@ where
     limit_max_status: Option<AxisLimitStatus>,
 }
 
-impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> Axis
+impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> AnyAxis
     for AxisDevice<AxisMotionControl<Driver, Timer, TIMER_HZ>, LimitMin, LimitMax>
 where
     Driver: SetDirection + Step,
     Timer: FugitTimer<TIMER_HZ>,
     <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
-    LimitMin: Switch,
+    LimitMin: AnyInputSwitch,
     LimitMin::Error: Debug,
-    LimitMax: Switch,
+    LimitMax: AnyInputSwitch,
     LimitMax::Error: Debug,
 {
 }
@@ -98,8 +98,8 @@ where
     <PinStep as OutputPin>::Error: Debug,
     Timer: FugitTimer<TIMER_HZ>,
     <AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
-    LimitMin: Switch,
-    LimitMax: Switch,
+    LimitMin: AnyInputSwitch,
+    LimitMax: AnyInputSwitch,
 {
     pub fn new_dq542ma(
         dir: PinDir,
@@ -142,8 +142,8 @@ impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax>
 where
     Driver: SetDirection + Step,
     Timer: FugitTimer<TIMER_HZ>,
-    LimitMin: Switch,
-    LimitMax: Switch,
+    LimitMin: AnyInputSwitch,
+    LimitMax: AnyInputSwitch,
 {
     pub fn get_real_position(&mut self) -> f64 {
         (self.stepper.driver_mut().current_step() as f64) / self.steps_per_millimeter
@@ -181,8 +181,8 @@ impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> ActorReceive<AxisMo
 where
     Driver: SetDirection + Step,
     Timer: FugitTimer<TIMER_HZ>,
-    LimitMin: Switch,
-    LimitMax: Switch,
+    LimitMin: AnyInputSwitch,
+    LimitMax: AnyInputSwitch,
 {
     fn receive(&mut self, action: &AxisMoveMessage) {
         let max_velocity_in_steps_per_sec =
@@ -216,9 +216,9 @@ impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax>
 where
     Driver: SetDirection + Step,
     Timer: FugitTimer<TIMER_HZ>,
-    LimitMin: Switch,
+    LimitMin: AnyInputSwitch,
     LimitMin::Error: Debug,
-    LimitMax: Switch,
+    LimitMax: AnyInputSwitch,
     LimitMax::Error: Debug,
 {
     pub fn update_limit_switches(
@@ -267,9 +267,9 @@ where
     Driver: SetDirection + Step,
     Timer: FugitTimer<TIMER_HZ>,
     <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
-    LimitMin: Switch,
+    LimitMin: AnyInputSwitch,
     LimitMin::Error: Debug,
-    LimitMax: Switch,
+    LimitMax: AnyInputSwitch,
     LimitMax::Error: Debug,
 {
     type Error = AxisError<

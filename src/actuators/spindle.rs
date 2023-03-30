@@ -13,9 +13,9 @@ use crate::util::{i16_to_u16, u16_to_i16};
 
 static ACCELERATION_IN_MS_PER_1000_RPM: u16 = 10_000;
 
-pub trait Spindle: ActorReceive<SpindleSetMessage> + ActorPoll {}
+pub trait AnySpindle: ActorReceive<SpindleSetMessage> + ActorPoll {}
 
-impl<Driver> Spindle for SpindleDevice<Driver> where Driver: SpindleDriver {}
+impl<Driver> AnySpindle for SpindleDevice<Driver> where Driver: SpindleDriver {}
 
 #[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub enum SpindleStatus {

@@ -7,7 +7,7 @@ use fugit_timer::Timer;
 
 use crate::actor::{ActorPoll, ActorReceive};
 
-pub trait Led<const TIMER_HZ: u32>: ActorReceive<LedBlinkMessage<TIMER_HZ>> + ActorPoll {}
+pub trait AnyLed<const TIMER_HZ: u32>: ActorReceive<LedBlinkMessage<TIMER_HZ>> + ActorPoll {}
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum LedBlinkStatus {
@@ -33,7 +33,7 @@ where
     state: Option<LedBlinkState<TIMER_HZ>>,
 }
 
-impl<P, T, const TIMER_HZ: u32> Led<TIMER_HZ> for LedDevice<P, T, TIMER_HZ>
+impl<P, T, const TIMER_HZ: u32> AnyLed<TIMER_HZ> for LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
     P::Error: Debug,

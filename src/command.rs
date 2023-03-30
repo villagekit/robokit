@@ -4,12 +4,12 @@ use defmt::Format;
 use heapless::Deque;
 
 use crate::actor::{ActorPoll, ActorReceive};
-use crate::actuators::axis::{Axis, AxisMoveMessage};
-use crate::actuators::led::{Led, LedBlinkMessage};
-use crate::actuators::spindle::{Spindle, SpindleSetMessage};
+use crate::actuators::axis::{AnyAxis, AxisMoveMessage};
+use crate::actuators::led::{AnyLed, LedBlinkMessage};
+use crate::actuators::spindle::{AnySpindle, SpindleSetMessage};
 use crate::timer::TICK_TIMER_HZ;
 
-type PollError<T> = <T as ActorPoll>::Error;
+pub trait AnyCommandCenter: ActorReceive<ResetMessage> + ActorReceive<Command> + ActorPoll {}
 
 /* actuators */
 
@@ -23,20 +23,20 @@ pub enum Command {
 }
 
 pub struct CommandCenterLeds<
-    GreenLed: Led<TICK_TIMER_HZ>,
-    BlueLed: Led<TICK_TIMER_HZ>,
-    RedLed: Led<TICK_TIMER_HZ>,
+    GreenLed: AnyLed<TICK_TIMER_HZ>,
+    BlueLed: AnyLed<TICK_TIMER_HZ>,
+    RedLed: AnyLed<TICK_TIMER_HZ>,
 > {
     pub green_led: GreenLed,
     pub blue_led: BlueLed,
     pub red_led: RedLed,
 }
 
-pub struct CommandCenterAxes<XAxis: Axis> {
+pub struct CommandCenterAxes<XAxis: AnyAxis> {
     pub x_axis: XAxis,
 }
 
-pub struct CommandCenterSpindles<MainSpindle: Spindle> {
+pub struct CommandCenterSpindles<MainSpindle: AnySpindle> {
     pub main_spindle: MainSpindle,
 }
 
@@ -55,17 +55,12 @@ pub enum CommandError<
     MainSpindle(MainSpindleError),
 }
 
-pub trait CommandCenterTrait:
-    ActorReceive<ResetMessage> + ActorReceive<Command> + ActorPoll
-{
-}
-
 pub struct CommandCenter<
-    GreenLed: Led<TICK_TIMER_HZ>,
-    BlueLed: Led<TICK_TIMER_HZ>,
-    RedLed: Led<TICK_TIMER_HZ>,
-    XAxis: Axis,
-    MainSpindle: Spindle,
+    GreenLed: AnyLed<TICK_TIMER_HZ>,
+    BlueLed: AnyLed<TICK_TIMER_HZ>,
+    RedLed: AnyLed<TICK_TIMER_HZ>,
+    XAxis: AnyAxis,
+    MainSpindle: AnySpindle,
 > {
     active_commands: Deque<Command, 8>,
     leds: CommandCenterLeds<GreenLed, BlueLed, RedLed>,
@@ -74,21 +69,21 @@ pub struct CommandCenter<
 }
 
 impl<
-        GreenLed: Led<TICK_TIMER_HZ>,
-        BlueLed: Led<TICK_TIMER_HZ>,
-        RedLed: Led<TICK_TIMER_HZ>,
-        XAxis: Axis,
-        MainSpindle: Spindle,
-    > CommandCenterTrait for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+        GreenLed: AnyLed<TICK_TIMER_HZ>,
+        BlueLed: AnyLed<TICK_TIMER_HZ>,
+        RedLed: AnyLed<TICK_TIMER_HZ>,
+        XAxis: AnyAxis,
+        MainSpindle: AnySpindle,
+    > AnyCommandCenter for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
 {
 }
 
 impl<
-        GreenLed: Led<TICK_TIMER_HZ>,
-        BlueLed: Led<TICK_TIMER_HZ>,
-        RedLed: Led<TICK_TIMER_HZ>,
-        XAxis: Axis,
-        MainSpindle: Spindle,
+        GreenLed: AnyLed<TICK_TIMER_HZ>,
+        BlueLed: AnyLed<TICK_TIMER_HZ>,
+        RedLed: AnyLed<TICK_TIMER_HZ>,
+        XAxis: AnyAxis,
+        MainSpindle: AnySpindle,
     > CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
 {
     pub fn new(
@@ -109,11 +104,11 @@ impl<
 pub struct ResetMessage {}
 
 impl<
-        GreenLed: Led<TICK_TIMER_HZ>,
-        BlueLed: Led<TICK_TIMER_HZ>,
-        RedLed: Led<TICK_TIMER_HZ>,
-        XAxis: Axis,
-        MainSpindle: Spindle,
+        GreenLed: AnyLed<TICK_TIMER_HZ>,
+        BlueLed: AnyLed<TICK_TIMER_HZ>,
+        RedLed: AnyLed<TICK_TIMER_HZ>,
+        XAxis: AnyAxis,
+        MainSpindle: AnySpindle,
     > ActorReceive<ResetMessage> for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
 {
     fn receive(&mut self, _message: &ResetMessage) {
@@ -122,11 +117,11 @@ impl<
 }
 
 impl<
-        GreenLed: Led<TICK_TIMER_HZ>,
-        BlueLed: Led<TICK_TIMER_HZ>,
-        RedLed: Led<TICK_TIMER_HZ>,
-        XAxis: Axis,
-        MainSpindle: Spindle,
+        GreenLed: AnyLed<TICK_TIMER_HZ>,
+        BlueLed: AnyLed<TICK_TIMER_HZ>,
+        RedLed: AnyLed<TICK_TIMER_HZ>,
+        XAxis: AnyAxis,
+        MainSpindle: AnySpindle,
     > ActorReceive<Command> for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
 {
     fn receive(&mut self, command: &Command) {
@@ -152,14 +147,16 @@ impl<
     }
 }
 
+type PollError<T> = <T as ActorPoll>::Error;
+
 impl<GreenLed, BlueLed, RedLed, XAxis, MainSpindle> ActorPoll
     for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
 where
-    GreenLed: Led<TICK_TIMER_HZ>,
-    BlueLed: Led<TICK_TIMER_HZ>,
-    RedLed: Led<TICK_TIMER_HZ>,
-    XAxis: Axis,
-    MainSpindle: Spindle,
+    GreenLed: AnyLed<TICK_TIMER_HZ>,
+    BlueLed: AnyLed<TICK_TIMER_HZ>,
+    RedLed: AnyLed<TICK_TIMER_HZ>,
+    XAxis: AnyAxis,
+    MainSpindle: AnySpindle,
 {
     type Error = CommandError<
         PollError<GreenLed>,

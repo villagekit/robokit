@@ -10,7 +10,7 @@ use nb;
 
 use crate::actor::ActorSense;
 
-pub trait Switch: ActorSense<SwitchUpdate> {}
+pub trait AnyInputSwitch: ActorSense<SwitchUpdate> {}
 
 #[derive(Copy, Clone, Debug, Format, PartialEq)]
 pub enum SwitchStatus {
@@ -161,7 +161,8 @@ where
     }
 }
 
-impl<Pin, Tim, const TIMER_HZ: u32> Switch for SwitchDevice<Pin, SwitchActiveLow, Tim, TIMER_HZ>
+impl<Pin, Tim, const TIMER_HZ: u32> AnyInputSwitch
+    for SwitchDevice<Pin, SwitchActiveLow, Tim, TIMER_HZ>
 where
     Pin: InputPin,
     Pin::Error: Debug,
@@ -169,7 +170,8 @@ where
 {
 }
 
-impl<Pin, Tim, const TIMER_HZ: u32> Switch for SwitchDevice<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
+impl<Pin, Tim, const TIMER_HZ: u32> AnyInputSwitch
+    for SwitchDevice<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
 where
     Pin: InputPin,
     Pin::Error: Debug,

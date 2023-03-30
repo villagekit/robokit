@@ -8,7 +8,7 @@ use crate::{
     actuators::axis::AxisMoveMessage,
     actuators::led::LedBlinkMessage,
     actuators::spindle::{SpindleSetMessage, SpindleStatus},
-    command::{Command, CommandCenterTrait, ResetMessage},
+    command::{AnyCommandCenter, Command, ResetMessage},
 };
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -22,7 +22,7 @@ pub enum MachineState {
     StopLoop,
 }
 
-pub struct Machine<CommandCenter: CommandCenterTrait> {
+pub struct Machine<CommandCenter: AnyCommandCenter> {
     command_center: CommandCenter,
     state: MachineState,
     run_commands: Vec<Command, 32>,
@@ -30,7 +30,7 @@ pub struct Machine<CommandCenter: CommandCenterTrait> {
     stop_commands: Vec<Command, 4>,
 }
 
-impl<CommandCenter: CommandCenterTrait> Machine<CommandCenter> {
+impl<CommandCenter: AnyCommandCenter> Machine<CommandCenter> {
     pub fn new(command_center: CommandCenter) -> Self {
         let run_commands: [Command; 8] = [
             Command::GreenLed(LedBlinkMessage {
@@ -82,7 +82,7 @@ impl<CommandCenter: CommandCenterTrait> Machine<CommandCenter> {
 #[derive(Clone, Copy, Debug, Format)]
 pub struct StartMessage {}
 
-impl<CommandCenter: CommandCenterTrait> ActorReceive<StartMessage> for Machine<CommandCenter> {
+impl<CommandCenter: AnyCommandCenter> ActorReceive<StartMessage> for Machine<CommandCenter> {
     fn receive(&mut self, _message: &StartMessage) {
         self.state = MachineState::Start;
     }
@@ -91,7 +91,7 @@ impl<CommandCenter: CommandCenterTrait> ActorReceive<StartMessage> for Machine<C
 #[derive(Clone, Copy, Debug, Format)]
 pub struct StopMessage {}
 
-impl<CommandCenter: CommandCenterTrait> ActorReceive<StopMessage> for Machine<CommandCenter> {
+impl<CommandCenter: AnyCommandCenter> ActorReceive<StopMessage> for Machine<CommandCenter> {
     fn receive(&mut self, _message: &StopMessage) {
         self.state = MachineState::Stop;
     }
@@ -100,7 +100,7 @@ impl<CommandCenter: CommandCenterTrait> ActorReceive<StopMessage> for Machine<Co
 #[derive(Clone, Copy, Debug, Format)]
 pub struct ToggleMessage {}
 
-impl<CommandCenter: CommandCenterTrait> ActorReceive<ToggleMessage> for Machine<CommandCenter> {
+impl<CommandCenter: AnyCommandCenter> ActorReceive<ToggleMessage> for Machine<CommandCenter> {
     fn receive(&mut self, _message: &ToggleMessage) {
         self.state = match self.state {
             MachineState::Idle => MachineState::Start,
@@ -114,7 +114,7 @@ impl<CommandCenter: CommandCenterTrait> ActorReceive<ToggleMessage> for Machine<
     }
 }
 
-impl<CommandCenter: CommandCenterTrait> ActorPoll for Machine<CommandCenter> {
+impl<CommandCenter: AnyCommandCenter> ActorPoll for Machine<CommandCenter> {
     type Error = <CommandCenter as ActorPoll>::Error;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
