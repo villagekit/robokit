@@ -7,6 +7,8 @@ use fugit_timer::Timer;
 
 use crate::actor::{ActorPoll, ActorReceive};
 
+pub trait AnyLed<const TIMER_HZ: u32>: ActorReceive<LedBlinkMessage<TIMER_HZ>> + ActorPoll {}
+
 #[derive(Clone, Copy, Debug, Format)]
 pub enum LedBlinkStatus {
     Start,
@@ -21,7 +23,7 @@ pub struct LedBlinkState<const TIMER_HZ: u32> {
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub struct Led<P, T, const TIMER_HZ: u32>
+pub struct LedDevice<P, T, const TIMER_HZ: u32>
 where
     P: OutputPin,
     T: Timer<TIMER_HZ>,
@@ -31,13 +33,22 @@ where
     state: Option<LedBlinkState<TIMER_HZ>>,
 }
 
-impl<P, T, const TIMER_HZ: u32> Led<P, T, TIMER_HZ>
+impl<P, T, const TIMER_HZ: u32> AnyLed<TIMER_HZ> for LedDevice<P, T, TIMER_HZ>
+where
+    P: OutputPin,
+    P::Error: Debug,
+    T: Timer<TIMER_HZ>,
+    T::Error: Debug,
+{
+}
+
+impl<P, T, const TIMER_HZ: u32> LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
     T: Timer<TIMER_HZ>,
 {
     pub fn new(pin: P, timer: T) -> Self {
-        Led {
+        Self {
             pin,
             timer,
             state: None,
@@ -50,7 +61,8 @@ pub struct LedBlinkMessage<const TIMER_HZ: u32> {
     pub duration: TimerDuration<TIMER_HZ>,
 }
 
-impl<P, T, const TIMER_HZ: u32> ActorReceive<LedBlinkMessage<TIMER_HZ>> for Led<P, T, TIMER_HZ>
+impl<P, T, const TIMER_HZ: u32> ActorReceive<LedBlinkMessage<TIMER_HZ>>
+    for LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
     T: Timer<TIMER_HZ>,
@@ -69,7 +81,7 @@ pub enum LedError<PinError: Debug, TimerError: Debug> {
     Timer(TimerError),
 }
 
-impl<P, T, const TIMER_HZ: u32> ActorPoll for Led<P, T, TIMER_HZ>
+impl<P, T, const TIMER_HZ: u32> ActorPoll for LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
     P::Error: Debug,

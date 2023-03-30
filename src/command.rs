@@ -1,55 +1,19 @@
+use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
-use embedded_hal::digital::v2::{InputPin, OutputPin};
-use fugit_timer::Timer;
 use heapless::Deque;
-use stm32f7xx_hal::{
-    gpio::{self, Alternate, Input, Output, Pin, PullUp, PushPull},
-    pac,
-    serial::Serial,
-    timer::counter::Counter,
-};
 
+use crate::actor::{ActorPoll, ActorReceive};
 use crate::actuators::axis::{
-    Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisLimitMessage, AxisLimitSide,
-    AxisLimitStatus, AxisMoveAbsoluteMessage, AxisMoveRelativeMessage,
+    AnyAxis, AxisHomeMessage, AxisMoveAbsoluteMessage, AxisMoveRelativeMessage,
 };
-use crate::actuators::led::{Led, LedBlinkMessage, LedError};
-use crate::actuators::spindle::{Spindle, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage};
-use crate::sensors::switch::{Switch, SwitchActiveLow, SwitchError, SwitchStatus};
-use crate::timer::{SubTimer, TICK_TIMER_HZ};
-use crate::{
-    actor::{ActorPoll, ActorReceive, ActorSense},
-    actuators::axis::AxisHomeMessage,
-};
+use crate::actuators::led::{AnyLed, LedBlinkMessage};
+use crate::actuators::spindle::{AnySpindle, SpindleSetMessage};
+use crate::timer::TICK_TIMER_HZ;
+
+pub trait AnyCommandCenter: ActorReceive<ResetMessage> + ActorReceive<Command> + ActorPoll {}
 
 /* actuators */
-
-type GreenLedPin = Pin<'B', 0, Output<PushPull>>;
-type GreenLedTimer = SubTimer;
-type GreenLedError =
-    LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
-type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
-type BlueLedTimer = SubTimer;
-type BlueLedError =
-    LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
-type RedLedPin = Pin<'B', 14, Output<PushPull>>;
-type RedLedTimer = SubTimer;
-type RedLedError =
-    LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
-
-const X_AXIS_TIMER_HZ: u32 = 1_000_000;
-type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
-type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
-type XAxisTimer = Counter<pac::TIM3, X_AXIS_TIMER_HZ>;
-type XAxisDriver = AxisDriverDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_HZ>;
-type XAxisDriverError =
-    AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_HZ>;
-type XAxisError = AxisError<XAxisDriverError>;
-
-type MainSpindleSerial = Serial<pac::USART2, (gpio::PD5<Alternate<7>>, gpio::PD6<Alternate<7>>)>;
-type MainSpindleDriver = SpindleDriverJmcHsv57<MainSpindleSerial>;
-type MainSpindleError = SpindleError<MainSpindleDriver>;
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum Command {
@@ -62,49 +26,32 @@ pub enum Command {
     MainSpindleSet(SpindleSetMessage),
 }
 
-/* sensors */
-type XAxisLimitMinPin = Pin<'F', 15, Input<PullUp>>; // D2
-type XAxisLimitMinTimer = SubTimer;
-type XAxisLimitMinError = SwitchError<
-    <XAxisLimitMinPin as InputPin>::Error,
-    <XAxisLimitMinTimer as Timer<TICK_TIMER_HZ>>::Error,
->;
-type XAxisLimitMin = Switch<XAxisLimitMinPin, SwitchActiveLow, XAxisLimitMinTimer, TICK_TIMER_HZ>;
-type XAxisLimitMaxPin = Pin<'F', 14, Input<PullUp>>; // D4
-type XAxisLimitMaxTimer = SubTimer;
-type XAxisLimitMaxError = SwitchError<
-    <XAxisLimitMaxPin as InputPin>::Error,
-    <XAxisLimitMaxTimer as Timer<TICK_TIMER_HZ>>::Error,
->;
-type XAxisLimitMax = Switch<XAxisLimitMaxPin, SwitchActiveLow, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
-
-pub struct CommandCenterResources {
-    pub green_led_pin: GreenLedPin,
-    pub green_led_timer: GreenLedTimer,
-    pub blue_led_pin: BlueLedPin,
-    pub blue_led_timer: BlueLedTimer,
-    pub red_led_pin: RedLedPin,
-    pub red_led_timer: RedLedTimer,
-    pub x_axis_dir_pin: XAxisDirPin,
-    pub x_axis_step_pin: XAxisStepPin,
-    pub x_axis_timer: XAxisTimer,
-    pub x_axis_limit_min_pin: XAxisLimitMinPin,
-    pub x_axis_limit_min_timer: XAxisLimitMinTimer,
-    pub x_axis_limit_max_pin: XAxisLimitMaxPin,
-    pub x_axis_limit_max_timer: XAxisLimitMaxTimer,
-    pub main_spindle_serial: MainSpindleSerial,
+pub struct CommandCenterLeds<
+    GreenLed: AnyLed<TICK_TIMER_HZ>,
+    BlueLed: AnyLed<TICK_TIMER_HZ>,
+    RedLed: AnyLed<TICK_TIMER_HZ>,
+> {
+    pub green_led: GreenLed,
+    pub blue_led: BlueLed,
+    pub red_led: RedLed,
 }
 
-pub struct CommandCenterActuators {
-    pub green_led: Led<GreenLedPin, GreenLedTimer, TICK_TIMER_HZ>,
-    pub blue_led: Led<BlueLedPin, BlueLedTimer, TICK_TIMER_HZ>,
-    pub red_led: Led<RedLedPin, RedLedTimer, TICK_TIMER_HZ>,
-    pub x_axis: Axis<XAxisDriver>,
-    pub main_spindle: Spindle<MainSpindleDriver>,
+pub struct CommandCenterAxes<XAxis: AnyAxis> {
+    pub x_axis: XAxis,
+}
+
+pub struct CommandCenterSpindles<MainSpindle: AnySpindle> {
+    pub main_spindle: MainSpindle,
 }
 
 #[derive(Debug)]
-pub enum ActuatorError {
+pub enum CommandError<
+    GreenLedError: Debug,
+    BlueLedError: Debug,
+    RedLedError: Debug,
+    XAxisError: Debug,
+    MainSpindleError: Debug,
+> {
     GreenLed(GreenLedError),
     BlueLed(BlueLedError),
     RedLed(RedLedError),
@@ -112,73 +59,47 @@ pub enum ActuatorError {
     MainSpindle(MainSpindleError),
 }
 
-pub struct CommandCenterSensors {
-    pub x_axis_limit_min: XAxisLimitMin,
-    pub x_axis_limit_max: XAxisLimitMax,
+pub struct CommandCenter<
+    GreenLed: AnyLed<TICK_TIMER_HZ>,
+    BlueLed: AnyLed<TICK_TIMER_HZ>,
+    RedLed: AnyLed<TICK_TIMER_HZ>,
+    XAxis: AnyAxis,
+    MainSpindle: AnySpindle,
+> {
+    active_commands: Deque<Command, 8>,
+    leds: CommandCenterLeds<GreenLed, BlueLed, RedLed>,
+    axes: CommandCenterAxes<XAxis>,
+    spindles: CommandCenterSpindles<MainSpindle>,
 }
 
-#[derive(Debug)]
-pub enum SensorError {
-    XAxisLimitMin(XAxisLimitMinError),
-    XAxisLimitMax(XAxisLimitMaxError),
+impl<
+        GreenLed: AnyLed<TICK_TIMER_HZ>,
+        BlueLed: AnyLed<TICK_TIMER_HZ>,
+        RedLed: AnyLed<TICK_TIMER_HZ>,
+        XAxis: AnyAxis,
+        MainSpindle: AnySpindle,
+    > AnyCommandCenter for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+{
 }
 
-pub struct CommandCenter {
-    pub active_commands: Deque<Command, 8>,
-    pub actuators: CommandCenterActuators,
-    pub sensors: CommandCenterSensors,
-}
-
-impl CommandCenter {
-    pub fn new(res: CommandCenterResources) -> Self {
-        let green_led = Led::new(res.green_led_pin, res.green_led_timer);
-        let blue_led = Led::new(res.blue_led_pin, res.blue_led_timer);
-        let red_led = Led::new(res.red_led_pin, res.red_led_timer);
-
-        let max_acceleration_in_millimeters_per_sec_per_sec = 20_f64;
-
-        /*
-        let steps_per_revolution = 6400_f64;
-        let leadscrew_starts = 4_f64;
-        let leadscrew_pitch = 2_f64;
-        let millimeters_per_revolution = leadscrew_starts * leadscrew_pitch;
-        let steps_per_millimeter = steps_per_revolution / millimeters_per_revolution;
-        */
-
-        // https://www.makerstore.com.au/product/gear-m1/
-        let steps_per_revolution = 6400_f64;
-        let millimeters_per_revolution = 125.66_f64;
-        let steps_per_millimeter = steps_per_revolution * (1_f64 / millimeters_per_revolution);
-
-        defmt::println!("Steps per mm: {}", steps_per_millimeter);
-
-        let x_axis = Axis::new_dq542ma(
-            res.x_axis_dir_pin,
-            res.x_axis_step_pin,
-            res.x_axis_timer,
-            max_acceleration_in_millimeters_per_sec_per_sec,
-            steps_per_millimeter,
-            AxisLimitSide::Min,
-        );
-        let x_axis_limit_min = Switch::new(res.x_axis_limit_min_pin, res.x_axis_limit_min_timer);
-        let x_axis_limit_max = Switch::new(res.x_axis_limit_max_pin, res.x_axis_limit_max_timer);
-
-        let main_spindle_driver = SpindleDriverJmcHsv57::new(res.main_spindle_serial);
-        let main_spindle = Spindle::new(main_spindle_driver);
-
+impl<
+        GreenLed: AnyLed<TICK_TIMER_HZ>,
+        BlueLed: AnyLed<TICK_TIMER_HZ>,
+        RedLed: AnyLed<TICK_TIMER_HZ>,
+        XAxis: AnyAxis,
+        MainSpindle: AnySpindle,
+    > CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+{
+    pub fn new(
+        leds: CommandCenterLeds<GreenLed, BlueLed, RedLed>,
+        axes: CommandCenterAxes<XAxis>,
+        spindles: CommandCenterSpindles<MainSpindle>,
+    ) -> Self {
         Self {
             active_commands: Deque::new(),
-            actuators: CommandCenterActuators {
-                green_led,
-                blue_led,
-                red_led,
-                x_axis,
-                main_spindle,
-            },
-            sensors: CommandCenterSensors {
-                x_axis_limit_min,
-                x_axis_limit_max,
-            },
+            leds,
+            axes,
+            spindles,
         }
     }
 }
@@ -186,35 +107,49 @@ impl CommandCenter {
 #[derive(Clone, Copy, Debug, Format)]
 pub struct ResetMessage {}
 
-impl ActorReceive<ResetMessage> for CommandCenter {
+impl<
+        GreenLed: AnyLed<TICK_TIMER_HZ>,
+        BlueLed: AnyLed<TICK_TIMER_HZ>,
+        RedLed: AnyLed<TICK_TIMER_HZ>,
+        XAxis: AnyAxis,
+        MainSpindle: AnySpindle,
+    > ActorReceive<ResetMessage> for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+{
     fn receive(&mut self, _message: &ResetMessage) {
         self.active_commands.clear()
     }
 }
 
-impl ActorReceive<Command> for CommandCenter {
+impl<
+        GreenLed: AnyLed<TICK_TIMER_HZ>,
+        BlueLed: AnyLed<TICK_TIMER_HZ>,
+        RedLed: AnyLed<TICK_TIMER_HZ>,
+        XAxis: AnyAxis,
+        MainSpindle: AnySpindle,
+    > ActorReceive<Command> for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+{
     fn receive(&mut self, command: &Command) {
         match command {
             Command::GreenLedBlink(message) => {
-                self.actuators.green_led.receive(message);
+                self.leds.green_led.receive(message);
             }
             Command::BlueLedBlink(message) => {
-                self.actuators.blue_led.receive(message);
+                self.leds.blue_led.receive(message);
             }
             Command::RedLedBlink(message) => {
-                self.actuators.red_led.receive(message);
+                self.leds.red_led.receive(message);
             }
             Command::XAxisMoveRelative(message) => {
-                self.actuators.x_axis.receive(message);
+                self.axes.x_axis.receive(message);
             }
             Command::XAxisMoveAbsolute(message) => {
-                self.actuators.x_axis.receive(message);
+                self.axes.x_axis.receive(message);
             }
             Command::XAxisHome(message) => {
-                self.actuators.x_axis.receive(message);
+                self.axes.x_axis.receive(message);
             }
             Command::MainSpindleSet(message) => {
-                self.actuators.main_spindle.receive(message);
+                self.spindles.main_spindle.receive(message);
             }
         }
 
@@ -222,50 +157,24 @@ impl ActorReceive<Command> for CommandCenter {
     }
 }
 
-impl CommandCenter {
-    pub fn sense(&mut self) -> Result<(), SensorError> {
-        if let Some(axis_limit_update) = self
-            .sensors
-            .x_axis_limit_min
-            .sense()
-            .map_err(|err| SensorError::XAxisLimitMin(err))?
-        {
-            // defmt::println!("limit min: {}", axis_limit_update);
-            let axis_limit_status = match axis_limit_update.status {
-                SwitchStatus::On => AxisLimitStatus::Over,
-                SwitchStatus::Off => AxisLimitStatus::Under,
-            };
-            let axis_limit_min_message = AxisLimitMessage {
-                side: AxisLimitSide::Min,
-                status: axis_limit_status,
-            };
-            self.actuators.x_axis.receive(&axis_limit_min_message);
-        }
+type PollError<T> = <T as ActorPoll>::Error;
 
-        if let Some(axis_limit_update) = self
-            .sensors
-            .x_axis_limit_max
-            .sense()
-            .map_err(|err| SensorError::XAxisLimitMax(err))?
-        {
-            // defmt::println!("limit max: {}", axis_limit_update);
-            let axis_limit_status = match axis_limit_update.status {
-                SwitchStatus::On => AxisLimitStatus::Over,
-                SwitchStatus::Off => AxisLimitStatus::Under,
-            };
-            let axis_limit_max_message = AxisLimitMessage {
-                side: AxisLimitSide::Max,
-                status: axis_limit_status,
-            };
-            self.actuators.x_axis.receive(&axis_limit_max_message);
-        }
-
-        Ok(())
-    }
-}
-
-impl ActorPoll for CommandCenter {
-    type Error = ActuatorError;
+impl<GreenLed, BlueLed, RedLed, XAxis, MainSpindle> ActorPoll
+    for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+where
+    GreenLed: AnyLed<TICK_TIMER_HZ>,
+    BlueLed: AnyLed<TICK_TIMER_HZ>,
+    RedLed: AnyLed<TICK_TIMER_HZ>,
+    XAxis: AnyAxis,
+    MainSpindle: AnySpindle,
+{
+    type Error = CommandError<
+        PollError<GreenLed>,
+        PollError<BlueLed>,
+        PollError<RedLed>,
+        PollError<XAxis>,
+        PollError<MainSpindle>,
+    >;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         let num_commands = self.active_commands.len();
@@ -273,40 +182,40 @@ impl ActorPoll for CommandCenter {
             let command = self.active_commands.pop_front().unwrap();
             let result = match command {
                 Command::GreenLedBlink(_) => self
-                    .actuators
+                    .leds
                     .green_led
                     .poll()
-                    .map_err(|err| ActuatorError::GreenLed(err)),
+                    .map_err(|err| CommandError::GreenLed(err)),
                 Command::BlueLedBlink(_) => self
-                    .actuators
+                    .leds
                     .blue_led
                     .poll()
-                    .map_err(|err| ActuatorError::BlueLed(err)),
+                    .map_err(|err| CommandError::BlueLed(err)),
                 Command::RedLedBlink(_) => self
-                    .actuators
+                    .leds
                     .red_led
                     .poll()
-                    .map_err(|err| ActuatorError::RedLed(err)),
+                    .map_err(|err| CommandError::RedLed(err)),
                 Command::XAxisMoveRelative(_) => self
-                    .actuators
+                    .axes
                     .x_axis
                     .poll()
-                    .map_err(|err| ActuatorError::XAxis(err)),
+                    .map_err(|err| CommandError::XAxis(err)),
                 Command::XAxisMoveAbsolute(_) => self
-                    .actuators
+                    .axes
                     .x_axis
                     .poll()
-                    .map_err(|err| ActuatorError::XAxis(err)),
+                    .map_err(|err| CommandError::XAxis(err)),
                 Command::XAxisHome(_) => self
-                    .actuators
+                    .axes
                     .x_axis
                     .poll()
-                    .map_err(|err| ActuatorError::XAxis(err)),
+                    .map_err(|err| CommandError::XAxis(err)),
                 Command::MainSpindleSet(_) => self
-                    .actuators
+                    .spindles
                     .main_spindle
                     .poll()
-                    .map_err(|err| ActuatorError::MainSpindle(err)),
+                    .map_err(|err| CommandError::MainSpindle(err)),
             };
 
             match result {
