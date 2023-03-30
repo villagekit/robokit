@@ -1,6 +1,9 @@
 // inspired by https://github.com/rubberduck203/switch-hal
 
+use anyhow::{anyhow, Context, Error};
+use core::fmt::{Debug, Display};
 use core::marker::PhantomData;
+use core::marker::{Send, Sync};
 use defmt::Format;
 use embedded_hal::digital::v2::InputPin;
 use fugit::{MillisDurationU32 as MillisDuration, TimerDurationU32 as TimerDuration};
@@ -53,7 +56,7 @@ where
 }
 
 pub trait InputSwitch {
-    type Error;
+    type Error: Send + Sync + Debug + Display;
 
     fn is_active(&self) -> Result<bool, Self::Error>;
 }
@@ -61,6 +64,7 @@ pub trait InputSwitch {
 impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch for Switch<Pin, SwitchActiveLow, Tim, TIMER_HZ>
 where
     Pin: InputPin,
+    Pin::Error: Send + Sync + Debug + Display,
     Tim: Timer<TIMER_HZ>,
 {
     type Error = <Pin as InputPin>::Error;
@@ -73,6 +77,7 @@ where
 impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch for Switch<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
 where
     Pin: InputPin,
+    Pin::Error: Send + Sync + Debug + Display,
     Tim: Timer<TIMER_HZ>,
 {
     type Error = <Pin as InputPin>::Error;
@@ -82,35 +87,36 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug, Format)]
-pub enum SwitchError<PinError, TimerError> {
-    Pin(PinError),
-    Timer(TimerError),
-}
-
 impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> ActorSense
     for Switch<Pin, ActiveLevel, Tim, TIMER_HZ>
 where
     Self: InputSwitch,
     Pin: InputPin,
+    Pin::Error: Send + Sync + Debug + Display,
     Tim: Timer<TIMER_HZ>,
+    Tim::Error: Send + Sync + Debug + Display,
 {
     type Message = SwitchUpdate;
-    type Error = SwitchError<<Self as InputSwitch>::Error, Tim::Error>;
 
-    fn sense(&mut self) -> Result<Option<SwitchUpdate>, Self::Error> {
+    fn sense(&mut self) -> Result<Option<SwitchUpdate>, Error> {
         if self.is_debouncing {
             match self.timer.wait() {
                 Ok(()) => {
-                    self.timer.cancel().map_err(|err| SwitchError::Timer(err))?;
+                    self.timer
+                        .cancel()
+                        .map_err(Error::msg)
+                        .context("Failed to call Switch.timer.cancel()")?;
                     self.is_debouncing = false;
                 }
                 Err(nb::Error::WouldBlock) => return Ok(None),
-                Err(nb::Error::Other(err)) => return Err(SwitchError::Timer(err)),
+                Err(nb::Error::Other(err)) => return Err(anyhow!(err)),
             }
         }
 
-        let is_active = self.is_active().map_err(|err| SwitchError::Pin(err))?;
+        let is_active = self
+            .is_active()
+            .map_err(Error::msg)
+            .context("Failed to call Switch.is_active()")?;
 
         let status = if is_active {
             SwitchStatus::On
@@ -126,7 +132,8 @@ where
             self.is_debouncing = true;
             self.timer
                 .start(debounce_duration)
-                .map_err(|err| SwitchError::Timer(err))?;
+                .map_err(Error::msg)
+                .context("Failed to call Switch.timer.start()")?;
 
             Ok(Some(SwitchUpdate { status }))
         } else {

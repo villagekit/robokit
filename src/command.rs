@@ -131,33 +131,6 @@ pub struct CommandCenter {
 
 impl CommandCenter {
     pub fn new(res: CommandCenterResources) -> Self {
-        let green_led = Led::new(res.green_led_pin, res.green_led_timer);
-        let blue_led = Led::new(res.blue_led_pin, res.blue_led_timer);
-        let red_led = Led::new(res.red_led_pin, res.red_led_timer);
-
-        let max_acceleration_in_millimeters_per_sec_per_sec = 20_f64;
-
-        let steps_per_revolution = 6400_f64;
-        let leadscrew_starts = 4_f64;
-        let leadscrew_pitch = 2_f64;
-        let millimeters_per_revolution = leadscrew_starts * leadscrew_pitch;
-        let steps_per_millimeter = steps_per_revolution / millimeters_per_revolution;
-
-        defmt::println!("Steps per mm: {}", steps_per_millimeter);
-
-        let x_axis = Axis::new_dq542ma(
-            res.x_axis_dir_pin,
-            res.x_axis_step_pin,
-            res.x_axis_timer,
-            max_acceleration_in_millimeters_per_sec_per_sec,
-            steps_per_millimeter,
-        );
-        let x_axis_limit_min = Switch::new(res.x_axis_limit_min_pin, res.x_axis_limit_min_timer);
-        let x_axis_limit_max = Switch::new(res.x_axis_limit_max_pin, res.x_axis_limit_max_timer);
-
-        let main_spindle_driver = SpindleDriverJmcHsv57::new(res.main_spindle_serial);
-        let main_spindle = Spindle::new(main_spindle_driver);
-
         Self {
             active_commands: Deque::new(),
             actuators: CommandCenterActuators {

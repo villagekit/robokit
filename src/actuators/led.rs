@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Error};
-use core::fmt::Debug;
+use core::fmt::{Debug, Display};
+use core::marker::{Send, Sync};
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
@@ -67,18 +68,12 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum LedError<PinError: Debug, TimerError: Debug> {
-    Pin(PinError),
-    Timer(TimerError),
-}
-
 impl<P, T, const TIMER_HZ: u32> ActorPoll for LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
-    P::Error: Debug,
+    P::Error: Send + Sync + Debug + Display,
     T: Timer<TIMER_HZ>,
-    T::Error: Debug,
+    T::Error: Send + Sync + Debug + Display,
 {
     fn poll(&mut self) -> Poll<Result<(), Error>> {
         if let Some(state) = self.state {
@@ -87,14 +82,14 @@ where
                     // start timer
                     self.timer
                         .start(state.duration)
-                        .context("Failed to start timer.")
-                        .map_err(Error::msg)?;
+                        .map_err(Error::msg)
+                        .context("Failed to start timer.")?;
 
                     // turn led on
                     self.pin
                         .set_high()
-                        .context("Failed to set pin high.")
-                        .map_err(Error::msg)?;
+                        .map_err(Error::msg)
+                        .context("Failed to set pin high.")?;
 
                     // update state
                     self.state = Some(LedBlinkState {
@@ -105,7 +100,7 @@ where
                     Poll::Pending
                 }
                 LedBlinkStatus::Wait => match self.timer.wait() {
-                    Err(nb::Error::Other(err)) => Poll::Ready(anyhow!(err)),
+                    Err(nb::Error::Other(err)) => Poll::Ready(Err(anyhow!(err))),
                     Err(nb::Error::WouldBlock) => Poll::Pending,
                     Ok(()) => {
                         self.state = Some(LedBlinkState {
@@ -119,8 +114,8 @@ where
                 LedBlinkStatus::Done => {
                     self.pin
                         .set_low()
-                        .context("Failed to set pin low.")
-                        .map_err(Error::msg)?;
+                        .map_err(Error::msg)
+                        .context("Failed to set pin low.")?;
 
                     self.state = None;
 

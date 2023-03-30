@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Error};
-use core::fmt::Debug;
-use core::marker::PhantomData;
+use core::fmt::{Debug, Display};
+use core::marker::{PhantomData, Send, Sync};
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
@@ -72,11 +72,13 @@ impl<PinDir, PinStep, Timer, const TIMER_HZ: u32>
     Axis<AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ>>
 where
     PinDir: OutputPin,
-    <PinDir as OutputPin>::Error: Debug,
+    PinDir::Error: Send + Sync + Debug + Display,
     PinStep: OutputPin,
-    <PinStep as OutputPin>::Error: Debug,
+    PinStep::Error: Send + Sync + Debug + Display,
     Timer: FugitTimer<TIMER_HZ>,
-    <AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
+    Timer::Error: Send + Sync + Debug + Display,
+    <AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ> as MotionControl>::Error:
+        Send + Sync + Debug + Display,
 {
     pub fn new_dq542ma(
         dir: PinDir,
@@ -100,7 +102,7 @@ where
             .enable_motion_control((stepper_timer, profile, DelayToTicks::new()));
 
         Axis {
-            stepper: stepper,
+            stepper,
             steps_per_millimeter,
             state: AxisState::Idle,
             logical_position: 0_f64,
@@ -196,7 +198,7 @@ where
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum AxisError<DriverError: Debug> {
+pub enum AxisError<DriverError: Send + Sync + Debug + Display> {
     Driver(DriverError),
     Limit(AxisLimitSide),
     Unexpected,
@@ -208,7 +210,7 @@ impl<Driver, Timer, const TIMER_HZ: u32> ActorPoll
 where
     Driver: SetDirection + Step,
     Timer: FugitTimer<TIMER_HZ>,
-    <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
+    <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error: Debug + Display,
 {
     fn poll(&mut self) -> Poll<Result<(), Error>> {
         // limit: min

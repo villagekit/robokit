@@ -17,7 +17,14 @@ use stm32f7xx_hal::{
     watchdog,
 };
 
-use gridbot::{
+use crate::actuators::axis::{
+    Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisLimitMessage, AxisLimitSide,
+    AxisLimitStatus, AxisMoveMessage,
+};
+use crate::actuators::led::{Led, LedBlinkMessage, LedError};
+use crate::actuators::spindle::{Spindle, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage};
+use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
+use crate::{
     actor::{ActorPoll, ActorReceive, ActorSense},
     command::{CommandCenter, CommandCenterResources},
     init_heap,
@@ -61,6 +68,7 @@ fn main() -> ! {
 
     let green_led_pin = gpiob.pb0.into_push_pull_output();
     let green_led_timer = SubTimer::new();
+    let green_led = LedDevice::new(green_led_pin, green_led_timer);
     let blue_led_pin = gpiob.pb7.into_push_pull_output();
     let blue_led_timer = SubTimer::new();
     let red_led_pin = gpiob.pb14.into_push_pull_output();
@@ -93,6 +101,32 @@ fn main() -> ! {
             ..Default::default()
         },
     );
+
+    let blue_led = Led::new(res.blue_led_pin, res.blue_led_timer);
+    let red_led = Led::new(res.red_led_pin, res.red_led_timer);
+
+    let max_acceleration_in_millimeters_per_sec_per_sec = 20_f64;
+
+    let steps_per_revolution = 6400_f64;
+    let leadscrew_starts = 4_f64;
+    let leadscrew_pitch = 2_f64;
+    let millimeters_per_revolution = leadscrew_starts * leadscrew_pitch;
+    let steps_per_millimeter = steps_per_revolution / millimeters_per_revolution;
+
+    defmt::println!("Steps per mm: {}", steps_per_millimeter);
+
+    let x_axis = Axis::new_dq542ma(
+        res.x_axis_dir_pin,
+        res.x_axis_step_pin,
+        res.x_axis_timer,
+        max_acceleration_in_millimeters_per_sec_per_sec,
+        steps_per_millimeter,
+    );
+    let x_axis_limit_min = Switch::new(res.x_axis_limit_min_pin, res.x_axis_limit_min_timer);
+    let x_axis_limit_max = Switch::new(res.x_axis_limit_max_pin, res.x_axis_limit_max_timer);
+
+    let main_spindle_driver = SpindleDriverJmcHsv57::new(res.main_spindle_serial);
+    let main_spindle = Spindle::new(main_spindle_driver);
 
     let command_center = CommandCenter::new(CommandCenterResources {
         green_led_pin,
