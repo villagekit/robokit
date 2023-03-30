@@ -9,6 +9,8 @@ use nb;
 
 use crate::actor::ActorSense;
 
+pub trait Switch: ActorSense<SwitchUpdate> {}
+
 #[derive(Copy, Clone, Debug, Format, PartialEq)]
 pub enum SwitchStatus {
     On,
@@ -24,7 +26,7 @@ pub struct SwitchActiveLow;
 pub struct SwitchActiveHigh;
 
 #[derive(Copy, Clone, Debug, Format)]
-pub struct Switch<Pin, ActiveLevel, Tim, const TIMER_HZ: u32>
+pub struct SwitchDevice<Pin, ActiveLevel, Tim, const TIMER_HZ: u32>
 where
     Pin: InputPin,
     Tim: Timer<TIMER_HZ>,
@@ -36,13 +38,13 @@ where
     is_debouncing: bool,
 }
 
-impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> Switch<Pin, ActiveLevel, Tim, TIMER_HZ>
+impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> SwitchDevice<Pin, ActiveLevel, Tim, TIMER_HZ>
 where
     Pin: InputPin,
     Tim: Timer<TIMER_HZ>,
 {
     pub fn new(pin: Pin, timer: Tim) -> Self {
-        Switch {
+        Self {
             pin,
             timer,
             current_status: None,
@@ -58,7 +60,8 @@ pub trait InputSwitch {
     fn is_active(&self) -> Result<bool, Self::Error>;
 }
 
-impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch for Switch<Pin, SwitchActiveLow, Tim, TIMER_HZ>
+impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch
+    for SwitchDevice<Pin, SwitchActiveLow, Tim, TIMER_HZ>
 where
     Pin: InputPin,
     Tim: Timer<TIMER_HZ>,
@@ -70,7 +73,8 @@ where
     }
 }
 
-impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch for Switch<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
+impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch
+    for SwitchDevice<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
 where
     Pin: InputPin,
     Tim: Timer<TIMER_HZ>,
@@ -88,14 +92,13 @@ pub enum SwitchError<PinError, TimerError> {
     Timer(TimerError),
 }
 
-impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> ActorSense
-    for Switch<Pin, ActiveLevel, Tim, TIMER_HZ>
+impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> ActorSense<SwitchUpdate>
+    for SwitchDevice<Pin, ActiveLevel, Tim, TIMER_HZ>
 where
     Self: InputSwitch,
     Pin: InputPin,
     Tim: Timer<TIMER_HZ>,
 {
-    type Message = SwitchUpdate;
     type Error = SwitchError<<Self as InputSwitch>::Error, Tim::Error>;
 
     fn sense(&mut self) -> Result<Option<SwitchUpdate>, Self::Error> {

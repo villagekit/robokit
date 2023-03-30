@@ -8,7 +8,7 @@ use crate::{
     actuators::axis::AxisMoveMessage,
     actuators::led::LedBlinkMessage,
     actuators::spindle::{SpindleSetMessage, SpindleStatus},
-    command::{ActuatorError, Command, CommandCenter, ResetMessage, SensorError},
+    command::{Command, CommandCenterTrait, ResetMessage},
 };
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -22,7 +22,7 @@ pub enum MachineState {
     StopLoop,
 }
 
-pub struct Machine {
+pub struct Machine<CommandCenter: CommandCenterTrait> {
     command_center: CommandCenter,
     state: MachineState,
     run_commands: Vec<Command, 32>,
@@ -30,7 +30,7 @@ pub struct Machine {
     stop_commands: Vec<Command, 4>,
 }
 
-impl Machine {
+impl<CommandCenter: CommandCenterTrait> Machine<CommandCenter> {
     pub fn new(command_center: CommandCenter) -> Self {
         let run_commands: [Command; 8] = [
             Command::GreenLed(LedBlinkMessage {
@@ -82,7 +82,7 @@ impl Machine {
 #[derive(Clone, Copy, Debug, Format)]
 pub struct StartMessage {}
 
-impl ActorReceive<StartMessage> for Machine {
+impl<CommandCenter: CommandCenterTrait> ActorReceive<StartMessage> for Machine<CommandCenter> {
     fn receive(&mut self, _message: &StartMessage) {
         self.state = MachineState::Start;
     }
@@ -91,7 +91,7 @@ impl ActorReceive<StartMessage> for Machine {
 #[derive(Clone, Copy, Debug, Format)]
 pub struct StopMessage {}
 
-impl ActorReceive<StopMessage> for Machine {
+impl<CommandCenter: CommandCenterTrait> ActorReceive<StopMessage> for Machine<CommandCenter> {
     fn receive(&mut self, _message: &StopMessage) {
         self.state = MachineState::Stop;
     }
@@ -100,7 +100,7 @@ impl ActorReceive<StopMessage> for Machine {
 #[derive(Clone, Copy, Debug, Format)]
 pub struct ToggleMessage {}
 
-impl ActorReceive<ToggleMessage> for Machine {
+impl<CommandCenter: CommandCenterTrait> ActorReceive<ToggleMessage> for Machine<CommandCenter> {
     fn receive(&mut self, _message: &ToggleMessage) {
         self.state = match self.state {
             MachineState::Idle => MachineState::Start,
@@ -114,20 +114,10 @@ impl ActorReceive<ToggleMessage> for Machine {
     }
 }
 
-#[derive(Debug)]
-pub enum MachineError {
-    Actuator(ActuatorError),
-    Sensor(SensorError),
-}
-
-impl ActorPoll for Machine {
-    type Error = MachineError;
+impl<CommandCenter: CommandCenterTrait> ActorPoll for Machine<CommandCenter> {
+    type Error = <CommandCenter as ActorPoll>::Error;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        self.command_center
-            .sense()
-            .map_err(|err| MachineError::Sensor(err))?;
-
         match self.state {
             MachineState::Idle => Poll::Ready(Ok(())),
             MachineState::Start => {
@@ -178,7 +168,7 @@ impl ActorPoll for Machine {
 
                     Poll::Pending
                 }
-                Poll::Ready(Err(err)) => Poll::Ready(Err(MachineError::Actuator(err))),
+                Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
                 Poll::Pending => Poll::Pending,
             },
             MachineState::Stop => {

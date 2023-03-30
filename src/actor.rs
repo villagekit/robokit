@@ -12,9 +12,8 @@ pub trait ActorPoll {
     fn poll(&mut self) -> Poll<Result<(), Self::Error>>;
 }
 
-pub trait ActorSense {
-    type Message;
+pub trait ActorSense<Message> {
     type Error;
 
-    fn sense(&mut self) -> Result<Option<Self::Message>, Self::Error>;
+    fn sense(&mut self) -> Result<Option<Message>, Self::Error>;
 }

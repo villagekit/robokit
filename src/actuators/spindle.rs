@@ -254,19 +254,21 @@ where
     }
 }
 
-pub struct Spindle<Driver>
+pub trait Spindle: ActorReceive<SpindleSetMessage> + ActorPoll {}
+
+pub struct SpindleDevice<Driver>
 where
     Driver: SpindleDriver,
 {
     driver: Driver,
 }
 
-impl<Driver> Spindle<Driver>
+impl<Driver> SpindleDevice<Driver>
 where
     Driver: SpindleDriver,
 {
     pub fn new(driver: Driver) -> Self {
-        Spindle { driver }
+        Self { driver }
     }
 }
 
@@ -275,7 +277,7 @@ pub struct SpindleSetMessage {
     pub status: SpindleStatus,
 }
 
-impl<Driver> ActorReceive<SpindleSetMessage> for Spindle<Driver>
+impl<Driver> ActorReceive<SpindleSetMessage> for SpindleDevice<Driver>
 where
     Driver: SpindleDriver,
 {
@@ -286,7 +288,7 @@ where
 
 pub type SpindleError<Driver> = <Driver as SpindleDriver>::Error;
 
-impl<Driver> ActorPoll for Spindle<Driver>
+impl<Driver> ActorPoll for SpindleDevice<Driver>
 where
     Driver: SpindleDriver,
 {
