@@ -1,26 +1,15 @@
+use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
-use embedded_hal::digital::v2::{InputPin, OutputPin};
-use fugit_timer::Timer;
 use heapless::Deque;
-use stm32f7xx_hal::{
-    gpio::{self, Alternate, Floating, Input, Output, Pin, PushPull},
-    pac,
-    serial::Serial,
-    timer::counter::Counter,
-};
 
-use crate::actor::{ActorPoll, ActorReceive, ActorSense};
-use crate::actuators::axis::{
-    Axis, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisLimitMessage, AxisLimitSide,
-    AxisLimitStatus, AxisMoveMessage,
-};
-use crate::actuators::led::{Led, LedBlinkMessage, LedError};
-use crate::actuators::spindle::{
-    Spindle, SpindleDriver, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage,
-};
-use crate::sensors::switch::{Switch, SwitchActiveHigh, SwitchError, SwitchStatus};
-use crate::timer::{SubTimer, TICK_TIMER_HZ};
+use crate::actor::{ActorPoll, ActorReceive};
+use crate::actuators::axis::{Axis, AxisMoveMessage};
+use crate::actuators::led::{Led, LedBlinkMessage};
+use crate::actuators::spindle::{Spindle, SpindleSetMessage};
+use crate::timer::TICK_TIMER_HZ;
+
+type PollError<T> = <T as ActorPoll>::Error;
 
 /* actuators */
 
@@ -34,10 +23,9 @@ pub enum Command {
 }
 
 pub struct CommandCenterLeds<
-    const TIMER_HZ: u32,
-    GreenLed: Led<TIMER_HZ>,
-    BlueLed: Led<TIMER_HZ>,
-    RedLed: Led<TIMER_HZ>,
+    GreenLed: Led<TICK_TIMER_HZ>,
+    BlueLed: Led<TICK_TIMER_HZ>,
+    RedLed: Led<TICK_TIMER_HZ>,
 > {
     pub green_led: GreenLed,
     pub blue_led: BlueLed,
@@ -53,24 +41,18 @@ pub struct CommandCenterSpindles<MainSpindle: Spindle> {
 }
 
 #[derive(Debug)]
-pub enum ActuatorError<
-    const LED_TIMER_HZ: u32,
-    GreenLed: Led<LED_TIMER_HZ>,
-    BlueLed: Led<LED_TIMER_HZ>,
-    RedLed: Led<LED_TIMER_HZ>,
-    XAxis: Axis,
-    MainSpindle: Spindle,
+pub enum CommandError<
+    GreenLedError: Debug,
+    BlueLedError: Debug,
+    RedLedError: Debug,
+    XAxisError: Debug,
+    MainSpindleError: Debug,
 > {
-    GreenLed(<GreenLed as ActorPoll>::Error),
-    BlueLed(<BlueLed as ActorPoll>::Error),
-    RedLed(<RedLed as ActorPoll>::Error),
-    XAxis(<XAxis as ActorPoll>::Error),
-    MainSpindle(<MainSpindle as ActorPoll>::Error),
-}
-
-pub struct CommandCenterLimitSwitches<XAxisLimitMin: Switch, XAxisLimitMax: Switch> {
-    pub x_axis_limit_min: XAxisLimitMin,
-    pub x_axis_limit_max: XAxisLimitMax,
+    GreenLed(GreenLedError),
+    BlueLed(BlueLedError),
+    RedLed(RedLedError),
+    XAxis(XAxisError),
+    MainSpindle(MainSpindleError),
 }
 
 pub trait CommandCenterTrait:
@@ -79,30 +61,38 @@ pub trait CommandCenterTrait:
 }
 
 pub struct CommandCenter<
-    const LED_TIMER_HZ: u32,
-    GreenLed: Led<LED_TIMER_HZ>,
-    BlueLed: Led<LED_TIMER_HZ>,
-    RedLed: Led<LED_TIMER_HZ>,
+    GreenLed: Led<TICK_TIMER_HZ>,
+    BlueLed: Led<TICK_TIMER_HZ>,
+    RedLed: Led<TICK_TIMER_HZ>,
     XAxis: Axis,
     MainSpindle: Spindle,
 > {
     active_commands: Deque<Command, 8>,
-    leds: CommandCenterLeds<LED_TIMER_HZ, GreenLed, BlueLed, RedLed>,
+    leds: CommandCenterLeds<GreenLed, BlueLed, RedLed>,
     axes: CommandCenterAxes<XAxis>,
     spindles: CommandCenterSpindles<MainSpindle>,
 }
 
 impl<
-        const LED_TIMER_HZ: u32,
-        GreenLed: Led<LED_TIMER_HZ>,
-        BlueLed: Led<LED_TIMER_HZ>,
-        RedLed: Led<LED_TIMER_HZ>,
+        GreenLed: Led<TICK_TIMER_HZ>,
+        BlueLed: Led<TICK_TIMER_HZ>,
+        RedLed: Led<TICK_TIMER_HZ>,
         XAxis: Axis,
         MainSpindle: Spindle,
-    > CommandCenter<LED_TIMER_HZ, GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+    > CommandCenterTrait for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+{
+}
+
+impl<
+        GreenLed: Led<TICK_TIMER_HZ>,
+        BlueLed: Led<TICK_TIMER_HZ>,
+        RedLed: Led<TICK_TIMER_HZ>,
+        XAxis: Axis,
+        MainSpindle: Spindle,
+    > CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
 {
     pub fn new(
-        leds: CommandCenterLeds<LED_TIMER_HZ, GreenLed, BlueLed, RedLed>,
+        leds: CommandCenterLeds<GreenLed, BlueLed, RedLed>,
         axes: CommandCenterAxes<XAxis>,
         spindles: CommandCenterSpindles<MainSpindle>,
     ) -> Self {
@@ -118,34 +108,43 @@ impl<
 #[derive(Clone, Copy, Debug, Format)]
 pub struct ResetMessage {}
 
-impl<const LED_TIMER_HZ: u32, GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
-    ActorReceive<ResetMessage>
-    for CommandCenter<LED_TIMER_HZ, GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+impl<
+        GreenLed: Led<TICK_TIMER_HZ>,
+        BlueLed: Led<TICK_TIMER_HZ>,
+        RedLed: Led<TICK_TIMER_HZ>,
+        XAxis: Axis,
+        MainSpindle: Spindle,
+    > ActorReceive<ResetMessage> for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
 {
     fn receive(&mut self, _message: &ResetMessage) {
         self.active_commands.clear()
     }
 }
 
-impl<const LED_TIMER_HZ: u32, GreenLed, BlueLed, RedLed, XAxis, MainSpindle> ActorReceive<Command>
-    for CommandCenter<LED_TIMER_HZ, GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+impl<
+        GreenLed: Led<TICK_TIMER_HZ>,
+        BlueLed: Led<TICK_TIMER_HZ>,
+        RedLed: Led<TICK_TIMER_HZ>,
+        XAxis: Axis,
+        MainSpindle: Spindle,
+    > ActorReceive<Command> for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
 {
     fn receive(&mut self, command: &Command) {
         match command {
             Command::GreenLed(message) => {
-                self.actuators.green_led.receive(message);
+                self.leds.green_led.receive(message);
             }
             Command::BlueLed(message) => {
-                self.actuators.blue_led.receive(message);
+                self.leds.blue_led.receive(message);
             }
             Command::RedLed(message) => {
-                self.actuators.red_led.receive(message);
+                self.leds.red_led.receive(message);
             }
             Command::XAxis(message) => {
-                self.actuators.x_axis.receive(message);
+                self.axes.x_axis.receive(message);
             }
             Command::MainSpindle(message) => {
-                self.actuators.main_spindle.receive(message);
+                self.spindles.main_spindle.receive(message);
             }
         }
 
@@ -153,10 +152,22 @@ impl<const LED_TIMER_HZ: u32, GreenLed, BlueLed, RedLed, XAxis, MainSpindle> Act
     }
 }
 
-impl<const LED_TIMER_HZ: u32, GreenLed, BlueLed, RedLed, XAxis, MainSpindle> ActorPoll
-    for CommandCenter<LED_TIMER_HZ, GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+impl<GreenLed, BlueLed, RedLed, XAxis, MainSpindle> ActorPoll
+    for CommandCenter<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
+where
+    GreenLed: Led<TICK_TIMER_HZ>,
+    BlueLed: Led<TICK_TIMER_HZ>,
+    RedLed: Led<TICK_TIMER_HZ>,
+    XAxis: Axis,
+    MainSpindle: Spindle,
 {
-    type Error = ActuatorError<LED_TIMER_HZ, GreenLed, BlueLed, RedLed, XAxis, MainSpindle>;
+    type Error = CommandError<
+        PollError<GreenLed>,
+        PollError<BlueLed>,
+        PollError<RedLed>,
+        PollError<XAxis>,
+        PollError<MainSpindle>,
+    >;
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         let num_commands = self.active_commands.len();
@@ -164,30 +175,30 @@ impl<const LED_TIMER_HZ: u32, GreenLed, BlueLed, RedLed, XAxis, MainSpindle> Act
             let command = self.active_commands.pop_front().unwrap();
             let result = match command {
                 Command::GreenLed(_) => self
-                    .actuators
+                    .leds
                     .green_led
                     .poll()
-                    .map_err(|err| ActuatorError::GreenLed(err)),
+                    .map_err(|err| CommandError::GreenLed(err)),
                 Command::BlueLed(_) => self
-                    .actuators
+                    .leds
                     .blue_led
                     .poll()
-                    .map_err(|err| ActuatorError::BlueLed(err)),
+                    .map_err(|err| CommandError::BlueLed(err)),
                 Command::RedLed(_) => self
-                    .actuators
+                    .leds
                     .red_led
                     .poll()
-                    .map_err(|err| ActuatorError::RedLed(err)),
+                    .map_err(|err| CommandError::RedLed(err)),
                 Command::XAxis(_) => self
-                    .actuators
+                    .axes
                     .x_axis
                     .poll()
-                    .map_err(|err| ActuatorError::XAxis(err)),
+                    .map_err(|err| CommandError::XAxis(err)),
                 Command::MainSpindle(_) => self
-                    .actuators
+                    .spindles
                     .main_spindle
                     .poll()
-                    .map_err(|err| ActuatorError::MainSpindle(err)),
+                    .map_err(|err| CommandError::MainSpindle(err)),
             };
 
             match result {

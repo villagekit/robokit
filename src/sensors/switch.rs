@@ -1,5 +1,6 @@
 // inspired by https://github.com/rubberduck203/switch-hal
 
+use core::fmt::Debug;
 use core::marker::PhantomData;
 use defmt::Format;
 use embedded_hal::digital::v2::InputPin;
@@ -55,7 +56,7 @@ where
 }
 
 pub trait InputSwitch {
-    type Error;
+    type Error: Debug;
 
     fn is_active(&self) -> Result<bool, Self::Error>;
 }
@@ -64,6 +65,7 @@ impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch
     for SwitchDevice<Pin, SwitchActiveLow, Tim, TIMER_HZ>
 where
     Pin: InputPin,
+    Pin::Error: Debug,
     Tim: Timer<TIMER_HZ>,
 {
     type Error = <Pin as InputPin>::Error;
@@ -77,6 +79,7 @@ impl<Pin, Tim, const TIMER_HZ: u32> InputSwitch
     for SwitchDevice<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
 where
     Pin: InputPin,
+    Pin::Error: Debug,
     Tim: Timer<TIMER_HZ>,
 {
     type Error = <Pin as InputPin>::Error;
@@ -87,7 +90,7 @@ where
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub enum SwitchError<PinError, TimerError> {
+pub enum SwitchError<PinError: Debug, TimerError: Debug> {
     Pin(PinError),
     Timer(TimerError),
 }
@@ -136,4 +139,20 @@ where
             Ok(None)
         }
     }
+}
+
+impl<Pin, Tim, const TIMER_HZ: u32> Switch for SwitchDevice<Pin, SwitchActiveLow, Tim, TIMER_HZ>
+where
+    Pin: InputPin,
+    Pin::Error: Debug,
+    Tim: Timer<TIMER_HZ>,
+{
+}
+
+impl<Pin, Tim, const TIMER_HZ: u32> Switch for SwitchDevice<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
+where
+    Pin: InputPin,
+    Pin::Error: Debug,
+    Tim: Timer<TIMER_HZ>,
+{
 }

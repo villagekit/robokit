@@ -13,6 +13,10 @@ use crate::util::{i16_to_u16, u16_to_i16};
 
 static ACCELERATION_IN_MS_PER_1000_RPM: u16 = 10_000;
 
+pub trait Spindle: ActorReceive<SpindleSetMessage> + ActorPoll {}
+
+impl<Driver> Spindle for SpindleDevice<Driver> where Driver: SpindleDriver {}
+
 #[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub enum SpindleStatus {
     Off,
@@ -20,7 +24,7 @@ pub enum SpindleStatus {
 }
 
 pub trait SpindleDriver {
-    type Error;
+    type Error: Debug;
 
     fn set(&mut self, status: SpindleStatus);
     fn poll(&mut self) -> Poll<Result<(), Self::Error>>;
@@ -253,8 +257,6 @@ where
         return Poll::Pending;
     }
 }
-
-pub trait Spindle: ActorReceive<SpindleSetMessage> + ActorPoll {}
 
 pub struct SpindleDevice<Driver>
 where

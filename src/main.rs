@@ -6,9 +6,7 @@ use gridbot as _;
 use core::task::Poll;
 use cortex_m_rt::entry;
 use defmt::Debug2Format;
-use embedded_hal::digital::v2::{InputPin, OutputPin};
 use fugit::ExtU32;
-use fugit_timer::Timer;
 use stm32f7xx_hal::{
     gpio::{self, Alternate, Floating, Input, Output, Pin, PushPull},
     pac,
@@ -21,18 +19,13 @@ use stm32f7xx_hal::{
 
 use gridbot::{
     actor::{ActorPoll, ActorReceive, ActorSense},
-    actuators::axis::{
-        AxisDevice, AxisDriverDQ542MA, AxisDriverErrorDQ542MA, AxisError, AxisLimitMessage,
-        AxisLimitSide, AxisLimitStatus, AxisMoveMessage,
-    },
-    actuators::led::{LedDevice, LedError},
-    actuators::spindle::{
-        SpindleDevice, SpindleDriver, SpindleDriverJmcHsv57, SpindleError, SpindleSetMessage,
-    },
-    command::{CommandCenter, CommandCenterResources},
+    actuators::axis::AxisDevice,
+    actuators::led::LedDevice,
+    actuators::spindle::{SpindleDevice, SpindleDriverJmcHsv57},
+    command::{CommandCenter, CommandCenterAxes, CommandCenterLeds, CommandCenterSpindles},
     init_heap,
     machine::{Machine, StopMessage, ToggleMessage},
-    sensors::switch::{SwitchActiveHigh, SwitchDevice, SwitchError, SwitchStatus},
+    sensors::switch::{SwitchActiveHigh, SwitchDevice, SwitchStatus},
     timer::{setup as timer_setup, tick as timer_tick, SubTimer, TICK_TIMER_HZ},
 };
 
@@ -48,45 +41,26 @@ type UserButton = SwitchDevice<UserButtonPin, SwitchActiveHigh, UserButtonTimer,
 
 type GreenLedPin = Pin<'B', 0, Output<PushPull>>;
 type GreenLedTimer = SubTimer;
-type GreenLedError =
-    LedError<<GreenLedPin as OutputPin>::Error, <GreenLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
 type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
 type BlueLedTimer = SubTimer;
-type BlueLedError =
-    LedError<<BlueLedPin as OutputPin>::Error, <BlueLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
 type RedLedPin = Pin<'B', 14, Output<PushPull>>;
 type RedLedTimer = SubTimer;
-type RedLedError =
-    LedError<<RedLedPin as OutputPin>::Error, <RedLedTimer as Timer<TICK_TIMER_HZ>>::Error>;
 
 const X_AXIS_TIMER_HZ: u32 = 1_000_000;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
 type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
 type XAxisTimer = Counter<pac::TIM3, X_AXIS_TIMER_HZ>;
-type XAxisDriver = AxisDriverDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_HZ>;
-type XAxisDriverError =
-    AxisDriverErrorDQ542MA<XAxisDirPin, XAxisStepPin, XAxisTimer, X_AXIS_TIMER_HZ>;
-type XAxisError = AxisError<XAxisDriverError>;
 
 type MainSpindleSerial = Serial<pac::USART2, (gpio::PD5<Alternate<7>>, gpio::PD6<Alternate<7>>)>;
 type MainSpindleDriver = SpindleDriverJmcHsv57<MainSpindleSerial>;
-type MainSpindleError = SpindleError<MainSpindleDriver>;
 
 /* sensors */
 type XAxisLimitMinPin = Pin<'F', 15, Input<Floating>>; // D2
 type XAxisLimitMinTimer = SubTimer;
-type XAxisLimitMinError = SwitchError<
-    <XAxisLimitMinPin as InputPin>::Error,
-    <XAxisLimitMinTimer as Timer<TICK_TIMER_HZ>>::Error,
->;
 type XAxisLimitMin =
     SwitchDevice<XAxisLimitMinPin, SwitchActiveHigh, XAxisLimitMinTimer, TICK_TIMER_HZ>;
 type XAxisLimitMaxPin = Pin<'E', 13, Input<Floating>>; // D3
 type XAxisLimitMaxTimer = SubTimer;
-type XAxisLimitMaxError = SwitchError<
-    <XAxisLimitMaxPin as InputPin>::Error,
-    <XAxisLimitMaxTimer as Timer<TICK_TIMER_HZ>>::Error,
->;
 type XAxisLimitMax =
     SwitchDevice<XAxisLimitMaxPin, SwitchActiveHigh, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
 
@@ -111,18 +85,18 @@ fn main() -> ! {
     let mut tick_timer: TickTimer = p.TIM5.counter_us(&clocks);
     timer_setup(&mut tick_timer, TICK_TIMER_MAX).unwrap();
 
-    let user_button_pin = gpioc.pc13.into_floating_input();
-    let user_button_timer = SubTimer::new();
+    let user_button_pin: UserButtonPin = gpioc.pc13.into_floating_input();
+    let user_button_timer: UserButtonTimer = SubTimer::new();
     let mut user_button: UserButton = SwitchDevice::new(user_button_pin, user_button_timer);
 
-    let green_led_pin = gpiob.pb0.into_push_pull_output();
-    let green_led_timer = SubTimer::new();
+    let green_led_pin: GreenLedPin = gpiob.pb0.into_push_pull_output();
+    let green_led_timer: GreenLedTimer = SubTimer::new();
     let green_led = LedDevice::new(green_led_pin, green_led_timer);
-    let blue_led_pin = gpiob.pb7.into_push_pull_output();
-    let blue_led_timer = SubTimer::new();
+    let blue_led_pin: BlueLedPin = gpiob.pb7.into_push_pull_output();
+    let blue_led_timer: BlueLedTimer = SubTimer::new();
     let blue_led = LedDevice::new(blue_led_pin, blue_led_timer);
-    let red_led_pin = gpiob.pb14.into_push_pull_output();
-    let red_led_timer = SubTimer::new();
+    let red_led_pin: RedLedPin = gpiob.pb14.into_push_pull_output();
+    let red_led_timer: RedLedTimer = SubTimer::new();
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
 
     defmt::println!(
@@ -140,28 +114,30 @@ fn main() -> ! {
 
     defmt::println!("Steps per mm: {}", steps_per_millimeter);
 
-    let x_axis_dir_pin = gpiog.pg9.into_push_pull_output();
-    let x_axis_step_pin = gpiog.pg14.into_push_pull_output();
-    let x_axis_timer = p.TIM3.counter(&clocks);
+    let x_axis_dir_pin: XAxisDirPin = gpiog.pg9.into_push_pull_output();
+    let x_axis_step_pin: XAxisStepPin = gpiog.pg14.into_push_pull_output();
+    let x_axis_timer: XAxisTimer = p.TIM3.counter(&clocks);
+    let x_axis_limit_min_pin: XAxisLimitMinPin = gpiof.pf15.into_floating_input();
+    let x_axis_limit_min_timer: XAxisLimitMinTimer = SubTimer::new();
+    let x_axis_limit_min: XAxisLimitMin =
+        SwitchDevice::new(x_axis_limit_min_pin, x_axis_limit_min_timer);
+    let x_axis_limit_max_pin: XAxisLimitMaxPin = gpioe.pe13.into_floating_input();
+    let x_axis_limit_max_timer: XAxisLimitMaxTimer = SubTimer::new();
+    let x_axis_limit_max: XAxisLimitMax =
+        SwitchDevice::new(x_axis_limit_max_pin, x_axis_limit_max_timer);
     let x_axis = AxisDevice::new_dq542ma(
         x_axis_dir_pin,
         x_axis_step_pin,
         x_axis_timer,
         max_acceleration_in_millimeters_per_sec_per_sec,
         steps_per_millimeter,
+        x_axis_limit_min,
+        x_axis_limit_max,
     );
-    let x_axis_limit_min_pin = gpiof.pf15.into_floating_input();
-    let x_axis_limit_min_timer = SubTimer::new();
-    let x_axis_limit_min: XAxisLimitMin =
-        SwitchDevice::new(x_axis_limit_min_pin, x_axis_limit_min_timer);
-    let x_axis_limit_max_pin = gpioe.pe13.into_floating_input();
-    let x_axis_limit_max_timer = SubTimer::new();
-    let x_axis_limit_max: XAxisLimitMax =
-        SwitchDevice::new(x_axis_limit_max_pin, x_axis_limit_max_timer);
 
     let main_spindle_serial_tx = gpiod.pd5.into_alternate();
     let main_spindle_serial_rx = gpiod.pd6.into_alternate();
-    let main_spindle_serial = Serial::new(
+    let main_spindle_serial: MainSpindleSerial = Serial::new(
         p.USART2,
         (main_spindle_serial_tx, main_spindle_serial_rx),
         &clocks,
@@ -172,23 +148,18 @@ fn main() -> ! {
             ..Default::default()
         },
     );
+    let main_spindle_driver: MainSpindleDriver = SpindleDriverJmcHsv57::new(main_spindle_serial);
+    let main_spindle = SpindleDevice::new(main_spindle_driver);
 
-    let command_center = CommandCenter::new(CommandCenterResources {
-        green_led_pin,
-        green_led_timer,
-        blue_led_pin,
-        blue_led_timer,
-        red_led_pin,
-        red_led_timer,
-        x_axis_dir_pin,
-        x_axis_step_pin,
-        x_axis_timer,
-        x_axis_limit_min_pin,
-        x_axis_limit_min_timer,
-        x_axis_limit_max_pin,
-        x_axis_limit_max_timer,
-        main_spindle_serial,
-    });
+    let command_center = CommandCenter::new(
+        CommandCenterLeds {
+            green_led,
+            blue_led,
+            red_led,
+        },
+        CommandCenterAxes { x_axis },
+        CommandCenterSpindles { main_spindle },
+    );
     let mut machine = Machine::new(command_center);
 
     let mut iwdg = watchdog::IndependentWatchdog::new(p.IWDG);
