@@ -120,11 +120,11 @@ fn main() -> ! {
     let x_axis_limit_min_pin: XAxisLimitMinPin = gpiof.pf15.into_floating_input();
     let x_axis_limit_min_timer: XAxisLimitMinTimer = SubTimer::new();
     let x_axis_limit_min: XAxisLimitMin =
-        SwitchDevice::new(x_axis_limit_min_pin, x_axis_limit_min_timer);
+        SwitchDevice::new_active_high(x_axis_limit_min_pin, x_axis_limit_min_timer);
     let x_axis_limit_max_pin: XAxisLimitMaxPin = gpioe.pe13.into_floating_input();
     let x_axis_limit_max_timer: XAxisLimitMaxTimer = SubTimer::new();
     let x_axis_limit_max: XAxisLimitMax =
-        SwitchDevice::new(x_axis_limit_max_pin, x_axis_limit_max_timer);
+        SwitchDevice::new_active_high(x_axis_limit_max_pin, x_axis_limit_max_timer);
     let x_axis = AxisDevice::new_dq542ma(
         x_axis_dir_pin,
         x_axis_step_pin,

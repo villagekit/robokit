@@ -55,6 +55,26 @@ where
     }
 }
 
+impl<Pin, Tim, const TIMER_HZ: u32> SwitchDevice<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
+where
+    Pin: InputPin,
+    Tim: Timer<TIMER_HZ>,
+{
+    pub fn new_active_high(pin: Pin, timer: Tim) -> Self {
+        SwitchDevice::<Pin, SwitchActiveHigh, Tim, TIMER_HZ>::new(pin, timer)
+    }
+}
+
+impl<Pin, Tim, const TIMER_HZ: u32> SwitchDevice<Pin, SwitchActiveLow, Tim, TIMER_HZ>
+where
+    Pin: InputPin,
+    Tim: Timer<TIMER_HZ>,
+{
+    pub fn new_active_low(pin: Pin, timer: Tim) -> Self {
+        SwitchDevice::<Pin, SwitchActiveLow, Tim, TIMER_HZ>::new(pin, timer)
+    }
+}
+
 pub trait InputSwitch {
     type Error: Debug;
 
