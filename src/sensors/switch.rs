@@ -8,9 +8,9 @@ use fugit::{MillisDurationU32 as MillisDuration, TimerDurationU32 as TimerDurati
 use fugit_timer::Timer;
 use nb;
 
-use crate::actor::ActorSense;
+use super::Sensor;
 
-pub trait AnyInputSwitch: ActorSense<SwitchUpdate> {}
+pub trait AnyInputSwitch: Sensor<SwitchUpdate> {}
 
 #[derive(Copy, Clone, Debug, Format, PartialEq)]
 pub enum SwitchStatus {
@@ -115,7 +115,7 @@ pub enum SwitchError<PinError: Debug, TimerError: Debug> {
     Timer(TimerError),
 }
 
-impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> ActorSense<SwitchUpdate>
+impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> Sensor<SwitchUpdate>
     for SwitchDevice<Pin, ActiveLevel, Tim, TIMER_HZ>
 where
     Self: InputSwitch,

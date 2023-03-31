@@ -13,16 +13,29 @@ use stepper::{
     Direction, Stepper,
 };
 
-use crate::actor::{ActorPoll, ActorReceive, ActorSense};
-use crate::sensors::switch::{AnyInputSwitch, SwitchStatus, SwitchUpdate};
+use super::Actuator;
+use crate::sensors::{
+    switch::{AnyInputSwitch, SwitchStatus, SwitchUpdate},
+    Sensor,
+};
 
-pub trait AnyAxis:
-    ActorReceive<AxisMoveRelativeMessage>
-    + ActorReceive<AxisMoveAbsoluteMessage>
-    + ActorReceive<AxisHomeMessage>
-    + ActorPoll
-{
+#[derive(Clone, Copy, Debug, Format)]
+pub enum AxisAction {
+    MoveRelative {
+        max_velocity_in_millimeters_per_sec: AxisVelocity,
+        distance_in_millimeters: f64,
+    },
+    MoveAbsolute {
+        max_velocity_in_millimeters_per_sec: AxisVelocity,
+        position_in_millimeters: f64,
+    },
+    Home {
+        max_velocity_in_millimeters_per_sec: AxisVelocity,
+        back_off_distance_in_millimeters: f64,
+    },
 }
+
+pub trait AnyAxis: Actuator<AxisAction> {}
 
 type AxisVelocity = f64;
 pub type AxisMotionProfile = ramp_maker::Trapezoidal<AxisVelocity>;
@@ -42,7 +55,7 @@ pub type AxisDriverDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> = AxisMo
 pub type AxisDriverErrorDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> =
     <AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ> as MotionControl>::Error;
 
-type GetLimitSenseError<Limit> = <Limit as ActorSense<SwitchUpdate>>::Error;
+type GetLimitSensorError<Limit> = <Limit as Sensor<SwitchUpdate>>::Error;
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
 #[derive(Clone, Copy, Debug, Format)]
@@ -66,6 +79,7 @@ struct AxisHomeState {
     towards_home_direction: Direction,
     #[defmt(Debug2Format)]
     back_off_home_direction: Direction,
+    back_off_distance_in_steps: i32,
 }
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -213,175 +227,15 @@ impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64, TIMER_HZ>
     }
 }
 
-#[derive(Clone, Copy, Debug, Format)]
-pub struct AxisMoveRelativeMessage {
-    pub max_velocity_in_millimeters_per_sec: AxisVelocity,
-    pub distance_in_millimeters: f64,
-}
-
-impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> ActorReceive<AxisMoveRelativeMessage>
-    for AxisDevice<AxisMotionControl<Driver, Timer, TIMER_HZ>, LimitMin, LimitMax>
-where
-    Driver: SetDirection + Step,
-    Timer: FugitTimer<TIMER_HZ>,
-    LimitMin: AnyInputSwitch,
-    LimitMax: AnyInputSwitch,
-{
-    fn receive(&mut self, action: &AxisMoveRelativeMessage) {
-        let AxisMoveRelativeMessage {
-            max_velocity_in_millimeters_per_sec,
-            distance_in_millimeters,
-        } = action;
-
-        let position_in_millimeters = self.logical_position + distance_in_millimeters;
-
-        self.receive(&AxisMoveAbsoluteMessage {
-            max_velocity_in_millimeters_per_sec: *max_velocity_in_millimeters_per_sec,
-            position_in_millimeters,
-        })
-    }
-}
-
-#[derive(Clone, Copy, Debug, Format)]
-pub struct AxisMoveAbsoluteMessage {
-    pub max_velocity_in_millimeters_per_sec: AxisVelocity,
-    pub position_in_millimeters: f64,
-}
-
-impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> ActorReceive<AxisMoveAbsoluteMessage>
-    for AxisDevice<AxisMotionControl<Driver, Timer, TIMER_HZ>, LimitMin, LimitMax>
-where
-    Driver: SetDirection + Step,
-    Timer: FugitTimer<TIMER_HZ>,
-    LimitMin: AnyInputSwitch,
-    LimitMax: AnyInputSwitch,
-{
-    fn receive(&mut self, action: &AxisMoveAbsoluteMessage) {
-        let AxisMoveAbsoluteMessage {
-            max_velocity_in_millimeters_per_sec,
-            position_in_millimeters,
-        } = action;
-
-        let max_velocity_in_steps_per_sec =
-            max_velocity_in_millimeters_per_sec * self.steps_per_millimeter;
-
-        let next_logical_position = position_in_millimeters;
-        let real_position_difference = next_logical_position - self.get_real_position();
-        let step_difference: i32 = (real_position_difference * self.steps_per_millimeter) as i32;
-        let target_step = self.get_current_step() + step_difference;
-
-        // NOTE(mw) hmm... is this the best way to do this?
-        self.logical_position = *next_logical_position;
-
-        // NOTE(mw): We do this because stepper doesn't immediately set direction after
-        //   .move_to_position(), we need the direction right away.
-        let direction = if step_difference < 0 {
-            Direction::Backward
-        } else {
-            Direction::Forward
-        };
-
-        self.state = AxisState::Moving(
-            AxisMoveState {
-                max_velocity_in_steps_per_sec,
-                target_step,
-                direction,
-            },
-            AxisMoveStatus::Start,
-        );
-    }
-}
-
-#[derive(Clone, Copy, Debug, Format)]
-pub struct AxisHomeMessage {
-    pub max_velocity_in_millimeters_per_sec: AxisVelocity,
-    pub back_off_distance_in_millimeters: f64,
-}
-
-impl<Driver, LimitMin, LimitMax> ActorReceive<AxisHomeMessage>
-    for AxisDevice<Driver, LimitMin, LimitMax>
-where
-    Driver: MotionControl,
-    LimitMin: AnyInputSwitch,
-    LimitMax: AnyInputSwitch,
-{
-    fn receive(&mut self, action: &AxisHomeMessage) {
-        let max_velocity_in_steps_per_sec =
-            action.max_velocity_in_millimeters_per_sec * self.steps_per_millimeter;
-
-        let (towards_home_direction, back_off_home_direction) = match self.home_side {
-            AxisLimitSide::Min => (Direction::Backward, Direction::Forward),
-            AxisLimitSide::Max => (Direction::Forward, Direction::Backward),
-        };
-
-        self.state = AxisState::Homing(
-            AxisHomeState {
-                max_velocity_in_steps_per_sec,
-                towards_home_direction,
-                back_off_home_direction,
-            },
-            AxisHomeStatus::Start,
-        );
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum LimitSenseError<LimitMinSenseError: Debug, LimitMaxSenseError: Debug> {
-    Min(LimitMinSenseError),
-    Max(LimitMaxSenseError),
-}
-
-impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax>
-    AxisDevice<AxisMotionControl<Driver, Timer, TIMER_HZ>, LimitMin, LimitMax>
-where
-    Driver: SetDirection + Step,
-    Timer: FugitTimer<TIMER_HZ>,
-    LimitMin: AnyInputSwitch,
-    LimitMin::Error: Debug,
-    LimitMax: AnyInputSwitch,
-    LimitMax::Error: Debug,
-{
-    pub fn update_limit_switches(
-        &mut self,
-    ) -> Result<(), LimitSenseError<LimitMin::Error, LimitMax::Error>> {
-        if let Some(axis_limit_update) = self
-            .limit_min
-            .sense()
-            .map_err(|err| LimitSenseError::Min(err))?
-        {
-            let limit_min_status = match axis_limit_update.status {
-                SwitchStatus::On => AxisLimitStatus::Over,
-                SwitchStatus::Off => AxisLimitStatus::Under,
-            };
-            self.limit_min_status = Some(limit_min_status);
-        }
-
-        if let Some(axis_limit_update) = self
-            .limit_max
-            .sense()
-            .map_err(|err| LimitSenseError::Max(err))?
-        {
-            let limit_max_status = match axis_limit_update.status {
-                SwitchStatus::On => AxisLimitStatus::Over,
-                SwitchStatus::Off => AxisLimitStatus::Under,
-            };
-            self.limit_max_status = Some(limit_max_status);
-        }
-
-        Ok(())
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum AxisError<DriverError: Debug, LimitMinSenseError: Debug, LimitMaxSenseError: Debug> {
     Driver(DriverError),
     Limit(AxisLimitSide),
-    LimitSense(LimitSenseError<LimitMinSenseError, LimitMaxSenseError>),
+    LimitSensor(LimitSensorError<LimitMinSenseError, LimitMaxSenseError>),
     Unexpected,
 }
 
-// https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html#
-impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> ActorPoll
+impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> Actuator<AxisAction>
     for AxisDevice<AxisMotionControl<Driver, Timer, TIMER_HZ>, LimitMin, LimitMax>
 where
     Driver: SetDirection + Step,
@@ -394,10 +248,84 @@ where
 {
     type Error = AxisError<
         <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error,
-        GetLimitSenseError<LimitMin>,
-        GetLimitSenseError<LimitMax>,
+        GetLimitSensorError<LimitMin>,
+        GetLimitSensorError<LimitMax>,
     >;
 
+    fn receive(&mut self, action: &AxisAction) {
+        match action {
+            AxisAction::MoveRelative {
+                max_velocity_in_millimeters_per_sec,
+                distance_in_millimeters,
+            } => {
+                let position_in_millimeters = self.logical_position + distance_in_millimeters;
+
+                self.receive(&AxisAction::MoveAbsolute {
+                    max_velocity_in_millimeters_per_sec: *max_velocity_in_millimeters_per_sec,
+                    position_in_millimeters,
+                })
+            }
+            AxisAction::MoveAbsolute {
+                max_velocity_in_millimeters_per_sec,
+                position_in_millimeters,
+            } => {
+                let max_velocity_in_steps_per_sec =
+                    max_velocity_in_millimeters_per_sec * self.steps_per_millimeter;
+
+                let next_logical_position = position_in_millimeters;
+                let real_position_difference = next_logical_position - self.get_real_position();
+                let step_difference: i32 =
+                    (real_position_difference * self.steps_per_millimeter) as i32;
+                let target_step = self.get_current_step() + step_difference;
+
+                // NOTE(mw) hmm... is this the best way to do this?
+                self.logical_position = *next_logical_position;
+
+                // NOTE(mw): We do this because stepper doesn't immediately set direction after
+                //   .move_to_position(), we need the direction right away.
+                let direction = if step_difference < 0 {
+                    Direction::Backward
+                } else {
+                    Direction::Forward
+                };
+
+                self.state = AxisState::Moving(
+                    AxisMoveState {
+                        max_velocity_in_steps_per_sec,
+                        target_step,
+                        direction,
+                    },
+                    AxisMoveStatus::Start,
+                );
+            }
+            AxisAction::Home {
+                max_velocity_in_millimeters_per_sec,
+                back_off_distance_in_millimeters,
+            } => {
+                let max_velocity_in_steps_per_sec =
+                    max_velocity_in_millimeters_per_sec * self.steps_per_millimeter;
+                let back_off_distance_in_steps =
+                    (back_off_distance_in_millimeters * self.steps_per_millimeter) as i32;
+
+                let (towards_home_direction, back_off_home_direction) = match self.home_side {
+                    AxisLimitSide::Min => (Direction::Backward, Direction::Forward),
+                    AxisLimitSide::Max => (Direction::Forward, Direction::Backward),
+                };
+
+                self.state = AxisState::Homing(
+                    AxisHomeState {
+                        max_velocity_in_steps_per_sec,
+                        towards_home_direction,
+                        back_off_home_direction,
+                        back_off_distance_in_steps,
+                    },
+                    AxisHomeStatus::Start,
+                );
+            }
+        }
+    }
+
+    // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html#
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         // assert min and max limits are set
         if let None = self.limit_min_status {
@@ -458,6 +386,7 @@ where
                     max_velocity_in_steps_per_sec,
                     towards_home_direction,
                     back_off_home_direction,
+                    back_off_distance_in_steps,
                 } = home_state;
 
                 let driver = self.stepper.driver_mut();
@@ -469,6 +398,9 @@ where
                             AxisLimitSide::Max => i32::MAX - 1,
                         };
 
+                        driver
+                            .reset_position(0)
+                            .map_err(|err| AxisError::Driver(err))?;
                         driver
                             .move_to_position(max_velocity_in_steps_per_sec, target_step)
                             .map_err(|err| AxisError::Driver(err))?;
@@ -503,10 +435,13 @@ where
                     }
                     AxisHomeStatus::Interlude => {
                         let target_step = match self.home_side {
-                            AxisLimitSide::Min => i32::MAX - 1,
-                            AxisLimitSide::Max => i32::MIN + 1,
+                            AxisLimitSide::Min => back_off_distance_in_steps,
+                            AxisLimitSide::Max => -back_off_distance_in_steps,
                         };
 
+                        driver
+                            .reset_position(0)
+                            .map_err(|err| AxisError::Driver(err))?;
                         driver
                             .move_to_position(max_velocity_in_steps_per_sec, target_step)
                             .map_err(|err| AxisError::Driver(err))?;
@@ -551,6 +486,53 @@ where
                 }
             }
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum LimitSensorError<LimitMinSenseError: Debug, LimitMaxSenseError: Debug> {
+    Min(LimitMinSenseError),
+    Max(LimitMaxSenseError),
+}
+
+impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax>
+    AxisDevice<AxisMotionControl<Driver, Timer, TIMER_HZ>, LimitMin, LimitMax>
+where
+    Driver: SetDirection + Step,
+    Timer: FugitTimer<TIMER_HZ>,
+    LimitMin: AnyInputSwitch,
+    LimitMin::Error: Debug,
+    LimitMax: AnyInputSwitch,
+    LimitMax::Error: Debug,
+{
+    pub fn update_limit_switches(
+        &mut self,
+    ) -> Result<(), LimitSensorError<LimitMin::Error, LimitMax::Error>> {
+        if let Some(axis_limit_update) = self
+            .limit_min
+            .sense()
+            .map_err(|err| LimitSensorError::Min(err))?
+        {
+            let limit_min_status = match axis_limit_update.status {
+                SwitchStatus::On => AxisLimitStatus::Over,
+                SwitchStatus::Off => AxisLimitStatus::Under,
+            };
+            self.limit_min_status = Some(limit_min_status);
+        }
+
+        if let Some(axis_limit_update) = self
+            .limit_max
+            .sense()
+            .map_err(|err| LimitSensorError::Max(err))?
+        {
+            let limit_max_status = match axis_limit_update.status {
+                SwitchStatus::On => AxisLimitStatus::Over,
+                SwitchStatus::Off => AxisLimitStatus::Under,
+            };
+            self.limit_max_status = Some(limit_max_status);
+        }
+
+        Ok(())
     }
 }
 

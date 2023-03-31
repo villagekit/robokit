@@ -18,16 +18,18 @@ use stm32f7xx_hal::{
 };
 
 use gridbot::{
-    actor::{ActorPoll, ActorReceive, ActorSense},
     actuators::{
         axis::{AxisDevice, AxisLimitSide},
         led::LedDevice,
         spindle::{SpindleDevice, SpindleDriverJmcHsv57},
     },
-    command::{CommandCenter, CommandCenterAxes, CommandCenterLeds, CommandCenterSpindles},
     init_heap,
-    machine::{Machine, StopMessage, ToggleMessage},
-    sensors::switch::{SwitchActiveHigh, SwitchActiveLow, SwitchDevice, SwitchStatus},
+    machine::Machine,
+    runner::{Runner, RunnerAxes, RunnerLeds, RunnerSpindles},
+    sensors::{
+        switch::{SwitchActiveHigh, SwitchActiveLow, SwitchDevice, SwitchStatus},
+        Sensor,
+    },
     timer::{setup as timer_setup, tick as timer_tick, SubTimer, TICK_TIMER_HZ},
 };
 
@@ -152,16 +154,16 @@ fn main() -> ! {
     let main_spindle_driver: MainSpindleDriver = SpindleDriverJmcHsv57::new(main_spindle_serial);
     let main_spindle = SpindleDevice::new(main_spindle_driver);
 
-    let command_center = CommandCenter::new(
-        CommandCenterLeds {
+    let runner = Runner::new(
+        RunnerLeds {
             green_led,
             blue_led,
             red_led,
         },
-        CommandCenterAxes { x_axis },
-        CommandCenterSpindles { main_spindle },
+        RunnerAxes { x_axis },
+        RunnerSpindles { main_spindle },
     );
-    let mut machine = Machine::new(command_center);
+    let mut machine = Machine::new(runner);
 
     let mut iwdg = watchdog::IndependentWatchdog::new(p.IWDG);
 
@@ -172,14 +174,14 @@ fn main() -> ! {
 
         if let Some(user_button_update) = user_button.sense().expect("Error reading user button") {
             if let SwitchStatus::On = user_button_update.status {
-                machine.receive(&ToggleMessage {});
+                machine.toggle();
             }
         }
 
         if let Poll::Ready(Err(err)) = machine.poll() {
             defmt::println!("Unexpected error: {}", Debug2Format(&err));
 
-            machine.receive(&StopMessage {});
+            machine.stop();
             loop {
                 match machine.poll() {
                     _ => {}
