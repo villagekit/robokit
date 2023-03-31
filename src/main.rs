@@ -8,7 +8,7 @@ use cortex_m_rt::entry;
 use defmt::Debug2Format;
 use fugit::ExtU32;
 use stm32f7xx_hal::{
-    gpio::{self, Alternate, Floating, Input, Output, Pin, PushPull},
+    gpio::{self, Alternate, Floating, Input, Output, Pin, PullUp, PushPull},
     pac,
     prelude::*,
     rcc::BusTimerClock,
@@ -19,13 +19,15 @@ use stm32f7xx_hal::{
 
 use gridbot::{
     actor::{ActorPoll, ActorReceive, ActorSense},
-    actuators::axis::AxisDevice,
-    actuators::led::LedDevice,
-    actuators::spindle::{SpindleDevice, SpindleDriverJmcHsv57},
+    actuators::{
+        axis::{AxisDevice, AxisLimitSide},
+        led::LedDevice,
+        spindle::{SpindleDevice, SpindleDriverJmcHsv57},
+    },
     command::{CommandCenter, CommandCenterAxes, CommandCenterLeds, CommandCenterSpindles},
     init_heap,
     machine::{Machine, StopMessage, ToggleMessage},
-    sensors::switch::{SwitchActiveHigh, SwitchDevice, SwitchStatus},
+    sensors::switch::{SwitchActiveHigh, SwitchActiveLow, SwitchDevice, SwitchStatus},
     timer::{setup as timer_setup, tick as timer_tick, SubTimer, TICK_TIMER_HZ},
 };
 
@@ -55,14 +57,14 @@ type MainSpindleSerial = Serial<pac::USART2, (gpio::PD5<Alternate<7>>, gpio::PD6
 type MainSpindleDriver = SpindleDriverJmcHsv57<MainSpindleSerial>;
 
 /* sensors */
-type XAxisLimitMinPin = Pin<'F', 15, Input<Floating>>; // D2
+type XAxisLimitMinPin = Pin<'F', 15, Input<PullUp>>; // D2
 type XAxisLimitMinTimer = SubTimer;
 type XAxisLimitMin =
-    SwitchDevice<XAxisLimitMinPin, SwitchActiveHigh, XAxisLimitMinTimer, TICK_TIMER_HZ>;
-type XAxisLimitMaxPin = Pin<'E', 13, Input<Floating>>; // D3
+    SwitchDevice<XAxisLimitMinPin, SwitchActiveLow, XAxisLimitMinTimer, TICK_TIMER_HZ>;
+type XAxisLimitMaxPin = Pin<'F', 14, Input<PullUp>>; // D4
 type XAxisLimitMaxTimer = SubTimer;
 type XAxisLimitMax =
-    SwitchDevice<XAxisLimitMaxPin, SwitchActiveHigh, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
+    SwitchDevice<XAxisLimitMaxPin, SwitchActiveLow, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
 
 #[entry]
 fn main() -> ! {
@@ -78,7 +80,6 @@ fn main() -> ! {
     let gpiob = p.GPIOB.split();
     let gpioc = p.GPIOC.split();
     let gpiod = p.GPIOD.split();
-    let gpioe = p.GPIOE.split();
     let gpiof = p.GPIOF.split();
     let gpiog = p.GPIOG.split();
 
@@ -106,25 +107,24 @@ fn main() -> ! {
 
     let max_acceleration_in_millimeters_per_sec_per_sec = 20_f64;
 
+    // https://www.makerstore.com.au/product/gear-m1/
     let steps_per_revolution = 6400_f64;
-    let leadscrew_starts = 4_f64;
-    let leadscrew_pitch = 2_f64;
-    let millimeters_per_revolution = leadscrew_starts * leadscrew_pitch;
-    let steps_per_millimeter = steps_per_revolution / millimeters_per_revolution;
+    let millimeters_per_revolution = 125.66_f64;
+    let steps_per_millimeter = steps_per_revolution * (1_f64 / millimeters_per_revolution);
 
     defmt::println!("Steps per mm: {}", steps_per_millimeter);
 
     let x_axis_dir_pin: XAxisDirPin = gpiog.pg9.into_push_pull_output();
     let x_axis_step_pin: XAxisStepPin = gpiog.pg14.into_push_pull_output();
     let x_axis_timer: XAxisTimer = p.TIM3.counter(&clocks);
-    let x_axis_limit_min_pin: XAxisLimitMinPin = gpiof.pf15.into_floating_input();
+    let x_axis_limit_min_pin: XAxisLimitMinPin = gpiof.pf15.into_pull_up_input();
     let x_axis_limit_min_timer: XAxisLimitMinTimer = SubTimer::new();
     let x_axis_limit_min: XAxisLimitMin =
-        SwitchDevice::new_active_high(x_axis_limit_min_pin, x_axis_limit_min_timer);
-    let x_axis_limit_max_pin: XAxisLimitMaxPin = gpioe.pe13.into_floating_input();
+        SwitchDevice::new_active_low(x_axis_limit_min_pin, x_axis_limit_min_timer);
+    let x_axis_limit_max_pin: XAxisLimitMaxPin = gpiof.pf14.into_pull_up_input();
     let x_axis_limit_max_timer: XAxisLimitMaxTimer = SubTimer::new();
     let x_axis_limit_max: XAxisLimitMax =
-        SwitchDevice::new_active_high(x_axis_limit_max_pin, x_axis_limit_max_timer);
+        SwitchDevice::new_active_low(x_axis_limit_max_pin, x_axis_limit_max_timer);
     let x_axis = AxisDevice::new_dq542ma(
         x_axis_dir_pin,
         x_axis_step_pin,
@@ -133,6 +133,7 @@ fn main() -> ! {
         steps_per_millimeter,
         x_axis_limit_min,
         x_axis_limit_max,
+        AxisLimitSide::Min,
     );
 
     let main_spindle_serial_tx = gpiod.pd5.into_alternate();

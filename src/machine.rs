@@ -5,9 +5,11 @@ use heapless::Vec;
 
 use crate::{
     actor::{ActorPoll, ActorReceive},
-    actuators::axis::AxisMoveMessage,
-    actuators::led::LedBlinkMessage,
-    actuators::spindle::{SpindleSetMessage, SpindleStatus},
+    actuators::{
+        axis::{AxisHomeMessage, AxisMoveAbsoluteMessage, AxisMoveRelativeMessage},
+        led::LedBlinkMessage,
+        spindle::{SpindleSetMessage, SpindleStatus},
+    },
     command::{AnyCommandCenter, Command, ResetMessage},
 };
 
@@ -33,41 +35,57 @@ pub struct Machine<CommandCenter: AnyCommandCenter> {
 impl<CommandCenter: AnyCommandCenter> Machine<CommandCenter> {
     pub fn new(command_center: CommandCenter) -> Self {
         let run_commands: [Command; 8] = [
-            Command::GreenLed(LedBlinkMessage {
+            Command::GreenLedBlink(LedBlinkMessage {
                 duration: 50.millis(),
             }),
-            Command::BlueLed(LedBlinkMessage {
+            Command::BlueLedBlink(LedBlinkMessage {
                 duration: 100.millis(),
             }),
-            Command::RedLed(LedBlinkMessage {
+            Command::RedLedBlink(LedBlinkMessage {
                 duration: 200.millis(),
             }),
-            Command::XAxis(AxisMoveMessage {
-                max_velocity_in_millimeters_per_sec: 40_f64,
+            Command::XAxisMoveRelative(AxisMoveRelativeMessage {
+                max_velocity_in_millimeters_per_sec: 10_f64,
                 distance_in_millimeters: 40_f64,
             }),
-            Command::RedLed(LedBlinkMessage {
+            Command::RedLedBlink(LedBlinkMessage {
                 duration: 50.millis(),
             }),
-            Command::BlueLed(LedBlinkMessage {
+            Command::BlueLedBlink(LedBlinkMessage {
                 duration: 100.millis(),
             }),
-            Command::GreenLed(LedBlinkMessage {
+            Command::GreenLedBlink(LedBlinkMessage {
                 duration: 200.millis(),
             }),
-            Command::XAxis(AxisMoveMessage {
-                max_velocity_in_millimeters_per_sec: 40_f64,
+            Command::XAxisMoveRelative(AxisMoveRelativeMessage {
+                max_velocity_in_millimeters_per_sec: 10_f64,
                 distance_in_millimeters: -40_f64,
             }),
         ];
 
-        let start_commands: [Command; 1] = [Command::MainSpindle(SpindleSetMessage {
-            status: SpindleStatus::On { rpm: 1000 },
-        })];
+        let start_commands: [Command; 1] = [
+            Command::XAxisHome(AxisHomeMessage {
+                max_velocity_in_millimeters_per_sec: 10_f64,
+                back_off_distance_in_millimeters: 0.1_f64,
+            }),
+            /*
+            Command::MainSpindleSet(SpindleSetMessage {
+                status: SpindleStatus::On { rpm: 1000 },
+            }),
+            */
+        ];
 
-        let stop_commands: [Command; 1] = [Command::MainSpindle(SpindleSetMessage {
-            status: SpindleStatus::Off,
-        })];
+        let stop_commands: [Command; 1] = [
+            Command::XAxisMoveAbsolute(AxisMoveAbsoluteMessage {
+                max_velocity_in_millimeters_per_sec: 10_f64,
+                position_in_millimeters: 0_f64,
+            }),
+            /*
+            Command::MainSpindleSet(SpindleSetMessage {
+                status: SpindleStatus::Off,
+            }),
+            */
+        ];
 
         Self {
             command_center,

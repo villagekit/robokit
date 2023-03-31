@@ -4,7 +4,9 @@ use defmt::Format;
 use heapless::Deque;
 
 use crate::actor::{ActorPoll, ActorReceive};
-use crate::actuators::axis::{AnyAxis, AxisMoveMessage};
+use crate::actuators::axis::{
+    AnyAxis, AxisHomeMessage, AxisMoveAbsoluteMessage, AxisMoveRelativeMessage,
+};
 use crate::actuators::led::{AnyLed, LedBlinkMessage};
 use crate::actuators::spindle::{AnySpindle, SpindleSetMessage};
 use crate::timer::TICK_TIMER_HZ;
@@ -15,11 +17,13 @@ pub trait AnyCommandCenter: ActorReceive<ResetMessage> + ActorReceive<Command> +
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum Command {
-    GreenLed(LedBlinkMessage<TICK_TIMER_HZ>),
-    BlueLed(LedBlinkMessage<TICK_TIMER_HZ>),
-    RedLed(LedBlinkMessage<TICK_TIMER_HZ>),
-    XAxis(AxisMoveMessage),
-    MainSpindle(SpindleSetMessage),
+    GreenLedBlink(LedBlinkMessage<TICK_TIMER_HZ>),
+    BlueLedBlink(LedBlinkMessage<TICK_TIMER_HZ>),
+    RedLedBlink(LedBlinkMessage<TICK_TIMER_HZ>),
+    XAxisMoveRelative(AxisMoveRelativeMessage),
+    XAxisMoveAbsolute(AxisMoveAbsoluteMessage),
+    XAxisHome(AxisHomeMessage),
+    MainSpindleSet(SpindleSetMessage),
 }
 
 pub struct CommandCenterLeds<
@@ -126,19 +130,25 @@ impl<
 {
     fn receive(&mut self, command: &Command) {
         match command {
-            Command::GreenLed(message) => {
+            Command::GreenLedBlink(message) => {
                 self.leds.green_led.receive(message);
             }
-            Command::BlueLed(message) => {
+            Command::BlueLedBlink(message) => {
                 self.leds.blue_led.receive(message);
             }
-            Command::RedLed(message) => {
+            Command::RedLedBlink(message) => {
                 self.leds.red_led.receive(message);
             }
-            Command::XAxis(message) => {
+            Command::XAxisMoveRelative(message) => {
                 self.axes.x_axis.receive(message);
             }
-            Command::MainSpindle(message) => {
+            Command::XAxisMoveAbsolute(message) => {
+                self.axes.x_axis.receive(message);
+            }
+            Command::XAxisHome(message) => {
+                self.axes.x_axis.receive(message);
+            }
+            Command::MainSpindleSet(message) => {
                 self.spindles.main_spindle.receive(message);
             }
         }
@@ -171,27 +181,37 @@ where
         for _command_index in 0..num_commands {
             let command = self.active_commands.pop_front().unwrap();
             let result = match command {
-                Command::GreenLed(_) => self
+                Command::GreenLedBlink(_) => self
                     .leds
                     .green_led
                     .poll()
                     .map_err(|err| CommandError::GreenLed(err)),
-                Command::BlueLed(_) => self
+                Command::BlueLedBlink(_) => self
                     .leds
                     .blue_led
                     .poll()
                     .map_err(|err| CommandError::BlueLed(err)),
-                Command::RedLed(_) => self
+                Command::RedLedBlink(_) => self
                     .leds
                     .red_led
                     .poll()
                     .map_err(|err| CommandError::RedLed(err)),
-                Command::XAxis(_) => self
+                Command::XAxisMoveRelative(_) => self
                     .axes
                     .x_axis
                     .poll()
                     .map_err(|err| CommandError::XAxis(err)),
-                Command::MainSpindle(_) => self
+                Command::XAxisMoveAbsolute(_) => self
+                    .axes
+                    .x_axis
+                    .poll()
+                    .map_err(|err| CommandError::XAxis(err)),
+                Command::XAxisHome(_) => self
+                    .axes
+                    .x_axis
+                    .poll()
+                    .map_err(|err| CommandError::XAxis(err)),
+                Command::MainSpindleSet(_) => self
                     .spindles
                     .main_spindle
                     .poll()
