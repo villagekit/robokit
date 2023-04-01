@@ -1,9 +1,7 @@
 pub mod switch;
 
-use core::fmt::Debug;
+use crate::error::Error;
 
 pub trait Sensor<Message> {
-    type Error: Debug;
-
-    fn sense(&mut self) -> Result<Option<Message>, Self::Error>;
+    fn sense(&mut self) -> Result<Option<Message>, Error>;
 }

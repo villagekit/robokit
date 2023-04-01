@@ -1,15 +1,19 @@
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
 use heapless::Deque;
 
-use crate::actuators::{
-    axis::{AnyAxis, AxisAction},
-    led::{AnyLed, LedAction},
-    spindle::{AnySpindle, SpindleAction},
-    Actuator,
-};
 use crate::timer::TICK_TIMER_HZ;
+use crate::{
+    actuators::{
+        axis::{AnyAxis, AxisAction},
+        led::{AnyLed, LedAction},
+        spindle::{AnySpindle, SpindleAction},
+        Actuator,
+    },
+    error::Error,
+};
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum Command {
@@ -62,18 +66,10 @@ pub struct RunnerSpindles<MainSpindle: AnySpindle> {
 }
 
 #[derive(Debug)]
-pub enum CommandError<
-    GreenLedError: Debug,
-    BlueLedError: Debug,
-    RedLedError: Debug,
-    XAxisError: Debug,
-    MainSpindleError: Debug,
-> {
-    GreenLed(GreenLedError),
-    BlueLed(BlueLedError),
-    RedLed(RedLedError),
-    XAxis(XAxisError),
-    MainSpindle(MainSpindleError),
+pub enum CommandError {
+    Led(LedId, Box<dyn Debug>),
+    Axis(AxisId, Box<dyn Debug>),
+    Spindle(SpindleId, Box<dyn Debug>),
 }
 
 pub struct Runner<
@@ -121,8 +117,6 @@ impl<
     }
 }
 
-type PollError<AnyActuator, Action> = <AnyActuator as Actuator<Action>>::Error;
-
 impl<
         GreenLed: AnyLed<TICK_TIMER_HZ>,
         BlueLed: AnyLed<TICK_TIMER_HZ>,
@@ -131,14 +125,6 @@ impl<
         MainSpindle: AnySpindle,
     > Actuator<RunnerAction> for Runner<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
 {
-    type Error = CommandError<
-        PollError<GreenLed, LedAction<TICK_TIMER_HZ>>,
-        PollError<BlueLed, LedAction<TICK_TIMER_HZ>>,
-        PollError<RedLed, LedAction<TICK_TIMER_HZ>>,
-        PollError<XAxis, AxisAction>,
-        PollError<MainSpindle, SpindleAction>,
-    >;
-
     fn receive(&mut self, action: &RunnerAction) {
         match action {
             RunnerAction::Run(command) => {
@@ -166,7 +152,7 @@ impl<
         }
     }
 
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
         let num_commands = self.active_commands.len();
         for _command_index in 0..num_commands {
             let command = self.active_commands.pop_front().unwrap();
@@ -175,27 +161,27 @@ impl<
                     .leds
                     .green_led
                     .poll()
-                    .map_err(|err| CommandError::GreenLed(err)),
+                    .map_err(|err| Box::new(CommandError::Led(LedId::Green, err))),
                 Command::Led(LedId::Blue, _) => self
                     .leds
                     .blue_led
                     .poll()
-                    .map_err(|err| CommandError::BlueLed(err)),
+                    .map_err(|err| Box::new(CommandError::Led(LedId::Blue, err))),
                 Command::Led(LedId::Red, _) => self
                     .leds
                     .red_led
                     .poll()
-                    .map_err(|err| CommandError::RedLed(err)),
+                    .map_err(|err| Box::new(CommandError::Led(LedId::Red, err))),
                 Command::Axis(AxisId::X, _) => self
                     .axes
                     .x_axis
                     .poll()
-                    .map_err(|err| CommandError::XAxis(err)),
-                Command::Spindle(SpindleId::Main, _) => self
-                    .spindles
-                    .main_spindle
-                    .poll()
-                    .map_err(|err| CommandError::MainSpindle(err)),
+                    .map_err(|err| Box::new(CommandError::Axis(AxisId::X, err))),
+                Command::Spindle(SpindleId::Main, _) => {
+                    self.spindles.main_spindle.poll().map_err(|err| {
+                        Box::new(CommandError::Spindle(SpindleId::Main, Box::new(err)))
+                    })
+                }
             };
 
             match result {

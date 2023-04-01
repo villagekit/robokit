@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 use core::task::Poll;
@@ -14,9 +15,12 @@ use stepper::{
 };
 
 use super::Actuator;
-use crate::sensors::{
-    switch::{AnyInputSwitch, SwitchStatus, SwitchUpdate},
-    Sensor,
+use crate::{
+    error::Error,
+    sensors::{
+        switch::{AnyInputSwitch, SwitchStatus, SwitchUpdate},
+        Sensor,
+    },
 };
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -134,9 +138,7 @@ where
     Timer: FugitTimer<TIMER_HZ>,
     <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
     LimitMin: AnyInputSwitch,
-    LimitMin::Error: Debug,
     LimitMax: AnyInputSwitch,
-    LimitMax::Error: Debug,
 {
 }
 
@@ -227,11 +229,11 @@ impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64, TIMER_HZ>
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum AxisError<DriverError: Debug, LimitMinSenseError: Debug, LimitMaxSenseError: Debug> {
+#[derive(Clone, Debug)]
+pub enum AxisError<DriverError: Debug> {
     Driver(DriverError),
     Limit(AxisLimitSide),
-    LimitSensor(LimitSensorError<LimitMinSenseError, LimitMaxSenseError>),
+    LimitSensor(Error),
     Unexpected,
 }
 
@@ -242,16 +244,8 @@ where
     Timer: FugitTimer<TIMER_HZ>,
     <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
     LimitMin: AnyInputSwitch,
-    LimitMin::Error: Debug,
     LimitMax: AnyInputSwitch,
-    LimitMax::Error: Debug,
 {
-    type Error = AxisError<
-        <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error,
-        GetLimitSensorError<LimitMin>,
-        GetLimitSensorError<LimitMax>,
-    >;
-
     fn receive(&mut self, action: &AxisAction) {
         match action {
             AxisAction::MoveRelative {
@@ -326,13 +320,13 @@ where
     }
 
     // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html#
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
         // assert min and max limits are set
         if let None = self.limit_min_status {
-            return Poll::Ready(Err(AxisError::Unexpected));
+            return Poll::Ready(Err(Box::new(AxisError::Unexpected)));
         }
         if let None = self.limit_max_status {
-            return Poll::Ready(Err(AxisError::Unexpected));
+            return Poll::Ready(Err(Box::new(AxisError::Unexpected)));
         }
 
         match self.state {
@@ -350,7 +344,7 @@ where
                     AxisMoveStatus::Start => {
                         driver
                             .move_to_position(max_velocity_in_steps_per_sec, target_step)
-                            .map_err(|err| AxisError::Driver(err))?;
+                            .map_err(|err| Box::new(AxisError::Driver(err)))?;
 
                         self.state = AxisState::Moving(move_state, AxisMoveStatus::Motion);
                         Poll::Pending
@@ -360,7 +354,9 @@ where
                             // limit: max
                             Direction::Forward => {
                                 if let Some(AxisLimitStatus::Over) = self.limit_max_status {
-                                    return Poll::Ready(Err(AxisError::Limit(AxisLimitSide::Max)));
+                                    return Poll::Ready(Err(Box::new(AxisError::Limit(
+                                        AxisLimitSide::Max,
+                                    ))));
                                 }
                             }
                             // limit: min
@@ -371,7 +367,9 @@ where
                             }
                         }
 
-                        let still_moving = driver.update().map_err(|err| AxisError::Driver(err))?;
+                        let still_moving = driver
+                            .update()
+                            .map_err(|err| Box::new(AxisError::Driver(err)))?;
                         if still_moving {
                             Poll::Pending
                         } else {
@@ -400,10 +398,10 @@ where
 
                         driver
                             .reset_position(0)
-                            .map_err(|err| AxisError::Driver(err))?;
+                            .map_err(|err| Box::new(AxisError::Driver(err)))?;
                         driver
                             .move_to_position(max_velocity_in_steps_per_sec, target_step)
-                            .map_err(|err| AxisError::Driver(err))?;
+                            .map_err(|err| Box::new(AxisError::Driver(err)))?;
 
                         self.state =
                             AxisState::Homing(home_state, AxisHomeStatus::MotionTowardsHome);
@@ -426,11 +424,13 @@ where
                             return Poll::Pending;
                         }
 
-                        let still_moving = driver.update().map_err(|err| AxisError::Driver(err))?;
+                        let still_moving = driver
+                            .update()
+                            .map_err(|err| Box::new(AxisError::Driver(err)))?;
                         if still_moving {
                             Poll::Pending
                         } else {
-                            Poll::Ready(Err(AxisError::Unexpected))
+                            Poll::Ready(Err(Box::new(AxisError::Unexpected)))
                         }
                     }
                     AxisHomeStatus::Interlude => {
@@ -441,10 +441,10 @@ where
 
                         driver
                             .reset_position(0)
-                            .map_err(|err| AxisError::Driver(err))?;
+                            .map_err(|err| Box::new(AxisError::Driver(err)))?;
                         driver
                             .move_to_position(max_velocity_in_steps_per_sec, target_step)
-                            .map_err(|err| AxisError::Driver(err))?;
+                            .map_err(|err| Box::new(AxisError::Driver(err)))?;
 
                         self.state =
                             AxisState::Homing(home_state, AxisHomeStatus::MotionBackOffHome);
@@ -489,10 +489,10 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum LimitSensorError<LimitMinSenseError: Debug, LimitMaxSenseError: Debug> {
-    Min(LimitMinSenseError),
-    Max(LimitMaxSenseError),
+#[derive(Clone, Debug)]
+pub enum LimitSensorError {
+    Min(Error),
+    Max(Error),
 }
 
 impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax>
@@ -501,13 +501,9 @@ where
     Driver: SetDirection + Step,
     Timer: FugitTimer<TIMER_HZ>,
     LimitMin: AnyInputSwitch,
-    LimitMin::Error: Debug,
     LimitMax: AnyInputSwitch,
-    LimitMax::Error: Debug,
 {
-    pub fn update_limit_switches(
-        &mut self,
-    ) -> Result<(), LimitSensorError<LimitMin::Error, LimitMax::Error>> {
+    pub fn update_limit_switches(&mut self) -> Result<(), Error> {
         if let Some(axis_limit_update) = self
             .limit_min
             .sense()

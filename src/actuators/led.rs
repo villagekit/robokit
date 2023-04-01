@@ -1,9 +1,12 @@
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
 use embedded_hal::digital::v2::OutputPin;
 use fugit::TimerDurationU32 as TimerDuration;
 use fugit_timer::Timer;
+
+use crate::error::Error;
 
 use super::Actuator;
 
@@ -74,8 +77,6 @@ where
     T: Timer<TIMER_HZ>,
     T::Error: Debug,
 {
-    type Error = LedError<P::Error, T::Error>;
-
     fn receive(&mut self, action: &LedAction<TIMER_HZ>) {
         match action {
             LedAction::Blink { duration } => {
@@ -87,17 +88,19 @@ where
         }
     }
 
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
         if let Some(state) = self.state {
             match state.status {
                 LedBlinkStatus::Start => {
                     // start timer
                     self.timer
                         .start(state.duration)
-                        .map_err(|err| LedError::Timer(err))?;
+                        .map_err(|err| Box::new(LedError::Timer(err)))?;
 
                     // turn led on
-                    self.pin.set_high().map_err(|err| LedError::Pin(err))?;
+                    self.pin
+                        .set_high()
+                        .map_err(|err| Box::new(LedError::Pin(err)))?;
 
                     // update state
                     self.state = Some(LedBlinkState {
@@ -108,7 +111,7 @@ where
                     Poll::Pending
                 }
                 LedBlinkStatus::Wait => match self.timer.wait() {
-                    Err(nb::Error::Other(err)) => Poll::Ready(Err(LedError::Timer(err))),
+                    Err(nb::Error::Other(err)) => Poll::Ready(Err(Box::new(LedError::Timer(err)))),
                     Err(nb::Error::WouldBlock) => Poll::Pending,
                     Ok(()) => {
                         self.state = Some(LedBlinkState {
@@ -120,7 +123,9 @@ where
                     }
                 },
                 LedBlinkStatus::Done => {
-                    self.pin.set_low().map_err(|err| LedError::Pin(err))?;
+                    self.pin
+                        .set_low()
+                        .map_err(|err| Box::new(LedError::Pin(err)))?;
 
                     self.state = None;
 

@@ -1,5 +1,6 @@
 // inspired by https://github.com/rubberduck203/switch-hal
 
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 use defmt::Format;
@@ -7,6 +8,8 @@ use embedded_hal::digital::v2::InputPin;
 use fugit::{MillisDurationU32 as MillisDuration, TimerDurationU32 as TimerDuration};
 use fugit_timer::Timer;
 use nb;
+
+use crate::error::Error;
 
 use super::Sensor;
 
@@ -122,21 +125,23 @@ where
     Pin: InputPin,
     Tim: Timer<TIMER_HZ>,
 {
-    type Error = SwitchError<<Self as InputSwitch>::Error, Tim::Error>;
-
-    fn sense(&mut self) -> Result<Option<SwitchUpdate>, Self::Error> {
+    fn sense(&mut self) -> Result<Option<SwitchUpdate>, Error> {
         if self.is_debouncing {
             match self.timer.wait() {
                 Ok(()) => {
-                    self.timer.cancel().map_err(|err| SwitchError::Timer(err))?;
+                    self.timer
+                        .cancel()
+                        .map_err(|err| Box::new(SwitchError::Timer(err)))?;
                     self.is_debouncing = false;
                 }
                 Err(nb::Error::WouldBlock) => return Ok(None),
-                Err(nb::Error::Other(err)) => return Err(SwitchError::Timer(err)),
+                Err(nb::Error::Other(err)) => return Err(Box::new(SwitchError::Timer(err))),
             }
         }
 
-        let is_active = self.is_active().map_err(|err| SwitchError::Pin(err))?;
+        let is_active = self
+            .is_active()
+            .map_err(|err| Box::new(SwitchError::Pin(err)))?;
 
         let status = match is_active {
             true => SwitchStatus::On,
@@ -151,7 +156,7 @@ where
             self.is_debouncing = true;
             self.timer
                 .start(debounce_duration)
-                .map_err(|err| SwitchError::Timer(err))?;
+                .map_err(|err| Box::new(SwitchError::Timer(err)))?;
 
             Ok(Some(SwitchUpdate { status }))
         } else {

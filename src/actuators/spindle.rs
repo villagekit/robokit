@@ -1,5 +1,6 @@
 // https://github.com/robert-budde/iHSV-Servo-Tool/blob/master/iHSV_Properties.py
 
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
@@ -8,6 +9,7 @@ use heapless::{Deque, Vec};
 use num::abs;
 
 use super::Actuator;
+use crate::error::Error;
 use crate::modbus::{ModbusSerial, ModbusSerialError, ModbusSerialErrorAlias};
 use crate::util::{i16_to_u16, u16_to_i16};
 
@@ -285,15 +287,13 @@ impl<Driver> Actuator<SpindleAction> for SpindleDevice<Driver>
 where
     Driver: SpindleDriver,
 {
-    type Error = Driver::Error;
-
     fn receive(&mut self, action: &SpindleAction) {
         match action {
             SpindleAction::Set { status } => self.driver.set(*status),
         }
     }
 
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        self.driver.poll()
+    fn poll(&mut self) -> Poll<Result<(), Error>> {
+        self.driver.poll().map_err(Box::new)
     }
 }
