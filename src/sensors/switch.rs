@@ -1,5 +1,6 @@
 // inspired by https://github.com/rubberduck203/switch-hal
 
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 use defmt::Format;
@@ -10,7 +11,8 @@ use nb;
 
 use super::Sensor;
 
-pub trait AnyInputSwitch: Sensor<SwitchUpdate> {}
+pub trait AnyInputSwitchError: Debug {}
+pub trait AnyInputSwitch: Sensor<SwitchUpdate, Error = Box<dyn AnyInputSwitchError>> {}
 
 #[derive(Copy, Clone, Debug, Format, PartialEq)]
 pub enum SwitchStatus {
@@ -115,6 +117,8 @@ pub enum SwitchError<PinError: Debug, TimerError: Debug> {
     Timer(TimerError),
 }
 
+impl<PinError: Debug, TimerError: Debug> AnyInputSwitchError for SwitchError<PinError, TimerError> {}
+
 impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> Sensor<SwitchUpdate>
     for SwitchDevice<Pin, ActiveLevel, Tim, TIMER_HZ>
 where
@@ -122,7 +126,7 @@ where
     Pin: InputPin,
     Tim: Timer<TIMER_HZ>,
 {
-    type Error = SwitchError<<Self as InputSwitch>::Error, Tim::Error>;
+    type Error = Box<dyn AnyInputSwitchError>;
 
     fn sense(&mut self) -> Result<Option<SwitchUpdate>, Self::Error> {
         if self.is_debouncing {

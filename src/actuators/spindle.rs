@@ -1,5 +1,6 @@
 // https://github.com/robert-budde/iHSV-Servo-Tool/blob/master/iHSV_Properties.py
 
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
@@ -18,7 +19,12 @@ pub enum SpindleAction {
     Set { status: SpindleStatus },
 }
 
-pub trait AnySpindle: Actuator<SpindleAction> {}
+pub trait AnySpindleError: Debug {}
+pub trait AnySpindle: Actuator<SpindleAction>
+where
+    Actuator::Error: AnySpindleError,
+{
+}
 
 impl<Driver> AnySpindle for SpindleDevice<Driver> where Driver: SpindleDriver {}
 
@@ -177,6 +183,11 @@ pub enum SpindleDriverJmcHsv57Error<SerialTxError: Debug, SerialRxError: Debug> 
     QueueFull,
 }
 
+impl<SerialTxError: Debug, SerialRxError: Debug> AnySpindleError
+    for SpindleDriverJmcHsv57Error<SerialTxError, SerialRxError>
+{
+}
+
 pub type SpindleDriverJmcHsv57ErrorAlias<Serial> =
     SpindleDriverJmcHsv57Error<<Serial as Write<u8>>::Error, <Serial as Read<u8>>::Error>;
 
@@ -284,8 +295,9 @@ pub type SpindleError<Driver> = <Driver as SpindleDriver>::Error;
 impl<Driver> Actuator<SpindleAction> for SpindleDevice<Driver>
 where
     Driver: SpindleDriver,
+    Driver::Error: AnySpindleError,
 {
-    type Error = Driver::Error;
+    type Error = Box<dyn AnySpindleError>;
 
     fn receive(&mut self, action: &SpindleAction) {
         match action {
@@ -294,6 +306,6 @@ where
     }
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        self.driver.poll()
+        self.driver.poll().map_err(|err| Box::new(err))
     }
 }

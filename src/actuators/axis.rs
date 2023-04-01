@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 use core::task::Poll;
@@ -35,7 +36,8 @@ pub enum AxisAction {
     },
 }
 
-pub trait AnyAxis: Actuator<AxisAction> {}
+pub trait AnyAxisError: Debug {}
+pub trait AnyAxis: Actuator<AxisAction, Error = Box<dyn AnyAxisError>> {}
 
 type AxisVelocity = f64;
 pub type AxisMotionProfile = ramp_maker::Trapezoidal<AxisVelocity>;
@@ -235,6 +237,11 @@ pub enum AxisError<DriverError: Debug, LimitMinSenseError: Debug, LimitMaxSenseE
     Unexpected,
 }
 
+impl<DriverError: Debug, LimitMinSenseError: Debug, LimitMaxSenseError: Debug> AnyAxisError
+    for AxisError<DriverError, LimitMinSenseError, LimitMaxSenseError>
+{
+}
+
 impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> Actuator<AxisAction>
     for AxisDevice<AxisMotionControl<Driver, Timer, TIMER_HZ>, LimitMin, LimitMax>
 where
@@ -246,11 +253,7 @@ where
     LimitMax: AnyInputSwitch,
     LimitMax::Error: Debug,
 {
-    type Error = AxisError<
-        <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error,
-        GetLimitSensorError<LimitMin>,
-        GetLimitSensorError<LimitMax>,
-    >;
+    type Error = Box<dyn AnyAxisError>;
 
     fn receive(&mut self, action: &AxisAction) {
         match action {

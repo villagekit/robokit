@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
@@ -12,7 +13,11 @@ pub enum LedAction<const TIMER_HZ: u32> {
     Blink { duration: TimerDuration<TIMER_HZ> },
 }
 
-pub trait AnyLed<const TIMER_HZ: u32>: Actuator<LedAction<TIMER_HZ>> {}
+pub trait AnyLedError: Debug {}
+pub trait AnyLed<const TIMER_HZ: u32>:
+    Actuator<LedAction<TIMER_HZ>, Error = Box<dyn AnyLedError>>
+{
+}
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum LedBlinkStatus {
@@ -67,6 +72,8 @@ pub enum LedError<PinError: Debug, TimerError: Debug> {
     Timer(TimerError),
 }
 
+impl<PinError: Debug, TimerError: Debug> AnyLedError for LedError<PinError, TimerError> {}
+
 impl<P, T, const TIMER_HZ: u32> Actuator<LedAction<TIMER_HZ>> for LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
@@ -74,7 +81,7 @@ where
     T: Timer<TIMER_HZ>,
     T::Error: Debug,
 {
-    type Error = LedError<P::Error, T::Error>;
+    type Error = Box<dyn AnyLedError>;
 
     fn receive(&mut self, action: &LedAction<TIMER_HZ>) {
         match action {

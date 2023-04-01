@@ -1,12 +1,13 @@
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
 use heapless::Deque;
 
 use crate::actuators::{
-    axis::{AnyAxis, AxisAction},
-    led::{AnyLed, LedAction},
-    spindle::{AnySpindle, SpindleAction},
+    axis::{AnyAxis, AnyAxisError, AxisAction},
+    led::{AnyLed, AnyLedError, LedAction},
+    spindle::{AnySpindle, AnySpindleError, SpindleAction},
     Actuator,
 };
 use crate::timer::TICK_TIMER_HZ;
@@ -43,75 +44,38 @@ pub enum SpindleId {
     Main,
 }
 
-pub struct RunnerLeds<
-    GreenLed: AnyLed<TICK_TIMER_HZ>,
-    BlueLed: AnyLed<TICK_TIMER_HZ>,
-    RedLed: AnyLed<TICK_TIMER_HZ>,
-> {
-    pub green_led: GreenLed,
-    pub blue_led: BlueLed,
-    pub red_led: RedLed,
+pub struct RunnerLeds {
+    pub green_led: Box<dyn AnyLed<TICK_TIMER_HZ>>,
+    pub blue_led: Box<dyn AnyLed<TICK_TIMER_HZ>>,
+    pub red_led: Box<dyn AnyLed<TICK_TIMER_HZ>>,
 }
 
-pub struct RunnerAxes<XAxis: AnyAxis> {
-    pub x_axis: XAxis,
+pub struct RunnerAxes {
+    pub x_axis: Box<dyn AnyAxis>,
 }
 
-pub struct RunnerSpindles<MainSpindle: AnySpindle> {
-    pub main_spindle: MainSpindle,
+pub struct RunnerSpindles {
+    pub main_spindle: Box<dyn AnySpindle>,
 }
 
 #[derive(Debug)]
-pub enum CommandError<
-    GreenLedError: Debug,
-    BlueLedError: Debug,
-    RedLedError: Debug,
-    XAxisError: Debug,
-    MainSpindleError: Debug,
-> {
-    GreenLed(GreenLedError),
-    BlueLed(BlueLedError),
-    RedLed(RedLedError),
-    XAxis(XAxisError),
-    MainSpindle(MainSpindleError),
+pub enum CommandError {
+    Led(LedId, Box<dyn AnyLedError>),
+    Axis(AxisId, Box<dyn AnyAxisError>),
+    Spindle(SpindleId, Box<dyn AnySpindleError>),
 }
 
-pub struct Runner<
-    GreenLed: AnyLed<TICK_TIMER_HZ>,
-    BlueLed: AnyLed<TICK_TIMER_HZ>,
-    RedLed: AnyLed<TICK_TIMER_HZ>,
-    XAxis: AnyAxis,
-    MainSpindle: AnySpindle,
-> {
+pub struct Runner {
     active_commands: Deque<Command, 8>,
-    leds: RunnerLeds<GreenLed, BlueLed, RedLed>,
-    axes: RunnerAxes<XAxis>,
-    spindles: RunnerSpindles<MainSpindle>,
+    leds: RunnerLeds,
+    axes: RunnerAxes,
+    spindles: RunnerSpindles,
 }
 
-impl<
-        GreenLed: AnyLed<TICK_TIMER_HZ>,
-        BlueLed: AnyLed<TICK_TIMER_HZ>,
-        RedLed: AnyLed<TICK_TIMER_HZ>,
-        XAxis: AnyAxis,
-        MainSpindle: AnySpindle,
-    > AnyRunner for Runner<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
-{
-}
+impl AnyRunner for Runner {}
 
-impl<
-        GreenLed: AnyLed<TICK_TIMER_HZ>,
-        BlueLed: AnyLed<TICK_TIMER_HZ>,
-        RedLed: AnyLed<TICK_TIMER_HZ>,
-        XAxis: AnyAxis,
-        MainSpindle: AnySpindle,
-    > Runner<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
-{
-    pub fn new(
-        leds: RunnerLeds<GreenLed, BlueLed, RedLed>,
-        axes: RunnerAxes<XAxis>,
-        spindles: RunnerSpindles<MainSpindle>,
-    ) -> Self {
+impl Runner {
+    pub fn new(leds: RunnerLeds, axes: RunnerAxes, spindles: RunnerSpindles) -> Self {
         Self {
             active_commands: Deque::new(),
             leds,
@@ -123,21 +87,8 @@ impl<
 
 type PollError<AnyActuator, Action> = <AnyActuator as Actuator<Action>>::Error;
 
-impl<
-        GreenLed: AnyLed<TICK_TIMER_HZ>,
-        BlueLed: AnyLed<TICK_TIMER_HZ>,
-        RedLed: AnyLed<TICK_TIMER_HZ>,
-        XAxis: AnyAxis,
-        MainSpindle: AnySpindle,
-    > Actuator<RunnerAction> for Runner<GreenLed, BlueLed, RedLed, XAxis, MainSpindle>
-{
-    type Error = CommandError<
-        PollError<GreenLed, LedAction<TICK_TIMER_HZ>>,
-        PollError<BlueLed, LedAction<TICK_TIMER_HZ>>,
-        PollError<RedLed, LedAction<TICK_TIMER_HZ>>,
-        PollError<XAxis, AxisAction>,
-        PollError<MainSpindle, SpindleAction>,
-    >;
+impl Actuator<RunnerAction> for Runner {
+    type Error = CommandError;
 
     fn receive(&mut self, action: &RunnerAction) {
         match action {
