@@ -89,3 +89,7 @@ Integration tests:
 ```shell
 cargo test --test integration --package gridbot-tahi
 ```
+
+## Resources
+
+- https://github.com/knurling-rs/app-template/
