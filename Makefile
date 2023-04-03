@@ -1,8 +1,11 @@
 run:
 	cargo run
 
-test:
-	cargo test --lib
+test-robokit:
+	cargo test --lib --package robokit --target x86_64-unknown-linux-gnu
+
+test-gridbot:
+	cargo test --lib --package gridbot-tahi
 
 test-e2e:
 	cargo test --test integration

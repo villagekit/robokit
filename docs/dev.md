@@ -69,7 +69,7 @@ cargo build --release
 Flash:
 
 ```shell
-cargo flash --chip stm32f767zitx --release
+cargo flash --chip --package gridbot-tahi stm32f767zitx --release
 ```
 
 ## Test
@@ -77,11 +77,15 @@ cargo flash --chip stm32f767zitx --release
 Unit tests:
 
 ```shell
-cargo test --lib
+cargo test --lib --package robokit --target x86_64-unknown-linux-gnu
+```
+
+```shell
+cargo test --lib --package gridbot-tahi
 ```
 
 Integration tests:
 
 ```shell
-cargo test --test integration
+cargo test --test integration --package gridbot-tahi
 ```
