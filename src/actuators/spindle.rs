@@ -7,13 +7,18 @@ use embedded_hal::serial::{Read, Write};
 use heapless::{Deque, Vec};
 use num::abs;
 
-use crate::actor::{ActorPoll, ActorReceive};
+use super::Actuator;
 use crate::modbus::{ModbusSerial, ModbusSerialError, ModbusSerialErrorAlias};
 use crate::util::{i16_to_u16, u16_to_i16};
 
 static ACCELERATION_IN_MS_PER_1000_RPM: u16 = 10_000;
 
-pub trait AnySpindle: ActorReceive<SpindleSetMessage> + ActorPoll {}
+#[derive(Clone, Copy, Debug, Format)]
+pub enum SpindleAction {
+    Set { status: SpindleStatus },
+}
+
+pub trait AnySpindle: Actuator<SpindleAction> {}
 
 impl<Driver> AnySpindle for SpindleDevice<Driver> where Driver: SpindleDriver {}
 
@@ -274,27 +279,19 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug, Format)]
-pub struct SpindleSetMessage {
-    pub status: SpindleStatus,
-}
-
-impl<Driver> ActorReceive<SpindleSetMessage> for SpindleDevice<Driver>
-where
-    Driver: SpindleDriver,
-{
-    fn receive(&mut self, action: &SpindleSetMessage) {
-        self.driver.set(action.status)
-    }
-}
-
 pub type SpindleError<Driver> = <Driver as SpindleDriver>::Error;
 
-impl<Driver> ActorPoll for SpindleDevice<Driver>
+impl<Driver> Actuator<SpindleAction> for SpindleDevice<Driver>
 where
     Driver: SpindleDriver,
 {
     type Error = Driver::Error;
+
+    fn receive(&mut self, action: &SpindleAction) {
+        match action {
+            SpindleAction::Set { status } => self.driver.set(*status),
+        }
+    }
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         self.driver.poll()

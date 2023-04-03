@@ -5,9 +5,14 @@ use embedded_hal::digital::v2::OutputPin;
 use fugit::TimerDurationU32 as TimerDuration;
 use fugit_timer::Timer;
 
-use crate::actor::{ActorPoll, ActorReceive};
+use super::Actuator;
 
-pub trait AnyLed<const TIMER_HZ: u32>: ActorReceive<LedBlinkMessage<TIMER_HZ>> + ActorPoll {}
+#[derive(Clone, Copy, Debug, Format)]
+pub enum LedAction<const TIMER_HZ: u32> {
+    Blink { duration: TimerDuration<TIMER_HZ> },
+}
+
+pub trait AnyLed<const TIMER_HZ: u32>: Actuator<LedAction<TIMER_HZ>> {}
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum LedBlinkStatus {
@@ -56,32 +61,13 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug, Format)]
-pub struct LedBlinkMessage<const TIMER_HZ: u32> {
-    pub duration: TimerDuration<TIMER_HZ>,
-}
-
-impl<P, T, const TIMER_HZ: u32> ActorReceive<LedBlinkMessage<TIMER_HZ>>
-    for LedDevice<P, T, TIMER_HZ>
-where
-    P: OutputPin,
-    T: Timer<TIMER_HZ>,
-{
-    fn receive(&mut self, action: &LedBlinkMessage<TIMER_HZ>) {
-        self.state = Some(LedBlinkState {
-            status: LedBlinkStatus::Start,
-            duration: action.duration,
-        });
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum LedError<PinError: Debug, TimerError: Debug> {
     Pin(PinError),
     Timer(TimerError),
 }
 
-impl<P, T, const TIMER_HZ: u32> ActorPoll for LedDevice<P, T, TIMER_HZ>
+impl<P, T, const TIMER_HZ: u32> Actuator<LedAction<TIMER_HZ>> for LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
     P::Error: Debug,
@@ -89,6 +75,17 @@ where
     T::Error: Debug,
 {
     type Error = LedError<P::Error, T::Error>;
+
+    fn receive(&mut self, action: &LedAction<TIMER_HZ>) {
+        match action {
+            LedAction::Blink { duration } => {
+                self.state = Some(LedBlinkState {
+                    status: LedBlinkStatus::Start,
+                    duration: *duration,
+                });
+            }
+        }
+    }
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
         if let Some(state) = self.state {
