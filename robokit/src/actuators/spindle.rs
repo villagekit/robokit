@@ -8,6 +8,7 @@ use heapless::{Deque, Vec};
 use num::abs;
 
 use super::Actuator;
+use crate::error::Error;
 use crate::modbus::{ModbusSerial, ModbusSerialError, ModbusSerialErrorAlias};
 use crate::util::{i16_to_u16, u16_to_i16};
 
@@ -18,7 +19,7 @@ pub enum SpindleAction {
     Set { status: SpindleStatus },
 }
 
-pub trait AnySpindle: Actuator<SpindleAction> {}
+pub trait AnySpindle: Actuator<Action = SpindleAction> {}
 
 impl<Driver> AnySpindle for SpindleDevice<Driver> where Driver: SpindleDriver {}
 
@@ -29,7 +30,7 @@ pub enum SpindleStatus {
 }
 
 pub trait SpindleDriver {
-    type Error: Debug;
+    type Error: Error;
 
     fn set(&mut self, status: SpindleStatus);
     fn poll(&mut self) -> Poll<Result<(), Self::Error>>;
@@ -177,6 +178,11 @@ pub enum SpindleDriverJmcHsv57Error<SerialTxError: Debug, SerialRxError: Debug> 
     QueueFull,
 }
 
+impl<SerialTxError: Debug, SerialRxError: Debug> Error
+    for SpindleDriverJmcHsv57Error<SerialTxError, SerialRxError>
+{
+}
+
 pub type SpindleDriverJmcHsv57ErrorAlias<Serial> =
     SpindleDriverJmcHsv57Error<<Serial as Write<u8>>::Error, <Serial as Read<u8>>::Error>;
 
@@ -281,13 +287,14 @@ where
 
 pub type SpindleError<Driver> = <Driver as SpindleDriver>::Error;
 
-impl<Driver> Actuator<SpindleAction> for SpindleDevice<Driver>
+impl<Driver> Actuator for SpindleDevice<Driver>
 where
     Driver: SpindleDriver,
 {
+    type Action = SpindleAction;
     type Error = Driver::Error;
 
-    fn receive(&mut self, action: &SpindleAction) {
+    fn run(&mut self, action: &Self::Action) {
         match action {
             SpindleAction::Set { status } => self.driver.set(*status),
         }

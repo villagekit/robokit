@@ -1,6 +1,11 @@
 #![no_main]
 #![no_std]
 
+extern crate alloc;
+
+pub mod actuators;
+pub mod commands;
+
 use embedded_alloc::Heap;
 
 use defmt_rtt as _; // global logger

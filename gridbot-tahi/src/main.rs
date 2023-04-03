@@ -1,7 +1,11 @@
 #![no_main]
 #![no_std]
 
-use gridbot_tahi as _;
+use gridbot_tahi::{
+    self as _,
+    actuators::{AxisSet, LedSet, SpindleSet},
+};
+use heapless::Vec;
 
 use core::task::Poll;
 use cortex_m_rt::entry;
@@ -32,7 +36,10 @@ use robokit::{
     timer::{setup as timer_setup, tick as timer_tick, SubTimer, TICK_TIMER_HZ},
 };
 
-use gridbot_tahi::init_heap;
+use gridbot_tahi::{
+    commands::{get_run_commands, get_start_commands, get_stop_commands},
+    init_heap,
+};
 
 pub const TICK_TIMER_MAX: u32 = u32::MAX;
 pub type TickTimer = Counter<pac::TIM5, TICK_TIMER_HZ>;
@@ -80,6 +87,11 @@ fn main() -> ! {
     let rcc = p.RCC.constrain();
     let clocks = rcc.cfgr.sysclk(216.MHz()).freeze();
 
+    defmt::println!(
+        "Stepper timer clock: {}",
+        <pac::TIM3 as BusTimerClock>::timer_clock(&clocks)
+    );
+
     let gpiob = p.GPIOB.split();
     let gpioc = p.GPIOC.split();
     let gpiod = p.GPIOD.split();
@@ -103,10 +115,11 @@ fn main() -> ! {
     let red_led_timer: RedLedTimer = SubTimer::new();
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
 
-    defmt::println!(
-        "Stepper timer clock: {}",
-        <pac::TIM3 as BusTimerClock>::timer_clock(&clocks)
-    );
+    let leds = LedSet {
+        green: green_led,
+        blue: blue_led,
+        red: red_led,
+    };
 
     let max_acceleration_in_millimeters_per_sec_per_sec = 20_f64;
 
@@ -139,6 +152,8 @@ fn main() -> ! {
         AxisLimitSide::Min,
     );
 
+    let axes = AxisSet { x: x_axis };
+
     let main_spindle_serial_tx = gpiod.pd5.into_alternate();
     let main_spindle_serial_rx = gpiod.pd6.into_alternate();
     let main_spindle_serial: MainSpindleSerial = Serial::new(
@@ -155,16 +170,15 @@ fn main() -> ! {
     let main_spindle_driver: MainSpindleDriver = SpindleDriverJmcHsv57::new(main_spindle_serial);
     let main_spindle = SpindleDevice::new(main_spindle_driver);
 
-    let runner = Runner::new(
-        RunnerLeds {
-            green_led,
-            blue_led,
-            red_led,
-        },
-        RunnerAxes { x_axis },
-        RunnerSpindles { main_spindle },
-    );
-    let mut machine = Machine::new(runner);
+    let spindles = SpindleSet { main: main_spindle };
+
+    let runner = Runner::new(leds, axes, spindles);
+
+    let run_commands = Vec::from_slice(get_run_commands());
+    let start_commands = Vec::from_slice(get_start_commands());
+    let stop_commands = Vec::from_slice(get_stop_commands());
+
+    let mut machine = Machine::new(runner, run_commands, start_commands, stop_commands);
 
     let mut iwdg = watchdog::IndependentWatchdog::new(p.IWDG);
 

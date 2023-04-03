@@ -14,9 +14,12 @@ use stepper::{
 };
 
 use super::Actuator;
-use crate::sensors::{
-    switch::{AnyInputSwitch, SwitchStatus, SwitchUpdate},
-    Sensor,
+use crate::{
+    error::Error,
+    sensors::{
+        switch::{AnyInputSwitch, SwitchStatus},
+        Sensor,
+    },
 };
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -35,7 +38,7 @@ pub enum AxisAction {
     },
 }
 
-pub trait AnyAxis: Actuator<AxisAction> {}
+pub trait AnyAxis: Actuator<Action = AxisAction> {}
 
 type AxisVelocity = f64;
 pub type AxisMotionProfile = ramp_maker::Trapezoidal<AxisVelocity>;
@@ -54,8 +57,6 @@ pub type AxisDriverDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> = AxisMo
 >;
 pub type AxisDriverErrorDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> =
     <AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ> as MotionControl>::Error;
-
-type GetLimitSensorError<Limit> = <Limit as Sensor<SwitchUpdate>>::Error;
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
 #[derive(Clone, Copy, Debug, Format)]
@@ -235,7 +236,12 @@ pub enum AxisError<DriverError: Debug, LimitMinSenseError: Debug, LimitMaxSenseE
     Unexpected,
 }
 
-impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> Actuator<AxisAction>
+impl<DriverError: Debug, LimitMinSenseError: Debug, LimitMaxSenseError: Debug> Error
+    for AxisError<DriverError, LimitMinSenseError, LimitMaxSenseError>
+{
+}
+
+impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> Actuator
     for AxisDevice<AxisMotionControl<Driver, Timer, TIMER_HZ>, LimitMin, LimitMax>
 where
     Driver: SetDirection + Step,
@@ -246,13 +252,14 @@ where
     LimitMax: AnyInputSwitch,
     LimitMax::Error: Debug,
 {
+    type Action = AxisAction;
     type Error = AxisError<
         <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error,
-        GetLimitSensorError<LimitMin>,
-        GetLimitSensorError<LimitMax>,
+        <LimitMin as Sensor>::Error,
+        <LimitMax as Sensor>::Error,
     >;
 
-    fn receive(&mut self, action: &AxisAction) {
+    fn run(&mut self, action: &Self::Action) {
         match action {
             AxisAction::MoveRelative {
                 max_velocity_in_millimeters_per_sec,
@@ -260,7 +267,7 @@ where
             } => {
                 let position_in_millimeters = self.logical_position + distance_in_millimeters;
 
-                self.receive(&AxisAction::MoveAbsolute {
+                self.run(&AxisAction::MoveAbsolute {
                     max_velocity_in_millimeters_per_sec: *max_velocity_in_millimeters_per_sec,
                     position_in_millimeters,
                 })
