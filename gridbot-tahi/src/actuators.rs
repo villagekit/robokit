@@ -33,8 +33,11 @@ pub struct LedSet<
 impl<GreenLed, BlueLed, RedLed> ActuatorSet for LedSet<GreenLed, BlueLed, RedLed>
 where
     GreenLed: AnyLed<TICK_TIMER_HZ>,
+    GreenLed::Error: 'static,
     BlueLed: AnyLed<TICK_TIMER_HZ>,
+    BlueLed::Error: 'static,
     RedLed: AnyLed<TICK_TIMER_HZ>,
+    RedLed::Error: 'static,
 {
     type Action = LedAction<TICK_TIMER_HZ>;
     type Id = LedId;
@@ -68,6 +71,7 @@ pub struct AxisSet<XAxis: AnyAxis> {
 impl<XAxis> ActuatorSet for AxisSet<XAxis>
 where
     XAxis: AnyAxis,
+    XAxis::Error: 'static,
 {
     type Action = AxisAction;
     type Id = AxisId;
@@ -97,6 +101,7 @@ pub struct SpindleSet<MainSpindle: AnySpindle> {
 impl<MainSpindle> ActuatorSet for SpindleSet<MainSpindle>
 where
     MainSpindle: AnySpindle,
+    MainSpindle::Error: 'static,
 {
     type Action = SpindleAction;
     type Id = SpindleId;
