@@ -27,8 +27,7 @@ use robokit::{
         led::LedDevice,
         spindle::{SpindleDevice, SpindleDriverJmcHsv57},
     },
-    machine::Machine,
-    runner::Runner,
+    robot::Robot,
     sensors::{
         switch::{SwitchActiveHigh, SwitchActiveLow, SwitchDevice, SwitchStatus},
         Sensor,
@@ -172,13 +171,18 @@ fn main() -> ! {
 
     let spindles = SpindleSet { main: main_spindle };
 
-    let runner = Runner::new(leds, axes, spindles);
-
     let run_commands = Vec::from_slice(&get_run_commands()).unwrap();
     let start_commands = Vec::from_slice(&get_start_commands()).unwrap();
     let stop_commands = Vec::from_slice(&get_stop_commands()).unwrap();
 
-    let mut machine = Machine::new(runner, run_commands, start_commands, stop_commands);
+    let mut machine = Robot::new(
+        leds,
+        axes,
+        spindles,
+        run_commands,
+        start_commands,
+        stop_commands,
+    );
 
     let mut iwdg = watchdog::IndependentWatchdog::new(p.IWDG);
 

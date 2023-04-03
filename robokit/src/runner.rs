@@ -20,13 +20,8 @@ where
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub enum RunnerAction<LedId, const LED_TIMER_HZ: u32, AxisId, SpindleId>
-where
-    LedId: Copy + Clone + Debug + Format,
-    AxisId: Copy + Clone + Debug + Format,
-    SpindleId: Copy + Clone + Debug + Format,
-{
-    Run(Command<LedId, LED_TIMER_HZ, AxisId, SpindleId>),
+pub enum RunnerAction<Command> {
+    Run(Command),
     Reset,
 }
 
@@ -65,10 +60,13 @@ where
     Axes: ActuatorSet<Action = AxisAction>,
     Spindles: ActuatorSet<Action = SpindleAction>,
 {
-    type Action = RunnerAction<Leds::Id, LED_TIMER_HZ, Axes::Id, Spindles::Id>;
+    type Action = RunnerAction<Command<Leds::Id, LED_TIMER_HZ, Axes::Id, Spindles::Id>>;
     type Error = BoxError;
 
-    fn run(&mut self, action: &RunnerAction<Leds::Id, LED_TIMER_HZ, Axes::Id, Spindles::Id>) {
+    fn run(
+        &mut self,
+        action: &RunnerAction<Command<Leds::Id, LED_TIMER_HZ, Axes::Id, Spindles::Id>>,
+    ) {
         match action {
             RunnerAction::Run(command) => {
                 match command {
