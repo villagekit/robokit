@@ -1,7 +1,7 @@
 #![no_main]
 #![no_std]
 
-use gridbot as _;
+use gridbot_tahi as _;
 
 use core::task::Poll;
 use cortex_m_rt::entry;
@@ -17,13 +17,12 @@ use stm32f7xx_hal::{
     watchdog,
 };
 
-use gridbot::{
+use robokit::{
     actuators::{
         axis::{AxisDevice, AxisLimitSide},
         led::LedDevice,
         spindle::{SpindleDevice, SpindleDriverJmcHsv57},
     },
-    init_heap,
     machine::Machine,
     runner::{Runner, RunnerAxes, RunnerLeds, RunnerSpindles},
     sensors::{
@@ -32,6 +31,8 @@ use gridbot::{
     },
     timer::{setup as timer_setup, tick as timer_tick, SubTimer, TICK_TIMER_HZ},
 };
+
+use gridbot_tahi::init_heap;
 
 pub const TICK_TIMER_MAX: u32 = u32::MAX;
 pub type TickTimer = Counter<pac::TIM5, TICK_TIMER_HZ>;
