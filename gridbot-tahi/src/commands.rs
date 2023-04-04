@@ -2,12 +2,11 @@ use fugit::ExtU32;
 use robokit::{
     actuators::{axis::AxisAction, led::LedAction},
     runner::Command,
-    timer::TICK_TIMER_HZ,
 };
 
-type BotCommand = Command<'static, TICK_TIMER_HZ>;
+type BotCommand<const TIMER_HZ: u32> = Command<'static, TIMER_HZ>;
 
-pub fn get_run_commands() -> [BotCommand; 8] {
+pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 8] {
     [
         Command::Led(
             "green",
@@ -62,7 +61,7 @@ pub fn get_run_commands() -> [BotCommand; 8] {
     ]
 }
 
-pub fn get_start_commands() -> [BotCommand; 1] {
+pub fn get_start_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
     [
         Command::Axis(
             "x",
@@ -79,7 +78,7 @@ pub fn get_start_commands() -> [BotCommand; 1] {
     ]
 }
 
-pub fn get_stop_commands() -> [BotCommand; 1] {
+pub fn get_stop_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
     [
         Command::Axis(
             "x",

@@ -2,65 +2,84 @@
 // https://github.com/khoih-prog/STM32_TimerInterrupt/blob/main/src/STM32_ISR_Timer-Impl.h
 // https://playground.arduino.cc/Code/TimingRollover/
 
+use alloc::rc::Rc;
 use core::sync::atomic::{AtomicU32, Ordering};
 use defmt::Format;
 use fugit::{TimerDurationU32 as TimerDuration, TimerInstantU32 as TimerInstant};
 use fugit_timer::Timer;
 use nb;
 
-pub const TICK_TIMER_HZ: u32 = 1_000_000;
-static TIME: AtomicU32 = AtomicU32::new(0);
-
-pub fn setup<T>(timer: &mut T, max_ticks: u32) -> Result<(), T::Error>
+pub struct SuperTimer<T, const TIMER_HZ: u32>
 where
-    T: Timer<TICK_TIMER_HZ>,
+    T: Timer<TIMER_HZ>,
 {
-    let max_duration = TimerDuration::<TICK_TIMER_HZ>::from_ticks(max_ticks);
-    timer.start(max_duration)?;
-    Ok(())
+    now: Rc<AtomicU32>,
+    timer: T,
+    max_ticks: u32,
 }
 
-pub fn tick<T>(timer: &mut T, max_ticks: u32) -> Result<(), T::Error>
+impl<T, const TIMER_HZ: u32> SuperTimer<T, TIMER_HZ>
 where
-    T: Timer<TICK_TIMER_HZ>,
+    T: Timer<TIMER_HZ>,
 {
-    let time_instant = timer.now();
-    let time_ticks = time_instant.ticks();
-    TIME.swap(time_ticks, Ordering::SeqCst);
-
-    match timer.wait() {
-        Ok(()) => {
-            setup(timer, max_ticks)?;
+    pub fn new(timer: T, max_ticks: u32) -> Self {
+        Self {
+            now: Rc::new(AtomicU32::new(0)),
+            timer,
+            max_ticks,
         }
-        Err(nb::Error::WouldBlock) => {}
-        Err(nb::Error::Other(err)) => return Err(err),
+    }
+    pub fn setup(&mut self) -> Result<(), T::Error> {
+        let max_duration = TimerDuration::<TIMER_HZ>::from_ticks(self.max_ticks);
+        self.timer.start(max_duration)?;
+        Ok(())
     }
 
-    Ok(())
+    pub fn tick(&mut self) -> Result<(), T::Error> {
+        let time_instant = self.timer.now();
+        let time_ticks = time_instant.ticks();
+        self.now.swap(time_ticks, Ordering::SeqCst);
+
+        match self.timer.wait() {
+            Ok(()) => {
+                self.setup()?;
+            }
+            Err(nb::Error::WouldBlock) => {}
+            Err(nb::Error::Other(err)) => return Err(err),
+        }
+
+        Ok(())
+    }
+
+    pub fn now(&self) -> TimerInstant<TIMER_HZ> {
+        let time_ticks = self.now.load(Ordering::SeqCst);
+        TimerInstant::from_ticks(time_ticks)
+    }
+
+    pub fn sub(&self) -> SubTimer<TIMER_HZ> {
+        SubTimer::new(self.now.clone())
+    }
 }
 
-pub fn now() -> TimerInstant<TICK_TIMER_HZ> {
-    let time_ticks = TIME.load(Ordering::SeqCst);
-    TimerInstant::from_ticks(time_ticks)
+#[derive(Clone)]
+pub struct SubTimer<const TIMER_HZ: u32> {
+    now: Rc<AtomicU32>,
+    state: SubTimerState<TIMER_HZ>,
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub struct SubTimer {
-    state: SubTimerState,
-}
-
-#[derive(Clone, Copy, Debug, Format)]
-enum SubTimerState {
+enum SubTimerState<const TIMER_HZ: u32> {
     Stop,
     Start {
-        start: TimerInstant<TICK_TIMER_HZ>,
-        duration: TimerDuration<TICK_TIMER_HZ>,
+        start: TimerInstant<TIMER_HZ>,
+        duration: TimerDuration<TIMER_HZ>,
     },
 }
 
-impl SubTimer {
-    pub fn new() -> Self {
+impl<const TIMER_HZ: u32> SubTimer<TIMER_HZ> {
+    pub fn new(now: Rc<AtomicU32>) -> Self {
         Self {
+            now,
             state: SubTimerState::Stop,
         }
     }
@@ -71,14 +90,15 @@ pub enum SubTimerError {
     NoStart,
 }
 
-impl Timer<TICK_TIMER_HZ> for SubTimer {
+impl<const TIMER_HZ: u32> Timer<TIMER_HZ> for SubTimer<TIMER_HZ> {
     type Error = SubTimerError;
 
-    fn now(&mut self) -> TimerInstant<TICK_TIMER_HZ> {
-        now()
+    fn now(&mut self) -> TimerInstant<TIMER_HZ> {
+        let time_ticks = self.now.load(Ordering::SeqCst);
+        TimerInstant::from_ticks(time_ticks)
     }
 
-    fn start(&mut self, duration: TimerDuration<TICK_TIMER_HZ>) -> Result<(), Self::Error> {
+    fn start(&mut self, duration: TimerDuration<TIMER_HZ>) -> Result<(), Self::Error> {
         let now = self.now();
 
         self.state = SubTimerState::Start {

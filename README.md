@@ -86,15 +86,15 @@ use robokit::{
         switch::{SwitchDevice, SwitchStatus},
         Sensor,
     },
-    timer::{setup as timer_setup, tick as timer_tick, SubTimer, TICK_TIMER_HZ},
+    timer::SuperTimer,
 };
 use stm32f7xx_hal::{pac, prelude::*};
 
 use blinky::init_heap;
 
-pub const TICK_TIMER_MAX: u32 = u32::MAX;
+pub const MILLIS_HZ: u32 = 1_000;
 
-pub fn get_run_commands() -> [Command<'static, TICK_TIMER_HZ>; 6] {
+pub fn get_run_commands() -> [Command<'static, MILLIS_HZ>; 6] {
     [
         Command::Led(
             "green",
@@ -149,27 +149,27 @@ fn main() -> ! {
     let gpiob = p.GPIOB.split();
     let gpioc = p.GPIOC.split();
 
-    let mut tick_timer = p.TIM5.counter_us(&clocks);
-    timer_setup(&mut tick_timer, TICK_TIMER_MAX).unwrap();
+    let tick_timer = p.TIM5.counter_us(&clocks);
+    let mut super_timer = SuperTimer::new(tick_timer, u32::MAX);
 
     let user_button_pin = gpioc.pc13.into_floating_input();
-    let user_button_timer = SubTimer::new();
+    let user_button_timer = super_timer.sub();
     let mut user_button = SwitchDevice::new_active_high(user_button_pin, user_button_timer);
 
     let mut robot_builder = RobotBuilder::new();
 
     let green_led_pin = gpiob.pb0.into_push_pull_output();
-    let green_led_timer = SubTimer::new();
+    let green_led_timer = super_timer.sub();
     let green_led = LedDevice::new(green_led_pin, green_led_timer);
     robot_builder.add_led("green", green_led).unwrap();
 
     let blue_led_pin = gpiob.pb7.into_push_pull_output();
-    let blue_led_timer = SubTimer::new();
+    let blue_led_timer = super_timer.sub();
     let blue_led = LedDevice::new(blue_led_pin, blue_led_timer);
     robot_builder.add_led("blue", blue_led).unwrap();
 
     let red_led_pin = gpiob.pb14.into_push_pull_output();
-    let red_led_timer = SubTimer::new();
+    let red_led_timer = super_timer.sub();
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
     robot_builder.add_led("red", red_led).unwrap();
 
@@ -178,7 +178,7 @@ fn main() -> ! {
     let mut robot = robot_builder.build();
 
     loop {
-        timer_tick(&mut tick_timer, TICK_TIMER_MAX).unwrap();
+        super_timer.tick().expect("Error ticking super timer");
 
         if let Some(user_button_update) = user_button.sense().expect("Error reading user button") {
             if let SwitchStatus::On = user_button_update.status {
@@ -188,6 +188,7 @@ fn main() -> ! {
 
         if let Poll::Ready(Err(err)) = robot.poll() {
             defmt::println!("Unexpected error: {}", Debug2Format(&err));
+
             robot.stop();
         }
     }
