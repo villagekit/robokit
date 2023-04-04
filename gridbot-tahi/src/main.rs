@@ -98,7 +98,8 @@ fn main() -> ! {
 
     let user_button_pin: UserButtonPin = gpioc.pc13.into_floating_input();
     let user_button_timer: UserButtonTimer = SubTimer::new();
-    let mut user_button: UserButton = SwitchDevice::new(user_button_pin, user_button_timer);
+    let mut user_button: UserButton =
+        SwitchDevice::new_active_high(user_button_pin, user_button_timer);
 
     let mut robot_builder = RobotBuilder::new();
 
