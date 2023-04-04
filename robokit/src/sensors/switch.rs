@@ -8,9 +8,11 @@ use fugit::{MillisDurationU32 as MillisDuration, TimerDurationU32 as TimerDurati
 use fugit_timer::Timer;
 use nb;
 
+use crate::error::Error;
+
 use super::Sensor;
 
-pub trait AnyInputSwitch: Sensor<SwitchUpdate> {}
+pub trait AnyInputSwitch: Sensor<Message = SwitchUpdate> {}
 
 #[derive(Copy, Clone, Debug, Format, PartialEq)]
 pub enum SwitchStatus {
@@ -115,13 +117,16 @@ pub enum SwitchError<PinError: Debug, TimerError: Debug> {
     Timer(TimerError),
 }
 
-impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> Sensor<SwitchUpdate>
+impl<PinError: Debug, TimerError: Debug> Error for SwitchError<PinError, TimerError> {}
+
+impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> Sensor
     for SwitchDevice<Pin, ActiveLevel, Tim, TIMER_HZ>
 where
     Self: InputSwitch,
     Pin: InputPin,
     Tim: Timer<TIMER_HZ>,
 {
+    type Message = SwitchUpdate;
     type Error = SwitchError<<Self as InputSwitch>::Error, Tim::Error>;
 
     fn sense(&mut self) -> Result<Option<SwitchUpdate>, Self::Error> {

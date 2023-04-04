@@ -5,6 +5,8 @@ use embedded_hal::digital::v2::OutputPin;
 use fugit::TimerDurationU32 as TimerDuration;
 use fugit_timer::Timer;
 
+use crate::error::Error;
+
 use super::Actuator;
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -12,7 +14,7 @@ pub enum LedAction<const TIMER_HZ: u32> {
     Blink { duration: TimerDuration<TIMER_HZ> },
 }
 
-pub trait AnyLed<const TIMER_HZ: u32>: Actuator<LedAction<TIMER_HZ>> {}
+pub trait AnyLed<const TIMER_HZ: u32>: Actuator<Action = LedAction<TIMER_HZ>> {}
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum LedBlinkStatus {
@@ -67,16 +69,19 @@ pub enum LedError<PinError: Debug, TimerError: Debug> {
     Timer(TimerError),
 }
 
-impl<P, T, const TIMER_HZ: u32> Actuator<LedAction<TIMER_HZ>> for LedDevice<P, T, TIMER_HZ>
+impl<PinError: Debug, TimerError: Debug> Error for LedError<PinError, TimerError> {}
+
+impl<P, T, const TIMER_HZ: u32> Actuator for LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
     P::Error: Debug,
     T: Timer<TIMER_HZ>,
     T::Error: Debug,
 {
+    type Action = LedAction<TIMER_HZ>;
     type Error = LedError<P::Error, T::Error>;
 
-    fn receive(&mut self, action: &LedAction<TIMER_HZ>) {
+    fn run(&mut self, action: &Self::Action) {
         match action {
             LedAction::Blink { duration } => {
                 self.state = Some(LedBlinkState {

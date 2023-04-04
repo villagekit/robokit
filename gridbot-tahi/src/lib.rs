@@ -4,12 +4,7 @@
 extern crate alloc;
 
 pub mod actuators;
-pub mod machine;
-pub mod modbus;
-pub mod runner;
-pub mod sensors;
-pub mod timer;
-pub mod util;
+pub mod commands;
 
 use embedded_alloc::Heap;
 
@@ -52,7 +47,7 @@ pub fn init_heap() {
 mod unit_tests {
     use defmt::assert_eq;
 
-    use crate::util;
+    use robokit::util;
 
     #[test]
     fn i16_to_u16() {
