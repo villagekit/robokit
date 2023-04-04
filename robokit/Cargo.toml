@@ -2,6 +2,13 @@
 name = "robokit"
 version = "0.1.0"
 edition = "2021"
+authors = ["Michael Williams <hello@mikey.nz>"]
+description = "Build custom firmware for simple robotic automation"
+license = "Apache-2.0"
+repository = "https://github.com/villagekit/robokit"
+readme = "../README.md"
+keywords = ["robot", "robotics", "firmware", "cnc", "machine", "automation"]
+categories = ["no-std", "embedded", "science::robotics", ]
 
 [dependencies]
 defmt = "0.3"
