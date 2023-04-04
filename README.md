@@ -26,8 +26,7 @@ If you're here and like what's happening, please give this a star and [say hi](h
 ## Features
 
 - Minimal
-  - Meant for `no-std` environments
-  - Currently uses `alloc` for dynamic `Box`'s at the moment (to be extensible and ergonomic)
+  - Designed for `no-std` + `alloc` environments
 - Extensible
   - Setup your robot with your own actuators with your own names
       - E.g. Isn't limited to only x, y, z linear axes
