@@ -17,37 +17,6 @@ pub trait Actuator {
     fn poll(&mut self) -> Poll<Result<(), Self::Error>>;
 }
 
-/*
-pub struct BoxActuator<Action, Error>(Box<dyn Actuator<Action = Action, Error = Error>>);
-
-impl<Action, Error> From<Box<dyn Actuator<Action = Action, Error = Error>>>
-    for BoxActuator<Action, Error>
-{
-    fn from(
-        actuator: Box<dyn Actuator<Action = Action, Error = Error>>,
-    ) -> BoxActuator<Action, Error> {
-        BoxActuator(actuator)
-    }
-}
-
-impl<Action, E> Actuator for BoxActuator<Action, E>
-where
-    E: Error + 'static,
-{
-    type Action = Action;
-    type Error = BoxError;
-
-    fn run(&mut self, action: &Self::Action) {
-        self.0.run(action)
-    }
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        self.0
-            .poll()
-            .map_err(|error| (Box::new(error) as Box<dyn Error>).into())
-    }
-}
-*/
-
 pub type BoxActuator<Action> = Box<dyn Actuator<Action = Action, Error = BoxError>>;
 
 pub struct BoxifyActuator<A: Actuator>(A);
