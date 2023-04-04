@@ -7,7 +7,7 @@ description = "Build custom firmware for simple robotic automation"
 license = "Apache-2.0"
 repository = "https://github.com/villagekit/robokit"
 readme = "../README.md"
-keywords = ["robot", "robotics", "firmware", "cnc", "machine", "automation"]
+keywords = ["robot", "firmware", "cnc", "machine", "automation"]
 categories = ["no-std", "embedded", "science::robotics", ]
 
 [dependencies]
