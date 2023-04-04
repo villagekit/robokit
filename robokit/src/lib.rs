@@ -1,5 +1,9 @@
 #![no_std]
 
+//! # robokit
+//!
+//! `robokit` is a toolkit to build custom firmware for simple robotic automation.
+
 extern crate alloc;
 
 pub mod actuators;
