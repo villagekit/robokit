@@ -18,3 +18,6 @@ flash:
 
 flash-reset:
 	cargo flash --chip STM32F767ZITx --release --connect-under-reset
+
+publish:
+	cargo publish --package robokit
