@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "robokit",
+    "blinky",
     "gridbot-tahi",
 ]
 

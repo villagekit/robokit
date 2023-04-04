@@ -1,16 +1,10 @@
 [package]
-name = "gridbot-tahi"
+name = "blinky"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
-[lib]
-harness = false
-
-# needed for each integration test
-[[test]]
-name = "integration"
-harness = false
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 robokit = { path = "../robokit" }
@@ -25,6 +19,3 @@ heapless = "0.7"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 stm32f7 = { version = "0.15", features = ["stm32f7x7", "rt"] }
 stm32f7xx-hal = { version = "0.7", features = ["stm32f767"] }
-
-[dev-dependencies]
-defmt-test = "0.3"

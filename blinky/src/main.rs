@@ -1,74 +1,3 @@
-<h1 align="center">Robo Kit 🤖</h1>
-
-<div align="center">
-  <strong>
-    Build custom firmware for simple robotic automation
-  </strong>
-</div>
-
-## Modules
-
-- [`robokit`](./robokit) : [![Crates.io version](https://img.shields.io/crates/v/robokit.svg?style=flat-square) ](https://crates.io/crates/robokit)  [![Download](https://img.shields.io/crates/d/robokit.svg?style=flat-square)](https://crates.io/crates/robokit)  [![docs.rs docs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square)](https://docs.rs/robokit)
-
-## Firmwares
-
-- [`blinky`](./blinky)
-- [`gridbot-tahi`](./gridbot-tahi)
-
-## About
-
-The short-term goal is to build [an automated machine for grid beam production](https://github.com/villagekit/gridbot-tahi).
-
-The long-term goal is to provide a ([real-time interrupt-driven](https://rtic.rs)) [actor-based](https://en.wikipedia.org/wiki/Actor_model) foundation for robotic automation or CNC machine control.
-
-If you're here and like what's happening, please give this a star and [say hi](https://github.com/villagekit/robokit/issues)! 👋
-
-## Features
-
-- Minimal
-  - Meant for `no-std` environments
-  - Currently uses `alloc` for dynamic `Box`'s at the moment (to be extensible and ergonomic)
-- Extensible
-  - Setup your robot with your own actuators with your own names
-      - E.g. Isn't limited to only x, y, z linear axes
-- Command system (like G-Code)
-  - Run a sequence of commands (one at a time)
-  - Run setup commands at beginning and/or teardown commands at end (in parallel)
-- Actuators:
-  - [x] Led
-      - Actions:
-        - Blink { duration }
-  - [x] Linear Axis
-      - Drivers: [Stepper](https://github.com/braun-embedded/stepper)
-      - Actions:
-        - MoveRelative { max_acceleration, distance }
-        - MoveAbsolute { max_acceleration, duration }
-        - Home { max_acceleration, back_off_distance }
-  - [x] Spindle
-      - Drivers:
-        - JmcHsv57
-      - Actions:
-        - Set(On { rpm })
-        - Set(Off)
-  - [ ] Relay (Pneumatic actuator)
-- Sensors
-  - [x] Input switch
-      - Button
-      - Limit switch
-  - [ ] Rotary encoder
-  - [ ] Linear encoder
-- Interfaces
-  - [ ] Physical controls
-  - [ ] JSON-RPC
-  - [ ] Web
-
-## Example
-
-[`./blinky/src/main.rs`](./blinky/src/main.rs)
-
-(for [Nucleo-F767ZI](https://nz.element14.com/stmicroelectronics/nucleo-f767zi/dev-board-nucleo-32-mcu/dp/2546569))
-
-```rust
 #![no_main]
 #![no_std]
 
@@ -188,28 +117,8 @@ fn main() -> ! {
 
         if let Poll::Ready(Err(err)) = robot.poll() {
             defmt::println!("Unexpected error: {}", Debug2Format(&err));
+
             robot.stop();
         }
     }
 }
-```
-
-## Development
-
-See [`docs/dev.md`](./docs/dev.md)
-
-## License
-
-Copyright 2023 Village Kit Limited
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
