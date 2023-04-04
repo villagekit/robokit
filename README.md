@@ -21,12 +21,7 @@ The short-term goal is to build [an automated machine for grid beam production](
 
 The long-term goal is to provide a ([real-time interrupt-driven](https://rtic.rs)) [actor-based](https://en.wikipedia.org/wiki/Actor_model) foundation for robotic automation or CNC machine control.
 
-If you're here and like what's happening, please give this a star and say hi! ðŸ‘‹
-
-## Example
-
-```rust
-```
+If you're here and like what's happening, please give this a star and [say hi](https://github.com/villagekit/robokit/issues)! ðŸ‘‹
 
 ## Features
 
@@ -38,7 +33,7 @@ If you're here and like what's happening, please give this a star and say hi! ðŸ
       - E.g. Isn't limited to only x, y, z linear axes
 - Command system (like G-Code)
   - Run a sequence of commands (one at a time)
-  - Run commands at beginning and/or end (in parallel)
+  - Run setup commands at beginning and/or teardown commands at end (in parallel)
 - Actuators:
   - [x] Led
       - Actions:
@@ -71,7 +66,9 @@ If you're here and like what's happening, please give this a star and say hi! ðŸ
 
 [`./blinky/src/main.rs`](./blinky/src/main.rs)
 
-```
+(for [Nucleo-F767ZI](https://nz.element14.com/stmicroelectronics/nucleo-f767zi/dev-board-nucleo-32-mcu/dp/2546569))
+
+```rust
 #![no_main]
 #![no_std]
 
