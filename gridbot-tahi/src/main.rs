@@ -1,11 +1,7 @@
 #![no_main]
 #![no_std]
 
-use gridbot_tahi::{
-    self as _,
-    actuators::{AxisSet, LedSet, SpindleSet},
-};
-use heapless::Vec;
+use gridbot_tahi as _;
 
 use core::task::Poll;
 use cortex_m_rt::entry;
@@ -27,7 +23,7 @@ use robokit::{
         led::LedDevice,
         spindle::{SpindleDevice, SpindleDriverJmcHsv57},
     },
-    robot::Robot,
+    robot::RobotBuilder,
     sensors::{
         switch::{SwitchActiveHigh, SwitchActiveLow, SwitchDevice, SwitchStatus},
         Sensor,
@@ -104,21 +100,22 @@ fn main() -> ! {
     let user_button_timer: UserButtonTimer = SubTimer::new();
     let mut user_button: UserButton = SwitchDevice::new(user_button_pin, user_button_timer);
 
+    let mut robot_builder = RobotBuilder::new();
+
     let green_led_pin: GreenLedPin = gpiob.pb0.into_push_pull_output();
     let green_led_timer: GreenLedTimer = SubTimer::new();
     let green_led = LedDevice::new(green_led_pin, green_led_timer);
+    robot_builder.add_led("green", green_led).unwrap();
+
     let blue_led_pin: BlueLedPin = gpiob.pb7.into_push_pull_output();
     let blue_led_timer: BlueLedTimer = SubTimer::new();
     let blue_led = LedDevice::new(blue_led_pin, blue_led_timer);
+    robot_builder.add_led("blue", blue_led).unwrap();
+
     let red_led_pin: RedLedPin = gpiob.pb14.into_push_pull_output();
     let red_led_timer: RedLedTimer = SubTimer::new();
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
-
-    let leds = LedSet {
-        green: green_led,
-        blue: blue_led,
-        red: red_led,
-    };
+    robot_builder.add_led("red", red_led).unwrap();
 
     let max_acceleration_in_millimeters_per_sec_per_sec = 20_f64;
 
@@ -150,8 +147,7 @@ fn main() -> ! {
         x_axis_limit_max,
         AxisLimitSide::Min,
     );
-
-    let axes = AxisSet { x: x_axis };
+    robot_builder.add_axis("x", x_axis).unwrap();
 
     let main_spindle_serial_tx = gpiod.pd5.into_alternate();
     let main_spindle_serial_rx = gpiod.pd6.into_alternate();
@@ -168,21 +164,17 @@ fn main() -> ! {
     );
     let main_spindle_driver: MainSpindleDriver = SpindleDriverJmcHsv57::new(main_spindle_serial);
     let main_spindle = SpindleDevice::new(main_spindle_driver);
+    robot_builder.add_spindle("main", main_spindle).unwrap();
 
-    let spindles = SpindleSet { main: main_spindle };
+    robot_builder.set_run_commands(&get_run_commands()).unwrap();
+    robot_builder
+        .set_start_commands(&get_start_commands())
+        .unwrap();
+    robot_builder
+        .set_stop_commands(&get_stop_commands())
+        .unwrap();
 
-    let run_commands = Vec::from_slice(&get_run_commands()).unwrap();
-    let start_commands = Vec::from_slice(&get_start_commands()).unwrap();
-    let stop_commands = Vec::from_slice(&get_stop_commands()).unwrap();
-
-    let mut machine = Robot::new(
-        leds,
-        axes,
-        spindles,
-        run_commands,
-        start_commands,
-        stop_commands,
-    );
+    let mut robot = robot_builder.build();
 
     let mut iwdg = watchdog::IndependentWatchdog::new(p.IWDG);
 
@@ -193,16 +185,16 @@ fn main() -> ! {
 
         if let Some(user_button_update) = user_button.sense().expect("Error reading user button") {
             if let SwitchStatus::On = user_button_update.status {
-                machine.toggle();
+                robot.toggle();
             }
         }
 
-        if let Poll::Ready(Err(err)) = machine.poll() {
+        if let Poll::Ready(Err(err)) = robot.poll() {
             defmt::println!("Unexpected error: {}", Debug2Format(&err));
 
-            machine.stop();
+            robot.stop();
             loop {
-                match machine.poll() {
+                match robot.poll() {
                     _ => {}
                 }
             }

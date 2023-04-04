@@ -1,22 +1,17 @@
-use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
-use heapless::Deque;
+use heapless::{Deque, FnvIndexMap};
 
+use crate::actuators::BoxActuator;
 use crate::actuators::{axis::AxisAction, led::LedAction, spindle::SpindleAction, Actuator};
-use crate::error::{BoxError, Error};
+use crate::error::BoxError;
 
 #[derive(Clone, Copy, Debug, Format)]
-pub enum Command<LedId, const LED_TIMER_HZ: u32, AxisId, SpindleId>
-where
-    LedId: Copy + Clone + Debug + Format,
-    AxisId: Copy + Clone + Debug + Format,
-    SpindleId: Copy + Clone + Debug + Format,
-{
-    Led(LedId, LedAction<LED_TIMER_HZ>),
-    Axis(AxisId, AxisAction),
-    Spindle(SpindleId, SpindleAction),
+pub enum Command<'a, const LED_TIMER_HZ: u32> {
+    Led(&'a str, LedAction<LED_TIMER_HZ>),
+    Axis(&'a str, AxisAction),
+    Spindle(&'a str, SpindleAction),
 }
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -25,25 +20,19 @@ pub enum RunnerAction<Command> {
     Reset,
 }
 
-pub struct Runner<Leds, const LED_TIMER_HZ: u32, Axes, Spindles>
-where
-    Leds: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
-    Axes: ActuatorSet<Action = AxisAction>,
-    Spindles: ActuatorSet<Action = SpindleAction>,
-{
-    active_commands: Deque<Command<Leds::Id, LED_TIMER_HZ, Axes::Id, Spindles::Id>, 8>,
-    leds: Leds,
-    axes: Axes,
-    spindles: Spindles,
+pub struct Runner<'a, const LED_TIMER_HZ: u32> {
+    active_commands: Deque<Command<'a, LED_TIMER_HZ>, 8>,
+    leds: FnvIndexMap<&'a str, BoxActuator<LedAction<LED_TIMER_HZ>>, 16>,
+    axes: FnvIndexMap<&'a str, BoxActuator<AxisAction>, 16>,
+    spindles: FnvIndexMap<&'a str, BoxActuator<SpindleAction>, 16>,
 }
 
-impl<Leds, const LED_TIMER_HZ: u32, Axes, Spindles> Runner<Leds, LED_TIMER_HZ, Axes, Spindles>
-where
-    Leds: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
-    Axes: ActuatorSet<Action = AxisAction>,
-    Spindles: ActuatorSet<Action = SpindleAction>,
-{
-    pub fn new(leds: Leds, axes: Axes, spindles: Spindles) -> Self {
+impl<'a, const LED_TIMER_HZ: u32> Runner<'a, LED_TIMER_HZ> {
+    pub fn new(
+        leds: FnvIndexMap<&'a str, BoxActuator<LedAction<LED_TIMER_HZ>>, 16>,
+        axes: FnvIndexMap<&'a str, BoxActuator<AxisAction>, 16>,
+        spindles: FnvIndexMap<&'a str, BoxActuator<SpindleAction>, 16>,
+    ) -> Self {
         Self {
             active_commands: Deque::new(),
             leds,
@@ -53,26 +42,33 @@ where
     }
 }
 
-impl<Leds, const LED_TIMER_HZ: u32, Axes, Spindles> Actuator
-    for Runner<Leds, LED_TIMER_HZ, Axes, Spindles>
-where
-    Leds: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
-    Axes: ActuatorSet<Action = AxisAction>,
-    Spindles: ActuatorSet<Action = SpindleAction>,
-{
-    type Action = RunnerAction<Command<Leds::Id, LED_TIMER_HZ, Axes::Id, Spindles::Id>>;
+/*
+#[derive(Debug)]
+pub enum RunnerError<'a> {
+    NotFound(&'a str),
+    Poll(&'a str, Box<dyn Error>),
+}
+*/
+
+impl<'a, const LED_TIMER_HZ: u32> Actuator for Runner<'a, LED_TIMER_HZ> {
+    type Action = RunnerAction<Command<'a, LED_TIMER_HZ>>;
     type Error = BoxError;
 
-    fn run(
-        &mut self,
-        action: &RunnerAction<Command<Leds::Id, LED_TIMER_HZ, Axes::Id, Spindles::Id>>,
-    ) {
+    fn run(&mut self, action: &RunnerAction<Command<'a, LED_TIMER_HZ>>) {
         match action {
             RunnerAction::Run(command) => {
                 match command {
-                    Command::Led(id, action) => self.leds.run(id, action),
-                    Command::Axis(id, action) => self.axes.run(id, action),
-                    Command::Spindle(id, action) => self.spindles.run(id, action),
+                    Command::Led(id, action) => {
+                        self.leds.get_mut(id).expect("Led not found!").run(action)
+                    }
+                    Command::Axis(id, action) => {
+                        self.axes.get_mut(id).expect("Axis not found!").run(action)
+                    }
+                    Command::Spindle(id, action) => self
+                        .spindles
+                        .get_mut(id)
+                        .expect("Spindle not found!")
+                        .run(action),
                 }
 
                 self.active_commands.push_back(*command).unwrap();
@@ -86,9 +82,13 @@ where
         for _command_index in 0..num_commands {
             let command = self.active_commands.pop_front().unwrap();
             let result = match command {
-                Command::Led(id, _) => self.leds.poll(&id),
-                Command::Axis(id, _) => self.axes.poll(&id),
-                Command::Spindle(id, _) => self.spindles.poll(&id),
+                Command::Led(id, _) => self.leds.get_mut(id).expect("Led not found!").poll(),
+                Command::Axis(id, _) => self.axes.get_mut(id).expect("Axis not found!").poll(),
+                Command::Spindle(id, _) => self
+                    .spindles
+                    .get_mut(id)
+                    .expect("Spindle not found!")
+                    .poll(),
             };
 
             match result {
@@ -110,12 +110,4 @@ where
             Poll::Pending
         }
     }
-}
-
-pub trait ActuatorSet {
-    type Action: Copy + Clone + Debug + Format;
-    type Id: Copy + Clone + Debug + Format;
-
-    fn run(&mut self, id: &Self::Id, action: &Self::Action);
-    fn poll(&mut self, id: &Self::Id) -> Poll<Result<(), Box<dyn Error>>>;
 }
