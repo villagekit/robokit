@@ -28,7 +28,7 @@ use robokit::{
         switch::{SwitchActiveHigh, SwitchActiveLow, SwitchDevice, SwitchStatus},
         Sensor,
     },
-    timer::{setup as timer_setup, tick as timer_tick, SubTimer, TICK_TIMER_HZ},
+    timer::{SubTimer, SuperTimer},
 };
 
 use gridbot_tahi::{
@@ -36,22 +36,24 @@ use gridbot_tahi::{
     init_heap,
 };
 
-pub const TICK_TIMER_MAX: u32 = u32::MAX;
-pub type TickTimer = Counter<pac::TIM5, TICK_TIMER_HZ>;
+const TICK_TIMER_MAX: u32 = u32::MAX;
+const TICK_TIMER_HZ: u32 = 1_000_000;
+type TickTimerDevice = Counter<pac::TIM5, TICK_TIMER_HZ>;
+type TickTimer = SuperTimer<TickTimerDevice, TICK_TIMER_HZ>;
 
 type UserButtonPin = Pin<'C', 13, Input<Floating>>;
-type UserButtonTimer = SubTimer;
+type UserButtonTimer = SubTimer<TICK_TIMER_HZ>;
 // type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
 type UserButton = SwitchDevice<UserButtonPin, SwitchActiveHigh, UserButtonTimer, TICK_TIMER_HZ>;
 
 /* actuators */
 
 type GreenLedPin = Pin<'B', 0, Output<PushPull>>;
-type GreenLedTimer = SubTimer;
+type GreenLedTimer = SubTimer<TICK_TIMER_HZ>;
 type BlueLedPin = Pin<'B', 7, Output<PushPull>>;
-type BlueLedTimer = SubTimer;
+type BlueLedTimer = SubTimer<TICK_TIMER_HZ>;
 type RedLedPin = Pin<'B', 14, Output<PushPull>>;
-type RedLedTimer = SubTimer;
+type RedLedTimer = SubTimer<TICK_TIMER_HZ>;
 
 const X_AXIS_TIMER_HZ: u32 = 1_000_000;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
@@ -63,11 +65,11 @@ type MainSpindleDriver = SpindleDriverJmcHsv57<MainSpindleSerial>;
 
 /* sensors */
 type XAxisLimitMinPin = Pin<'F', 15, Input<PullUp>>; // D2
-type XAxisLimitMinTimer = SubTimer;
+type XAxisLimitMinTimer = SubTimer<TICK_TIMER_HZ>;
 type XAxisLimitMin =
     SwitchDevice<XAxisLimitMinPin, SwitchActiveLow, XAxisLimitMinTimer, TICK_TIMER_HZ>;
 type XAxisLimitMaxPin = Pin<'F', 14, Input<PullUp>>; // D4
-type XAxisLimitMaxTimer = SubTimer;
+type XAxisLimitMaxTimer = SubTimer<TICK_TIMER_HZ>;
 type XAxisLimitMax =
     SwitchDevice<XAxisLimitMaxPin, SwitchActiveLow, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
 
@@ -93,28 +95,28 @@ fn main() -> ! {
     let gpiof = p.GPIOF.split();
     let gpiog = p.GPIOG.split();
 
-    let mut tick_timer: TickTimer = p.TIM5.counter_us(&clocks);
-    timer_setup(&mut tick_timer, TICK_TIMER_MAX).unwrap();
+    let tick_timer_device: TickTimerDevice = p.TIM5.counter_us(&clocks);
+    let mut super_timer: TickTimer = SuperTimer::new(tick_timer_device, TICK_TIMER_MAX);
 
     let user_button_pin: UserButtonPin = gpioc.pc13.into_floating_input();
-    let user_button_timer: UserButtonTimer = SubTimer::new();
+    let user_button_timer: UserButtonTimer = super_timer.sub();
     let mut user_button: UserButton =
         SwitchDevice::new_active_high(user_button_pin, user_button_timer);
 
-    let mut robot_builder = RobotBuilder::new();
+    let mut robot_builder: RobotBuilder<TICK_TIMER_HZ> = RobotBuilder::new();
 
     let green_led_pin: GreenLedPin = gpiob.pb0.into_push_pull_output();
-    let green_led_timer: GreenLedTimer = SubTimer::new();
+    let green_led_timer: GreenLedTimer = super_timer.sub();
     let green_led = LedDevice::new(green_led_pin, green_led_timer);
     robot_builder.add_led("green", green_led).unwrap();
 
     let blue_led_pin: BlueLedPin = gpiob.pb7.into_push_pull_output();
-    let blue_led_timer: BlueLedTimer = SubTimer::new();
+    let blue_led_timer: BlueLedTimer = super_timer.sub();
     let blue_led = LedDevice::new(blue_led_pin, blue_led_timer);
     robot_builder.add_led("blue", blue_led).unwrap();
 
     let red_led_pin: RedLedPin = gpiob.pb14.into_push_pull_output();
-    let red_led_timer: RedLedTimer = SubTimer::new();
+    let red_led_timer: RedLedTimer = super_timer.sub();
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
     robot_builder.add_led("red", red_led).unwrap();
 
@@ -131,11 +133,11 @@ fn main() -> ! {
     let x_axis_step_pin: XAxisStepPin = gpiog.pg14.into_push_pull_output();
     let x_axis_timer: XAxisTimer = p.TIM3.counter(&clocks);
     let x_axis_limit_min_pin: XAxisLimitMinPin = gpiof.pf15.into_pull_up_input();
-    let x_axis_limit_min_timer: XAxisLimitMinTimer = SubTimer::new();
+    let x_axis_limit_min_timer: XAxisLimitMinTimer = super_timer.sub();
     let x_axis_limit_min: XAxisLimitMin =
         SwitchDevice::new_active_low(x_axis_limit_min_pin, x_axis_limit_min_timer);
     let x_axis_limit_max_pin: XAxisLimitMaxPin = gpiof.pf14.into_pull_up_input();
-    let x_axis_limit_max_timer: XAxisLimitMaxTimer = SubTimer::new();
+    let x_axis_limit_max_timer: XAxisLimitMaxTimer = super_timer.sub();
     let x_axis_limit_max: XAxisLimitMax =
         SwitchDevice::new_active_low(x_axis_limit_max_pin, x_axis_limit_max_timer);
     let x_axis = AxisDevice::new_dq542ma(
@@ -182,7 +184,7 @@ fn main() -> ! {
     iwdg.start(2.millis());
 
     loop {
-        timer_tick(&mut tick_timer, TICK_TIMER_MAX).unwrap();
+        super_timer.tick().expect("Failed to tick super timer");
 
         if let Some(user_button_update) = user_button.sense().expect("Error reading user button") {
             if let SwitchStatus::On = user_button_update.status {
