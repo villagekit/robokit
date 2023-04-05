@@ -17,18 +17,29 @@ pub enum SchedulerState {
     StopLoop,
 }
 
-pub struct Scheduler<Command, Runner>
-where
+pub struct Scheduler<
+    Command,
+    Runner,
+    const RUN_COMMANDS_COUNT: usize,
+    const START_COMMANDS_COUNT: usize,
+    const STOP_COMMANDS_COUNT: usize,
+> where
     Runner: Actuator<Action = RunnerAction<Command>>,
 {
     runner: Runner,
     state: SchedulerState,
-    run_commands: Vec<Command, 32>,
-    start_commands: Vec<Command, 4>,
-    stop_commands: Vec<Command, 4>,
+    run_commands: Vec<Command, RUN_COMMANDS_COUNT>,
+    start_commands: Vec<Command, START_COMMANDS_COUNT>,
+    stop_commands: Vec<Command, STOP_COMMANDS_COUNT>,
 }
 
-impl<Command, Runner> Scheduler<Command, Runner>
+impl<
+        Command,
+        Runner,
+        const RUN_COMMANDS_COUNT: usize,
+        const START_COMMANDS_COUNT: usize,
+        const STOP_COMMANDS_COUNT: usize,
+    > Scheduler<Command, Runner, RUN_COMMANDS_COUNT, START_COMMANDS_COUNT, STOP_COMMANDS_COUNT>
 where
     Command: Copy + Clone + Debug + Format,
     Runner: Actuator<Action = RunnerAction<Command>>,
@@ -36,9 +47,9 @@ where
 {
     pub fn new(
         runner: Runner,
-        run_commands: Vec<Command, 32>,
-        start_commands: Vec<Command, 4>,
-        stop_commands: Vec<Command, 4>,
+        run_commands: Vec<Command, RUN_COMMANDS_COUNT>,
+        start_commands: Vec<Command, START_COMMANDS_COUNT>,
+        stop_commands: Vec<Command, STOP_COMMANDS_COUNT>,
     ) -> Self {
         Self {
             runner,

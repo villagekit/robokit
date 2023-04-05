@@ -36,6 +36,14 @@ use gridbot_tahi::{
     init_heap,
 };
 
+const RUN_COMMANDS_COUNT: usize = 32;
+const START_COMMANDS_COUNT: usize = 4;
+const STOP_COMMANDS_COUNT: usize = 4;
+const LEDS_COUNT: usize = 4;
+const AXES_COUNT: usize = 4;
+const SPINDLES_COUNT: usize = 4;
+const ACTIVE_COMMANDS_COUNT: usize = 8;
+
 const TICK_TIMER_MAX: u32 = u32::MAX;
 const TICK_TIMER_HZ: u32 = 1_000_000;
 type TickTimerDevice = Counter<pac::TIM5, TICK_TIMER_HZ>;
@@ -103,7 +111,17 @@ fn main() -> ! {
     let mut user_button: UserButton =
         SwitchDevice::new_active_high(user_button_pin, user_button_timer);
 
-    let mut robot_builder: RobotBuilder<TICK_TIMER_HZ> = RobotBuilder::new();
+    let mut robot_builder: RobotBuilder<
+        '_,
+        TICK_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        LEDS_COUNT,
+        AXES_COUNT,
+        SPINDLES_COUNT,
+        ACTIVE_COMMANDS_COUNT,
+    > = RobotBuilder::new();
 
     let green_led_pin: GreenLedPin = gpiob.pb0.into_push_pull_output();
     let green_led_timer: GreenLedTimer = super_timer.sub();

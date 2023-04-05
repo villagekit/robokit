@@ -10,17 +10,43 @@ use crate::error::Error;
 use crate::runner::{Command, Runner};
 use crate::scheduler::Scheduler;
 
-pub struct RobotBuilder<'a, const LED_TIMER_HZ: u32> {
-    run_commands: Vec<Command<'a, LED_TIMER_HZ>, 32>,
-    start_commands: Vec<Command<'a, LED_TIMER_HZ>, 4>,
-    stop_commands: Vec<Command<'a, LED_TIMER_HZ>, 4>,
-    leds: FnvIndexMap<&'a str, BoxActuator<LedAction<LED_TIMER_HZ>>, 16>,
-    axes: FnvIndexMap<&'a str, BoxActuator<AxisAction>, 16>,
-    spindles: FnvIndexMap<&'a str, BoxActuator<SpindleAction>, 16>,
+pub struct RobotBuilder<
+    'a,
+    const LED_TIMER_HZ: u32,
+    const RUN_COMMANDS_COUNT: usize,
+    const START_COMMANDS_COUNT: usize,
+    const STOP_COMMANDS_COUNT: usize,
+    const LEDS_COUNT: usize,
+    const AXES_COUNT: usize,
+    const SPINDLES_COUNT: usize,
+    const ACTIVE_COMMANDS_COUNT: usize,
+> {
+    run_commands: Vec<Command<'a, LED_TIMER_HZ>, RUN_COMMANDS_COUNT>,
+    start_commands: Vec<Command<'a, LED_TIMER_HZ>, START_COMMANDS_COUNT>,
+    stop_commands: Vec<Command<'a, LED_TIMER_HZ>, STOP_COMMANDS_COUNT>,
+    leds: FnvIndexMap<&'a str, BoxActuator<LedAction<LED_TIMER_HZ>>, LEDS_COUNT>,
+    axes: FnvIndexMap<&'a str, BoxActuator<AxisAction>, AXES_COUNT>,
+    spindles: FnvIndexMap<&'a str, BoxActuator<SpindleAction>, SPINDLES_COUNT>,
 }
 
-pub struct Robot<'a, const LED_TIMER_HZ: u32> {
-    scheduler: Scheduler<Command<'a, LED_TIMER_HZ>, Runner<'a, LED_TIMER_HZ>>,
+pub struct Robot<
+    'a,
+    const LED_TIMER_HZ: u32,
+    const RUN_COMMANDS_COUNT: usize,
+    const START_COMMANDS_COUNT: usize,
+    const STOP_COMMANDS_COUNT: usize,
+    const LEDS_COUNT: usize,
+    const AXES_COUNT: usize,
+    const SPINDLES_COUNT: usize,
+    const ACTIVE_COMMANDS_COUNT: usize,
+> {
+    scheduler: Scheduler<
+        Command<'a, LED_TIMER_HZ>,
+        Runner<'a, LED_TIMER_HZ, LEDS_COUNT, AXES_COUNT, SPINDLES_COUNT, ACTIVE_COMMANDS_COUNT>,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+    >,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -33,7 +59,29 @@ pub enum RobotBuilderError {
     TooManyStopCommands,
 }
 
-impl<'a, const LED_TIMER_HZ: u32> RobotBuilder<'a, LED_TIMER_HZ> {
+impl<
+        'a,
+        const LED_TIMER_HZ: u32,
+        const RUN_COMMANDS_COUNT: usize,
+        const START_COMMANDS_COUNT: usize,
+        const STOP_COMMANDS_COUNT: usize,
+        const LEDS_COUNT: usize,
+        const AXES_COUNT: usize,
+        const SPINDLES_COUNT: usize,
+        const ACTIVE_COMMANDS_COUNT: usize,
+    >
+    RobotBuilder<
+        'a,
+        LED_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        LEDS_COUNT,
+        AXES_COUNT,
+        SPINDLES_COUNT,
+        ACTIVE_COMMANDS_COUNT,
+    >
+{
     pub fn new() -> Self {
         Self {
             run_commands: Vec::new(),
@@ -111,7 +159,19 @@ impl<'a, const LED_TIMER_HZ: u32> RobotBuilder<'a, LED_TIMER_HZ> {
         Ok(())
     }
 
-    pub fn build(self) -> Robot<'a, LED_TIMER_HZ> {
+    pub fn build(
+        self,
+    ) -> Robot<
+        'a,
+        LED_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        LEDS_COUNT,
+        AXES_COUNT,
+        SPINDLES_COUNT,
+        ACTIVE_COMMANDS_COUNT,
+    > {
         let runner = Runner::new(self.leds, self.axes, self.spindles);
         let scheduler = Scheduler::new(
             runner,
@@ -123,8 +183,38 @@ impl<'a, const LED_TIMER_HZ: u32> RobotBuilder<'a, LED_TIMER_HZ> {
     }
 }
 
-impl<'a, const LED_TIMER_HZ: u32> Robot<'a, LED_TIMER_HZ> {
-    pub fn new(scheduler: Scheduler<Command<'a, LED_TIMER_HZ>, Runner<'a, LED_TIMER_HZ>>) -> Self {
+impl<
+        'a,
+        const LED_TIMER_HZ: u32,
+        const RUN_COMMANDS_COUNT: usize,
+        const START_COMMANDS_COUNT: usize,
+        const STOP_COMMANDS_COUNT: usize,
+        const LEDS_COUNT: usize,
+        const AXES_COUNT: usize,
+        const SPINDLES_COUNT: usize,
+        const ACTIVE_COMMANDS_COUNT: usize,
+    >
+    Robot<
+        'a,
+        LED_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        LEDS_COUNT,
+        AXES_COUNT,
+        SPINDLES_COUNT,
+        ACTIVE_COMMANDS_COUNT,
+    >
+{
+    pub fn new(
+        scheduler: Scheduler<
+            Command<'a, LED_TIMER_HZ>,
+            Runner<'a, LED_TIMER_HZ, LEDS_COUNT, AXES_COUNT, SPINDLES_COUNT, ACTIVE_COMMANDS_COUNT>,
+            RUN_COMMANDS_COUNT,
+            START_COMMANDS_COUNT,
+            STOP_COMMANDS_COUNT,
+        >,
+    ) -> Self {
         Self { scheduler }
     }
 

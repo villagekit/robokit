@@ -21,6 +21,15 @@ use stm32f7xx_hal::{pac, prelude::*};
 
 use blinky::init_heap;
 
+const TICK_TIMER_HZ: u32 = 1_000_000;
+const RUN_COMMANDS_COUNT: usize = 6;
+const START_COMMANDS_COUNT: usize = 0;
+const STOP_COMMANDS_COUNT: usize = 0;
+const LEDS_COUNT: usize = 4;
+const AXES_COUNT: usize = 2;
+const SPINDLES_COUNT: usize = 2;
+const ACTIVE_COMMANDS_COUNT: usize = 1;
+
 pub fn get_run_commands<const TIMER_HZ: u32>() -> [Command<'static, TIMER_HZ>; 6] {
     [
         Command::Led(
@@ -83,7 +92,17 @@ fn main() -> ! {
     let user_button_timer = super_timer.sub();
     let mut user_button = SwitchDevice::new_active_high(user_button_pin, user_button_timer);
 
-    let mut robot_builder = RobotBuilder::new();
+    let mut robot_builder: RobotBuilder<
+        '_,
+        TICK_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        LEDS_COUNT,
+        AXES_COUNT,
+        SPINDLES_COUNT,
+        ACTIVE_COMMANDS_COUNT,
+    > = RobotBuilder::new();
 
     let green_led_pin = gpiob.pb0.into_push_pull_output();
     let green_led_timer = super_timer.sub();
