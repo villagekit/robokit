@@ -562,7 +562,7 @@ dependencies = [
 
 [[package]]
 name = "robokit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "defmt",
  "embedded-hal 0.2.7",
