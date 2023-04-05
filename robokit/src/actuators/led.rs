@@ -72,8 +72,9 @@ where
 
 #[derive(Clone, Copy, Debug)]
 pub enum LedError<PinError: Debug, TimerError: Debug> {
-    Pin(PinError),
-    Timer(TimerError),
+    PinSet(PinError),
+    TimerStart(TimerError),
+    TimerWait(TimerError),
 }
 
 impl<PinError: Debug, TimerError: Debug> Error for LedError<PinError, TimerError> {}
@@ -108,7 +109,7 @@ where
                 // set led state
                 self.pin
                     .set_state(PinState::from(is_on))
-                    .map_err(|err| LedError::Pin(err))?;
+                    .map_err(LedError::PinSet)?;
 
                 self.state = None;
 
@@ -118,12 +119,10 @@ where
                 match status {
                     LedBlinkStatus::Start => {
                         // start timer
-                        self.timer
-                            .start(duration)
-                            .map_err(|err| LedError::Timer(err))?;
+                        self.timer.start(duration).map_err(LedError::TimerStart)?;
 
                         // turn led on
-                        self.pin.set_high().map_err(|err| LedError::Pin(err))?;
+                        self.pin.set_high().map_err(LedError::PinSet)?;
 
                         // update state
                         self.state = Some(LedState::Blink {
@@ -134,7 +133,7 @@ where
                         Poll::Pending
                     }
                     LedBlinkStatus::Wait => match self.timer.wait() {
-                        Err(nb::Error::Other(err)) => Poll::Ready(Err(LedError::Timer(err))),
+                        Err(nb::Error::Other(err)) => Poll::Ready(Err(LedError::TimerWait(err))),
                         Err(nb::Error::WouldBlock) => Poll::Pending,
                         Ok(()) => {
                             self.state = Some(LedState::Blink {
@@ -146,7 +145,7 @@ where
                         }
                     },
                     LedBlinkStatus::Done => {
-                        self.pin.set_low().map_err(|err| LedError::Pin(err))?;
+                        self.pin.set_low().map_err(LedError::PinSet)?;
 
                         self.state = None;
 
