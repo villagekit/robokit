@@ -20,18 +20,33 @@ pub enum RunnerAction<Command> {
     Reset,
 }
 
-pub struct Runner<'a, const LED_TIMER_HZ: u32> {
-    active_commands: Deque<Command<'a, LED_TIMER_HZ>, 8>,
-    leds: FnvIndexMap<&'a str, BoxActuator<LedAction<LED_TIMER_HZ>>, 16>,
-    axes: FnvIndexMap<&'a str, BoxActuator<AxisAction>, 16>,
-    spindles: FnvIndexMap<&'a str, BoxActuator<SpindleAction>, 16>,
+pub struct Runner<
+    'a,
+    const LED_TIMER_HZ: u32,
+    const LEDS_COUNT: usize,
+    const AXES_COUNT: usize,
+    const SPINDLES_COUNT: usize,
+    const ACTIVE_COMMMANDS_COUNT: usize,
+> {
+    active_commands: Deque<Command<'a, LED_TIMER_HZ>, ACTIVE_COMMMANDS_COUNT>,
+    leds: FnvIndexMap<&'a str, BoxActuator<LedAction<LED_TIMER_HZ>>, LEDS_COUNT>,
+    axes: FnvIndexMap<&'a str, BoxActuator<AxisAction>, AXES_COUNT>,
+    spindles: FnvIndexMap<&'a str, BoxActuator<SpindleAction>, SPINDLES_COUNT>,
 }
 
-impl<'a, const LED_TIMER_HZ: u32> Runner<'a, LED_TIMER_HZ> {
+impl<
+        'a,
+        const LED_TIMER_HZ: u32,
+        const LEDS_COUNT: usize,
+        const AXES_COUNT: usize,
+        const SPINDLES_COUNT: usize,
+        const ACTIVE_COMMMANDS_COUNT: usize,
+    > Runner<'a, LED_TIMER_HZ, LEDS_COUNT, AXES_COUNT, SPINDLES_COUNT, ACTIVE_COMMMANDS_COUNT>
+{
     pub fn new(
-        leds: FnvIndexMap<&'a str, BoxActuator<LedAction<LED_TIMER_HZ>>, 16>,
-        axes: FnvIndexMap<&'a str, BoxActuator<AxisAction>, 16>,
-        spindles: FnvIndexMap<&'a str, BoxActuator<SpindleAction>, 16>,
+        leds: FnvIndexMap<&'a str, BoxActuator<LedAction<LED_TIMER_HZ>>, LEDS_COUNT>,
+        axes: FnvIndexMap<&'a str, BoxActuator<AxisAction>, AXES_COUNT>,
+        spindles: FnvIndexMap<&'a str, BoxActuator<SpindleAction>, SPINDLES_COUNT>,
     ) -> Self {
         Self {
             active_commands: Deque::new(),
@@ -50,7 +65,16 @@ pub enum RunnerError<'a> {
 }
 */
 
-impl<'a, const LED_TIMER_HZ: u32> Actuator for Runner<'a, LED_TIMER_HZ> {
+impl<
+        'a,
+        const LED_TIMER_HZ: u32,
+        const LEDS_COUNT: usize,
+        const AXES_COUNT: usize,
+        const SPINDLES_COUNT: usize,
+        const ACTIVE_COMMMANDS_COUNT: usize,
+    > Actuator
+    for Runner<'a, LED_TIMER_HZ, LEDS_COUNT, AXES_COUNT, SPINDLES_COUNT, ACTIVE_COMMMANDS_COUNT>
+{
     type Action = RunnerAction<Command<'a, LED_TIMER_HZ>>;
     type Error = BoxError;
 
