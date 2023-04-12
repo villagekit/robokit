@@ -195,7 +195,7 @@ fn main() -> ! {
         .set_stop_commands(&get_stop_commands())
         .unwrap();
 
-    let mut robot = robot_builder.build();
+    let mut robot = robot_builder.build().expect("Error validating robot");
 
     let mut iwdg = watchdog::IndependentWatchdog::new(p.IWDG);
 

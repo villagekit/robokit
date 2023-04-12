@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use alloc::string::String;
 use core::task::Poll;
 use heapless::{FnvIndexMap, Vec};
 
@@ -57,6 +58,15 @@ pub enum RobotBuilderError {
     TooManyRunCommands,
     TooManyStartCommands,
     TooManyStopCommands,
+}
+
+#[derive(Clone, Debug)]
+pub enum RobotValidationError {
+    UnmatchedId {
+        id: String,
+        actuator_type: String,
+        command_type: String,
+    },
 }
 
 impl<
@@ -159,19 +169,72 @@ impl<
         Ok(())
     }
 
+    fn validate_commands<const COMMANDS_COUNT: usize>(
+        &self,
+        command_type: &'a str,
+        commands: &Vec<Command<'a, LED_TIMER_HZ>, COMMANDS_COUNT>,
+    ) -> Result<(), RobotValidationError> {
+        for command in commands.iter() {
+            match command {
+                Command::Led(id, _) => {
+                    if !self.leds.contains_key(*id) {
+                        return Err(RobotValidationError::UnmatchedId {
+                            id: (*id).into(),
+                            actuator_type: "led".into(),
+                            command_type: command_type.into(),
+                        });
+                    }
+                }
+                Command::Axis(id, _) => {
+                    if !self.axes.contains_key(*id) {
+                        return Err(RobotValidationError::UnmatchedId {
+                            id: (*id).into(),
+                            actuator_type: "axis".into(),
+                            command_type: command_type.into(),
+                        });
+                    }
+                }
+                Command::Spindle(id, _) => {
+                    if !self.spindles.contains_key(*id) {
+                        return Err(RobotValidationError::UnmatchedId {
+                            id: (*id).into(),
+                            actuator_type: "spindle".into(),
+                            command_type: command_type.into(),
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate(&self) -> Result<(), RobotValidationError> {
+        self.validate_commands("run", &self.run_commands)?;
+        self.validate_commands("start", &self.start_commands)?;
+        self.validate_commands("stop", &self.stop_commands)?;
+
+        Ok(())
+    }
+
     pub fn build(
         self,
-    ) -> Robot<
-        'a,
-        LED_TIMER_HZ,
-        RUN_COMMANDS_COUNT,
-        START_COMMANDS_COUNT,
-        STOP_COMMANDS_COUNT,
-        LEDS_COUNT,
-        AXES_COUNT,
-        SPINDLES_COUNT,
-        ACTIVE_COMMANDS_COUNT,
+    ) -> Result<
+        Robot<
+            'a,
+            LED_TIMER_HZ,
+            RUN_COMMANDS_COUNT,
+            START_COMMANDS_COUNT,
+            STOP_COMMANDS_COUNT,
+            LEDS_COUNT,
+            AXES_COUNT,
+            SPINDLES_COUNT,
+            ACTIVE_COMMANDS_COUNT,
+        >,
+        RobotValidationError,
     > {
+        self.validate()?;
+
         let runner = Runner::new(self.leds, self.axes, self.spindles);
         let scheduler = Scheduler::new(
             runner,
@@ -179,7 +242,8 @@ impl<
             self.start_commands,
             self.stop_commands,
         );
-        Robot::new(scheduler)
+
+        Ok(Robot::new(scheduler))
     }
 }
 
