@@ -1,9 +1,10 @@
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
-use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::digital::v2::{OutputPin, PinState};
 use fugit::TimerDurationU32 as TimerDuration;
 use fugit_timer::Timer;
+use nb;
 
 use crate::error::Error;
 
@@ -11,6 +12,7 @@ use super::Actuator;
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum LedAction<const TIMER_HZ: u32> {
+    Set { is_on: bool },
     Blink { duration: TimerDuration<TIMER_HZ> },
 }
 
@@ -24,9 +26,14 @@ pub enum LedBlinkStatus {
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub struct LedBlinkState<const TIMER_HZ: u32> {
-    status: LedBlinkStatus,
-    duration: TimerDuration<TIMER_HZ>,
+pub enum LedState<const TIMER_HZ: u32> {
+    Set {
+        is_on: bool,
+    },
+    Blink {
+        status: LedBlinkStatus,
+        duration: TimerDuration<TIMER_HZ>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -37,7 +44,7 @@ where
 {
     pin: P,
     timer: T,
-    state: Option<LedBlinkState<TIMER_HZ>>,
+    state: Option<LedState<TIMER_HZ>>,
 }
 
 impl<P, T, const TIMER_HZ: u32> AnyLed<TIMER_HZ> for LedDevice<P, T, TIMER_HZ>
@@ -65,8 +72,9 @@ where
 
 #[derive(Clone, Copy, Debug)]
 pub enum LedError<PinError: Debug, TimerError: Debug> {
-    Pin(PinError),
-    Timer(TimerError),
+    PinSet(PinError),
+    TimerStart(TimerError),
+    TimerWait(TimerError),
 }
 
 impl<PinError: Debug, TimerError: Debug> Error for LedError<PinError, TimerError> {}
@@ -83,8 +91,11 @@ where
 
     fn run(&mut self, action: &Self::Action) {
         match action {
+            LedAction::Set { is_on } => {
+                self.state = Some(LedState::Set { is_on: *is_on });
+            }
             LedAction::Blink { duration } => {
-                self.state = Some(LedBlinkState {
+                self.state = Some(LedState::Blink {
                     status: LedBlinkStatus::Start,
                     duration: *duration,
                 });
@@ -93,47 +104,56 @@ where
     }
 
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        if let Some(state) = self.state {
-            match state.status {
-                LedBlinkStatus::Start => {
-                    // start timer
-                    self.timer
-                        .start(state.duration)
-                        .map_err(|err| LedError::Timer(err))?;
+        match self.state {
+            Some(LedState::Set { is_on }) => {
+                // set led state
+                self.pin
+                    .set_state(PinState::from(is_on))
+                    .map_err(LedError::PinSet)?;
 
-                    // turn led on
-                    self.pin.set_high().map_err(|err| LedError::Pin(err))?;
+                self.state = None;
 
-                    // update state
-                    self.state = Some(LedBlinkState {
-                        status: LedBlinkStatus::Wait,
-                        duration: state.duration,
-                    });
+                Poll::Ready(Ok(()))
+            }
+            Some(LedState::Blink { duration, status }) => {
+                match status {
+                    LedBlinkStatus::Start => {
+                        // start timer
+                        self.timer.start(duration).map_err(LedError::TimerStart)?;
 
-                    Poll::Pending
-                }
-                LedBlinkStatus::Wait => match self.timer.wait() {
-                    Err(nb::Error::Other(err)) => Poll::Ready(Err(LedError::Timer(err))),
-                    Err(nb::Error::WouldBlock) => Poll::Pending,
-                    Ok(()) => {
-                        self.state = Some(LedBlinkState {
-                            status: LedBlinkStatus::Done,
-                            duration: state.duration,
+                        // turn led on
+                        self.pin.set_high().map_err(LedError::PinSet)?;
+
+                        // update state
+                        self.state = Some(LedState::Blink {
+                            status: LedBlinkStatus::Wait,
+                            duration,
                         });
 
                         Poll::Pending
                     }
-                },
-                LedBlinkStatus::Done => {
-                    self.pin.set_low().map_err(|err| LedError::Pin(err))?;
+                    LedBlinkStatus::Wait => match self.timer.wait() {
+                        Err(nb::Error::Other(err)) => Poll::Ready(Err(LedError::TimerWait(err))),
+                        Err(nb::Error::WouldBlock) => Poll::Pending,
+                        Ok(()) => {
+                            self.state = Some(LedState::Blink {
+                                status: LedBlinkStatus::Done,
+                                duration,
+                            });
 
-                    self.state = None;
+                            Poll::Pending
+                        }
+                    },
+                    LedBlinkStatus::Done => {
+                        self.pin.set_low().map_err(LedError::PinSet)?;
 
-                    Poll::Ready(Ok(()))
+                        self.state = None;
+
+                        Poll::Ready(Ok(()))
+                    }
                 }
             }
-        } else {
-            Poll::Ready(Ok(()))
+            None => Poll::Ready(Ok(())),
         }
     }
 }
