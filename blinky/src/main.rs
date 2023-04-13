@@ -121,7 +121,7 @@ fn main() -> ! {
 
     robot_builder.set_run_commands(&get_run_commands()).unwrap();
 
-    let mut robot = robot_builder.build();
+    let mut robot = robot_builder.build().expect("Error validating robot");
 
     loop {
         super_timer.tick().expect("Error ticking super timer");
