@@ -230,7 +230,9 @@ impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64, TIMER_HZ>
 
 #[derive(Clone, Copy, Debug)]
 pub enum AxisError<DriverError: Debug, LimitMinSenseError: Debug, LimitMaxSenseError: Debug> {
-    Driver(DriverError),
+    DriverUpdate(DriverError),
+    DriverResetPosition(DriverError),
+    DriverMoveToPosition(DriverError),
     Limit(AxisLimitSide),
     LimitSensor(LimitSensorError<LimitMinSenseError, LimitMaxSenseError>),
     Unexpected,
@@ -357,7 +359,7 @@ where
                     AxisMoveStatus::Start => {
                         driver
                             .move_to_position(max_velocity_in_steps_per_sec, target_step)
-                            .map_err(|err| AxisError::Driver(err))?;
+                            .map_err(AxisError::DriverMoveToPosition)?;
 
                         self.state = AxisState::Moving(move_state, AxisMoveStatus::Motion);
                         Poll::Pending
@@ -378,7 +380,7 @@ where
                             }
                         }
 
-                        let still_moving = driver.update().map_err(|err| AxisError::Driver(err))?;
+                        let still_moving = driver.update().map_err(AxisError::DriverUpdate)?;
                         if still_moving {
                             Poll::Pending
                         } else {
@@ -407,10 +409,10 @@ where
 
                         driver
                             .reset_position(0)
-                            .map_err(|err| AxisError::Driver(err))?;
+                            .map_err(AxisError::DriverResetPosition)?;
                         driver
                             .move_to_position(max_velocity_in_steps_per_sec, target_step)
-                            .map_err(|err| AxisError::Driver(err))?;
+                            .map_err(AxisError::DriverMoveToPosition)?;
 
                         self.state =
                             AxisState::Homing(home_state, AxisHomeStatus::MotionTowardsHome);
@@ -433,7 +435,7 @@ where
                             return Poll::Pending;
                         }
 
-                        let still_moving = driver.update().map_err(|err| AxisError::Driver(err))?;
+                        let still_moving = driver.update().map_err(AxisError::DriverUpdate)?;
                         if still_moving {
                             Poll::Pending
                         } else {
@@ -448,10 +450,10 @@ where
 
                         driver
                             .reset_position(0)
-                            .map_err(|err| AxisError::Driver(err))?;
+                            .map_err(AxisError::DriverResetPosition)?;
                         driver
                             .move_to_position(max_velocity_in_steps_per_sec, target_step)
-                            .map_err(|err| AxisError::Driver(err))?;
+                            .map_err(AxisError::DriverMoveToPosition)?;
 
                         self.state =
                             AxisState::Homing(home_state, AxisHomeStatus::MotionBackOffHome);
@@ -474,7 +476,7 @@ where
                             }
                         }
 
-                        let still_moving = driver.update().map_err(|err| AxisError::Driver(err))?;
+                        let still_moving = driver.update().map_err(AxisError::DriverUpdate)?;
                         if !still_moving {
                             self.state = AxisState::Homing(home_state, AxisHomeStatus::Done);
                         }
@@ -484,7 +486,7 @@ where
                     AxisHomeStatus::Done => {
                         driver
                             .reset_position(0)
-                            .map_err(|err| AxisError::Driver(err))?;
+                            .map_err(AxisError::DriverResetPosition)?;
 
                         self.state = AxisState::Idle;
 
@@ -515,11 +517,7 @@ where
     pub fn update_limit_switches(
         &mut self,
     ) -> Result<(), LimitSensorError<LimitMin::Error, LimitMax::Error>> {
-        if let Some(axis_limit_update) = self
-            .limit_min
-            .sense()
-            .map_err(|err| LimitSensorError::Min(err))?
-        {
+        if let Some(axis_limit_update) = self.limit_min.sense().map_err(LimitSensorError::Min)? {
             let limit_min_status = match axis_limit_update.status {
                 SwitchStatus::On => AxisLimitStatus::Over,
                 SwitchStatus::Off => AxisLimitStatus::Under,
@@ -527,11 +525,7 @@ where
             self.limit_min_status = Some(limit_min_status);
         }
 
-        if let Some(axis_limit_update) = self
-            .limit_max
-            .sense()
-            .map_err(|err| LimitSensorError::Max(err))?
-        {
+        if let Some(axis_limit_update) = self.limit_max.sense().map_err(LimitSensorError::Max)? {
             let limit_max_status = match axis_limit_update.status {
                 SwitchStatus::On => AxisLimitStatus::Over,
                 SwitchStatus::Off => AxisLimitStatus::Under,
