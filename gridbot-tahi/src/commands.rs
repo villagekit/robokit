@@ -80,8 +80,9 @@ pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 8] {
     ]
 }
 
-pub fn get_start_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
+pub fn get_start_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 0] {
     [
+        /*
         Command::Axis(
             AxisId::X,
             AxisAction::Home {
@@ -89,7 +90,6 @@ pub fn get_start_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
                 back_off_distance_in_millimeters: 0.1_f64,
             },
         ),
-        /*
         Command::MainSpindleSet(SpindleSetMessage {
             status: SpindleStatus::On { rpm: 1000 },
         }),
@@ -97,8 +97,9 @@ pub fn get_start_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
     ]
 }
 
-pub fn get_stop_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
+pub fn get_stop_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 0] {
     [
+        /*
         Command::Axis(
             AxisId::X,
             AxisAction::MoveAbsolute {
@@ -106,7 +107,6 @@ pub fn get_stop_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
                 position_in_millimeters: 0_f64,
             },
         ),
-        /*
         Command::MainSpindleSet(SpindleSetMessage {
             status: SpindleStatus::Off,
         }),

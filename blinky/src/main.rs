@@ -133,6 +133,7 @@ fn main() -> ! {
         super_timer.tick().expect("Failed to tick super timer");
 
         if let Some(user_button_update) = user_button.sense().expect("Error reading user button") {
+            defmt::println!("user button: {}", user_button_update);
             if let SwitchStatus::On = user_button_update.status {
                 robot.toggle();
             }
