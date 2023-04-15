@@ -1,5 +1,4 @@
 use alloc::boxed::Box;
-use alloc::string::String;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
@@ -68,9 +67,18 @@ pub enum RobotBuilderError {
 
 #[derive(Clone, Debug)]
 pub enum RobotValidationError<LedId: Debug, AxisId: Debug, SpindleId: Debug> {
-    UnmatchedLedId { id: LedId, command_type: String },
-    UnmatchedAxisId { id: AxisId, command_type: String },
-    UnmatchedSpindleId { id: SpindleId, command_type: String },
+    UnmatchedLedId {
+        id: LedId,
+        command_type: &'static str,
+    },
+    UnmatchedAxisId {
+        id: AxisId,
+        command_type: &'static str,
+    },
+    UnmatchedSpindleId {
+        id: SpindleId,
+        command_type: &'static str,
+    },
 }
 
 impl<
@@ -174,33 +182,24 @@ where
 
     fn validate_commands<const COMMANDS_COUNT: usize>(
         &self,
-        command_type: &str,
+        command_type: &'static str,
         commands: &Vec<Command<LED_TIMER_HZ, LedId, AxisId, SpindleId>, COMMANDS_COUNT>,
     ) -> Result<(), RobotValidationError<LedId, AxisId, SpindleId>> {
         for command in commands.iter() {
-            match command {
+            match *command {
                 Command::Led(id, _) => {
-                    if !self.leds.contains_key(*id) {
-                        return Err(RobotValidationError::UnmatchedLedId {
-                            id: (*id),
-                            command_type: command_type.into(),
-                        });
+                    if !self.leds.contains_key(id) {
+                        return Err(RobotValidationError::UnmatchedLedId { id, command_type });
                     }
                 }
                 Command::Axis(id, _) => {
-                    if !self.axes.contains_key(*id) {
-                        return Err(RobotValidationError::UnmatchedAxisId {
-                            id: (*id),
-                            command_type: command_type.into(),
-                        });
+                    if !self.axes.contains_key(id) {
+                        return Err(RobotValidationError::UnmatchedAxisId { id, command_type });
                     }
                 }
                 Command::Spindle(id, _) => {
-                    if !self.spindles.contains_key(*id) {
-                        return Err(RobotValidationError::UnmatchedSpindleId {
-                            id: *id,
-                            command_type: command_type.into(),
-                        });
+                    if !self.spindles.contains_key(id) {
+                        return Err(RobotValidationError::UnmatchedSpindleId { id, command_type });
                     }
                 }
             }
