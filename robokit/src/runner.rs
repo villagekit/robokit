@@ -1,17 +1,23 @@
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
-use heapless::{Deque, FnvIndexMap};
+use fixed_map::{key::Key, Map};
+use heapless::Deque;
 
 use crate::actuators::BoxActuator;
 use crate::actuators::{axis::AxisAction, led::LedAction, spindle::SpindleAction, Actuator};
 use crate::error::BoxError;
 
 #[derive(Clone, Copy, Debug, Format)]
-pub enum Command<'a, const LED_TIMER_HZ: u32> {
-    Led(&'a str, LedAction<LED_TIMER_HZ>),
-    Axis(&'a str, AxisAction),
-    Spindle(&'a str, SpindleAction),
+pub enum Command<const LED_TIMER_HZ: u32, LedId, AxisId, SpindleId>
+where
+    LedId: Debug + Format,
+    AxisId: Debug + Format,
+    SpindleId: Debug + Format,
+{
+    Led(LedId, LedAction<LED_TIMER_HZ>),
+    Axis(AxisId, AxisAction),
+    Spindle(SpindleId, SpindleAction),
 }
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -21,32 +27,33 @@ pub enum RunnerAction<Command> {
 }
 
 pub struct Runner<
-    'a,
     const LED_TIMER_HZ: u32,
-    const LEDS_COUNT: usize,
-    const AXES_COUNT: usize,
-    const SPINDLES_COUNT: usize,
     const ACTIVE_COMMMANDS_COUNT: usize,
-> {
-    active_commands: Deque<Command<'a, LED_TIMER_HZ>, ACTIVE_COMMMANDS_COUNT>,
-    leds: FnvIndexMap<&'a str, BoxActuator<LedAction<LED_TIMER_HZ>>, LEDS_COUNT>,
-    axes: FnvIndexMap<&'a str, BoxActuator<AxisAction>, AXES_COUNT>,
-    spindles: FnvIndexMap<&'a str, BoxActuator<SpindleAction>, SPINDLES_COUNT>,
+    LedId,
+    AxisId,
+    SpindleId,
+> where
+    LedId: Key + Debug + Format,
+    AxisId: Key + Debug + Format,
+    SpindleId: Key + Debug + Format,
+{
+    active_commands: Deque<Command<LED_TIMER_HZ, LedId, AxisId, SpindleId>, ACTIVE_COMMMANDS_COUNT>,
+    leds: Map<LedId, BoxActuator<LedAction<LED_TIMER_HZ>>>,
+    axes: Map<AxisId, BoxActuator<AxisAction>>,
+    spindles: Map<SpindleId, BoxActuator<SpindleAction>>,
 }
 
-impl<
-        'a,
-        const LED_TIMER_HZ: u32,
-        const LEDS_COUNT: usize,
-        const AXES_COUNT: usize,
-        const SPINDLES_COUNT: usize,
-        const ACTIVE_COMMMANDS_COUNT: usize,
-    > Runner<'a, LED_TIMER_HZ, LEDS_COUNT, AXES_COUNT, SPINDLES_COUNT, ACTIVE_COMMMANDS_COUNT>
+impl<const LED_TIMER_HZ: u32, const ACTIVE_COMMMANDS_COUNT: usize, LedId, AxisId, SpindleId>
+    Runner<LED_TIMER_HZ, ACTIVE_COMMMANDS_COUNT, LedId, AxisId, SpindleId>
+where
+    LedId: Key + Debug + Format,
+    AxisId: Key + Debug + Format,
+    SpindleId: Key + Debug + Format,
 {
     pub fn new(
-        leds: FnvIndexMap<&'a str, BoxActuator<LedAction<LED_TIMER_HZ>>, LEDS_COUNT>,
-        axes: FnvIndexMap<&'a str, BoxActuator<AxisAction>, AXES_COUNT>,
-        spindles: FnvIndexMap<&'a str, BoxActuator<SpindleAction>, SPINDLES_COUNT>,
+        leds: Map<LedId, BoxActuator<LedAction<LED_TIMER_HZ>>>,
+        axes: Map<AxisId, BoxActuator<AxisAction>>,
+        spindles: Map<SpindleId, BoxActuator<SpindleAction>>,
     ) -> Self {
         Self {
             active_commands: Deque::new(),
@@ -57,40 +64,29 @@ impl<
     }
 }
 
-/*
-#[derive(Debug)]
-pub enum RunnerError<'a> {
-    NotFound(&'a str),
-    Poll(&'a str, Box<dyn Error>),
-}
-*/
-
-impl<
-        'a,
-        const LED_TIMER_HZ: u32,
-        const LEDS_COUNT: usize,
-        const AXES_COUNT: usize,
-        const SPINDLES_COUNT: usize,
-        const ACTIVE_COMMMANDS_COUNT: usize,
-    > Actuator
-    for Runner<'a, LED_TIMER_HZ, LEDS_COUNT, AXES_COUNT, SPINDLES_COUNT, ACTIVE_COMMMANDS_COUNT>
+impl<const LED_TIMER_HZ: u32, const ACTIVE_COMMMANDS_COUNT: usize, LedId, AxisId, SpindleId>
+    Actuator for Runner<LED_TIMER_HZ, ACTIVE_COMMMANDS_COUNT, LedId, AxisId, SpindleId>
+where
+    LedId: Key + Debug + Format,
+    AxisId: Key + Debug + Format,
+    SpindleId: Key + Debug + Format,
 {
-    type Action = RunnerAction<Command<'a, LED_TIMER_HZ>>;
+    type Action = RunnerAction<Command<LED_TIMER_HZ, LedId, AxisId, SpindleId>>;
     type Error = BoxError;
 
-    fn run(&mut self, action: &RunnerAction<Command<'a, LED_TIMER_HZ>>) {
+    fn run(&mut self, action: &RunnerAction<Command<LED_TIMER_HZ, LedId, AxisId, SpindleId>>) {
         match action {
             RunnerAction::Run(command) => {
                 match command {
                     Command::Led(id, action) => {
-                        self.leds.get_mut(id).expect("Led not found!").run(action)
+                        self.leds.get_mut(*id).expect("Led not found!").run(action)
                     }
                     Command::Axis(id, action) => {
-                        self.axes.get_mut(id).expect("Axis not found!").run(action)
+                        self.axes.get_mut(*id).expect("Axis not found!").run(action)
                     }
                     Command::Spindle(id, action) => self
                         .spindles
-                        .get_mut(id)
+                        .get_mut(*id)
                         .expect("Spindle not found!")
                         .run(action),
                 }
