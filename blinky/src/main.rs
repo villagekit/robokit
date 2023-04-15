@@ -36,12 +36,7 @@ enum LedId {
     Red,
 }
 
-#[derive(Copy, Clone, Debug, Format, Key)]
-enum AxisId {}
-#[derive(Copy, Clone, Debug, Format, Key)]
-enum SpindleId {}
-
-fn get_run_commands<const TIMER_HZ: u32>() -> [Command<TIMER_HZ, LedId, AxisId, SpindleId>; 6] {
+fn get_run_commands<const TIMER_HZ: u32>() -> [Command<TIMER_HZ, LedId, (), ()>; 6] {
     [
         Command::Led(
             LedId::Green,
@@ -110,8 +105,8 @@ fn main() -> ! {
         STOP_COMMANDS_COUNT,
         ACTIVE_COMMANDS_COUNT,
         LedId,
-        AxisId,
-        SpindleId,
+        (),
+        (),
     > = RobotBuilder::new();
 
     let green_led_pin = gpiob.pb0.into_push_pull_output();
