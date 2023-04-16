@@ -113,8 +113,10 @@ where
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum SwitchError<PinError: Debug, TimerError: Debug> {
-    Pin(PinError),
-    Timer(TimerError),
+    PinRead(PinError),
+    TimerStart(TimerError),
+    TimerWait(TimerError),
+    TimerCancel(TimerError),
 }
 
 impl<PinError: Debug, TimerError: Debug> Error for SwitchError<PinError, TimerError> {}
@@ -133,15 +135,15 @@ where
         if self.is_debouncing {
             match self.timer.wait() {
                 Ok(()) => {
-                    self.timer.cancel().map_err(|err| SwitchError::Timer(err))?;
+                    self.timer.cancel().map_err(SwitchError::TimerCancel)?;
                     self.is_debouncing = false;
                 }
                 Err(nb::Error::WouldBlock) => return Ok(None),
-                Err(nb::Error::Other(err)) => return Err(SwitchError::Timer(err)),
+                Err(nb::Error::Other(err)) => return Err(SwitchError::TimerWait(err)),
             }
         }
 
-        let is_active = self.is_active().map_err(|err| SwitchError::Pin(err))?;
+        let is_active = self.is_active().map_err(SwitchError::PinRead)?;
 
         let status = match is_active {
             true => SwitchStatus::On,
@@ -156,7 +158,7 @@ where
             self.is_debouncing = true;
             self.timer
                 .start(debounce_duration)
-                .map_err(|err| SwitchError::Timer(err))?;
+                .map_err(SwitchError::TimerStart)?;
 
             Ok(Some(SwitchUpdate { status }))
         } else {
