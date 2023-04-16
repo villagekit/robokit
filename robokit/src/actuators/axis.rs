@@ -336,6 +336,9 @@ where
 
     // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html#
     fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+        self.update_limit_switches()
+            .map_err(AxisError::LimitSensor)?;
+
         // assert min and max limits are set
         if let None = self.limit_min_status {
             return Poll::Ready(Err(AxisError::Unexpected));

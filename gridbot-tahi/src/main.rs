@@ -199,6 +199,7 @@ fn main() -> ! {
 
     iwdg.start(2.millis());
 
+    super_timer.setup().expect("Failed to setup super time");
     loop {
         super_timer.tick().expect("Failed to tick super timer");
 
