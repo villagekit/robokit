@@ -128,8 +128,9 @@ fn main() -> ! {
 
     let mut robot = robot_builder.build().expect("Error validating robot");
 
+    super_timer.setup().expect("Failed to setup super time");
     loop {
-        super_timer.tick().expect("Error ticking super timer");
+        super_timer.tick().expect("Failed to tick super timer");
 
         if let Some(user_button_update) = user_button.sense().expect("Error reading user button") {
             if let SwitchStatus::On = user_button_update.status {
