@@ -134,7 +134,7 @@ fn main() -> ! {
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
     robot_builder.add_led(LedId::Red, red_led).unwrap();
 
-    let max_acceleration_in_millimeters_per_sec_per_sec = 10_f64;
+    let max_acceleration_in_millimeters_per_sec_per_sec = 20_f64;
 
     // https://www.makerstore.com.au/product/gear-m1/
     let steps_per_revolution = 6400_f64;

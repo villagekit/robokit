@@ -163,8 +163,6 @@ where
         limit_max: LimitMax,
         home_side: AxisLimitSide,
     ) -> Self {
-        defmt::println!("Stepper timer hz: {}", TIMER_HZ);
-
         let max_acceleration_in_steps_per_sec_per_sec =
             max_acceleration_in_millimeters_per_sec_per_sec * steps_per_millimeter;
         let profile = ramp_maker::Trapezoidal::new(max_acceleration_in_steps_per_sec_per_sec);
@@ -225,8 +223,6 @@ impl<Time, const TIMER_HZ: u32> motion_control::DelayToTicks<f64, TIMER_HZ>
 
     fn delay_to_ticks(&self, delay: f64) -> Result<TimerDuration<TIMER_HZ>, Self::Error> {
         let ticks = TimerDuration::<TIMER_HZ>::from_ticks((delay * (TIMER_HZ as f64)) as u32);
-
-        defmt::println!("ticks: {}", ticks);
 
         Ok(ticks)
     }
@@ -496,6 +492,8 @@ where
                             .map_err(AxisError::DriverResetPosition)?;
 
                         self.state = AxisState::Idle;
+
+                        self.logical_position = 0_f64;
 
                         Poll::Ready(Ok(()))
                     }
