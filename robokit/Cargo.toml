@@ -11,6 +11,7 @@ keywords = ["robot", "firmware", "cnc", "machine", "automation"]
 categories = ["no-std", "embedded", "science::robotics", ]
 
 [dependencies]
+async-trait = "0.1.68"
 defmt = "0.3"
 embedded-hal = { version = "0.2", features = ["unproven"] }
 fixed-map = { version = "0.8.2", default-features = false }

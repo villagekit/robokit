@@ -1,5 +1,8 @@
-use core::fmt::Debug;
+use alloc::sync::Arc;
+use async_trait::async_trait;
+use core::future::Future;
 use core::task::Poll;
+use core::{cell::RefMut, fmt::Debug};
 use defmt::Format;
 use embedded_hal::digital::v2::{OutputPin, PinState};
 use fugit::TimerDurationU32 as TimerDuration;
@@ -79,6 +82,7 @@ pub enum LedError<PinError: Debug, TimerError: Debug> {
 
 impl<PinError: Debug, TimerError: Debug> Error for LedError<PinError, TimerError> {}
 
+#[async_trait]
 impl<P, T, const TIMER_HZ: u32> Actuator for LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
@@ -89,7 +93,7 @@ where
     type Action = LedAction<TIMER_HZ>;
     type Error = LedError<P::Error, T::Error>;
 
-    fn run(&mut self, action: &Self::Action) {
+    async fn run(&mut self, action: &Self::Action) -> {
         match action {
             LedAction::Set { is_on } => {
                 self.state = Some(LedState::Set { is_on: *is_on });
@@ -101,9 +105,28 @@ where
                 });
             }
         }
-    }
 
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+        LedDeviceFuture(Arc::new(RefMut::new(self)))
+    }
+}
+
+pub struct LedDeviceFuture<'a, P, T, const TIMER_HZ: u32>(
+    Arc<RefMut<'a, LedDevice<P, T, TIMER_HZ>>>,
+)
+where
+    P: OutputPin,
+    T: Timer<TIMER_HZ>;
+
+impl<'a, P, T, const TIMER_HZ: u32> Future for LedDeviceFuture<'a, P, T, TIMER_HZ>
+where
+    P: OutputPin,
+    P::Error: Debug,
+    T: Timer<TIMER_HZ>,
+    T::Error: Debug,
+{
+    type Output = Result<(), LedError<P::Error, T::Error>>;
+
+    fn poll(&mut self) -> Poll<Self::Output> {
         match self.state {
             Some(LedState::Set { is_on }) => {
                 // set led state

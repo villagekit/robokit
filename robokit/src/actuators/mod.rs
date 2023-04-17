@@ -2,19 +2,21 @@ pub mod axis;
 pub mod led;
 pub mod spindle;
 
+use core::future::Future;
+
 use alloc::boxed::Box;
+use async_trait::async_trait;
 
 use crate::error::{BoxError, Error};
-use core::task::Poll;
 
 // receive inspired by https://github.com/rtic-rs/rfcs/pull/0052
 // poll inspired by https://docs.rs/stepper
 pub trait Actuator {
-    type Action;
+    type Action: Sync;
     type Error: Error;
+    type Future: Future<Output = Result<(), Self::Error>>;
 
-    fn run(&mut self, action: &Self::Action);
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>>;
+    fn run(&mut self, action: &Self::Action) -> Self::Future;
 }
 
 pub type BoxActuator<Action> = Box<dyn Actuator<Action = Action, Error = BoxError>>;
@@ -27,19 +29,19 @@ impl<A: Actuator> BoxifyActuator<A> {
     }
 }
 
+#[async_trait]
 impl<A: Actuator> Actuator for BoxifyActuator<A>
 where
+    A: Send,
     A::Error: 'static,
 {
     type Action = A::Action;
     type Error = BoxError;
 
-    fn run(&mut self, action: &Self::Action) {
-        self.0.run(action)
-    }
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
+    async fn run(&mut self, action: &Self::Action) -> Result<(), Self::Error> {
         self.0
-            .poll()
+            .run(action)
+            .await
             .map_err(|error| (Box::new(error) as Box<dyn Error>).into())
     }
 }
