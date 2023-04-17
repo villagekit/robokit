@@ -2,44 +2,150 @@ pub mod axis;
 pub mod led;
 pub mod spindle;
 
-use alloc::boxed::Box;
-
-use crate::error::{BoxError, Error};
+use core::fmt::Debug;
 use core::task::Poll;
+use defmt::Format;
+
+use crate::error::Error;
 
 // receive inspired by https://github.com/rtic-rs/rfcs/pull/0052
 // poll inspired by https://docs.rs/stepper
 pub trait Actuator {
-    type Action;
+    type Action: Debug + Format;
     type Error: Error;
 
     fn run(&mut self, action: &Self::Action);
     fn poll(&mut self) -> Poll<Result<(), Self::Error>>;
 }
 
-pub type BoxActuator<Action> = Box<dyn Actuator<Action = Action, Error = BoxError>>;
+pub trait ActuatorSet {
+    type Action: Debug + Format;
+    type Id: Debug + Format;
+    type Error: Error;
 
-pub struct BoxifyActuator<A: Actuator>(A);
-
-impl<A: Actuator> BoxifyActuator<A> {
-    pub fn new(actuator: A) -> Self {
-        Self(actuator)
-    }
+    fn run(&mut self, id: &Self::Id, action: &Self::Action);
+    fn poll(&mut self, id: &Self::Id) -> Poll<Result<(), Self::Error>>;
 }
 
-impl<A: Actuator> Actuator for BoxifyActuator<A>
-where
-    A::Error: 'static,
-{
-    type Action = A::Action;
-    type Error = BoxError;
+#[macro_export]
+macro_rules! actuator_set {
+    (
+        $type:ident { $($actuator:ident),* },
+        $action:ty,
+        $id:ident,
+        $set:ident,
+        $error:ident
+    ) => {
+        paste::paste! {
+            #[derive(Copy, Clone, Debug, defmt::Format)]
+            pub enum $id {
+                $(
+                    [<$actuator:camel>],
+                )*
+            }
 
-    fn run(&mut self, action: &Self::Action) {
-        self.0.run(action)
-    }
-    fn poll(&mut self) -> Poll<Result<(), Self::Error>> {
-        self.0
-            .poll()
-            .map_err(|error| (Box::new(error) as Box<dyn Error>).into())
-    }
+            #[derive(Copy, Clone, Debug)]
+            pub enum $error<
+                $(
+                    [<$actuator:camel $type:camel>]: core::fmt::Debug,
+                )*
+            >{
+                $(
+                    [<$actuator:camel $type:camel>]([<$actuator:camel $type:camel>]),
+                )*
+            }
+
+            pub struct $set<
+                $(
+                    [<$actuator:camel $type:camel>],
+                )*
+            >
+            where
+                $(
+                    [<$actuator:camel $type:camel>]: crate::Actuator<Action = $action>,
+                )*
+            {
+
+                $(
+                    [<$actuator:snake $type:snake>]: [<$actuator:camel $type:camel>],
+                )*
+            }
+
+            impl<
+                $(
+                    [<$actuator:camel $type:camel>],
+                )*
+            > $set<
+                $(
+                    [<$actuator:camel $type:camel>],
+                )*
+            >
+            where
+                $(
+                    [<$actuator:camel $type:camel>]: crate::Actuator<Action = $action>,
+                )*
+            {
+                pub fn new(
+                    $(
+                        [<$actuator:snake $type:snake>]: [<$actuator:camel $type:camel>],
+                    )*
+                ) -> Self {
+                    Self {
+                        $(
+                            [<$actuator:snake $type:snake>],
+                        )*
+                    }
+                }
+            }
+
+            impl<
+                $(
+                    [<$actuator:camel $type:camel>],
+                )*
+            > crate::ActuatorSet for $set<
+                $(
+                    [<$actuator:camel $type:camel>],
+                )*
+            >
+            where
+                $(
+                    [<$actuator:camel $type:camel>]: crate::Actuator<Action = $action>,
+                    [<$actuator:camel $type:camel>]::Error: core::fmt::Debug,
+                )*
+            {
+                type Action = $action;
+                type Id = $id;
+                type Error = $error<
+                    $(
+                        [<$actuator:camel $type:camel>]::Error,
+                    )*
+                >;
+
+                fn run(&mut self, id: &Self::Id, action: &Self::Action) {
+                    match id {
+                        $(
+                            $id::[<$actuator:camel>] => {
+                                self
+                                    .[<$actuator:snake $type:snake>]
+                                    .run(action)
+                            },
+                        )*
+                    }
+                }
+
+                fn poll(&mut self, id: &Self::Id) -> core::task::Poll<Result<(), Self::Error>> {
+                    match id {
+                        $(
+                            $id::[<$actuator:camel>] => {
+                                self
+                                    .[<$actuator:snake $type:snake>]
+                                    .poll()
+                                    .map_err($error::[<$actuator:camel $type:camel>])
+                            },
+                        )*
+                    }
+                }
+            }
+        }
+    };
 }

@@ -8,11 +8,10 @@ use fugit::{MillisDurationU32 as MillisDuration, TimerDurationU32 as TimerDurati
 use fugit_timer::Timer;
 use nb;
 
-use crate::error::Error;
-
 use super::Sensor;
 
 pub trait AnyInputSwitch: Sensor<Message = SwitchUpdate> {}
+impl<T: Sensor<Message = SwitchUpdate>> AnyInputSwitch for T {}
 
 #[derive(Copy, Clone, Debug, Format, PartialEq)]
 pub enum SwitchStatus {
@@ -119,8 +118,6 @@ pub enum SwitchError<PinError: Debug, TimerError: Debug> {
     TimerCancel(TimerError),
 }
 
-impl<PinError: Debug, TimerError: Debug> Error for SwitchError<PinError, TimerError> {}
-
 impl<Pin, ActiveLevel, Tim, const TIMER_HZ: u32> Sensor
     for SwitchDevice<Pin, ActiveLevel, Tim, TIMER_HZ>
 where
@@ -165,22 +162,4 @@ where
             Ok(None)
         }
     }
-}
-
-impl<Pin, Tim, const TIMER_HZ: u32> AnyInputSwitch
-    for SwitchDevice<Pin, SwitchActiveLow, Tim, TIMER_HZ>
-where
-    Pin: InputPin,
-    Pin::Error: Debug,
-    Tim: Timer<TIMER_HZ>,
-{
-}
-
-impl<Pin, Tim, const TIMER_HZ: u32> AnyInputSwitch
-    for SwitchDevice<Pin, SwitchActiveHigh, Tim, TIMER_HZ>
-where
-    Pin: InputPin,
-    Pin::Error: Debug,
-    Tim: Timer<TIMER_HZ>,
-{
 }

@@ -7,16 +7,16 @@ use core::task::Poll;
 use cortex_m_rt::entry;
 use defmt::Debug2Format;
 use defmt::Format;
-use fixed_map::Key;
 use fugit::ExtU32;
-use robokit::{actuators::led::LedAction, runner::Command};
 use robokit::{
-    actuators::led::LedDevice,
-    robot::RobotBuilder,
+    actuators::led::{LedDevice, LedAction},
+    robot::Robot,
     sensors::{
         switch::{SwitchDevice, SwitchStatus},
         Sensor,
     },
+    runner::Command,
+    actuator_set,
     timer::SuperTimer,
 };
 use stm32f7xx_hal::{pac, prelude::*};
@@ -29,12 +29,7 @@ const START_COMMANDS_COUNT: usize = 0;
 const STOP_COMMANDS_COUNT: usize = 0;
 const ACTIVE_COMMANDS_COUNT: usize = 1;
 
-#[derive(Copy, Clone, Debug, Format, Key)]
-enum LedId {
-    Green,
-    Blue,
-    Red,
-}
+actuator_set!(Led { Green, Blue, Red }, LedId, LedSet, LedSetError);
 
 fn get_run_commands<const TIMER_HZ: u32>() -> [Command<TIMER_HZ, LedId, (), ()>; 6] {
     [
@@ -126,7 +121,8 @@ fn main() -> ! {
 
     robot_builder.set_run_commands(&get_run_commands()).unwrap();
 
-    let mut robot = robot_builder.build().expect("Error validating robot");
+    let mut robot = Robot::new(
+        .build().expect("Error validating robot");
 
     super_timer.setup().expect("Failed to setup super time");
     loop {

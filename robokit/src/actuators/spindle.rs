@@ -20,8 +20,7 @@ pub enum SpindleAction {
 }
 
 pub trait AnySpindle: Actuator<Action = SpindleAction> {}
-
-impl<Driver> AnySpindle for SpindleDevice<Driver> where Driver: SpindleDriver {}
+impl<T: Actuator<Action = SpindleAction>> AnySpindle for T {}
 
 #[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub enum SpindleStatus {
@@ -176,11 +175,6 @@ where
 pub enum SpindleDriverJmcHsv57Error<SerialTxError: Debug, SerialRxError: Debug> {
     ModbusSerial(ModbusSerialError<SerialTxError, SerialRxError>),
     QueueFull,
-}
-
-impl<SerialTxError: Debug, SerialRxError: Debug> Error
-    for SpindleDriverJmcHsv57Error<SerialTxError, SerialRxError>
-{
 }
 
 pub type SpindleDriverJmcHsv57ErrorAlias<Serial> =
