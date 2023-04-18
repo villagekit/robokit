@@ -19,6 +19,7 @@ fugit-timer = "0.1"
 heapless = "0.7"
 nb = "1"
 num = { version = "0.4", default-features = false }
+paste = "1.0.12"
 ramp-maker = { version = "0.2", features = ["libm"] }
 rmodbus = { version = "0.7", default-features = false, features = ["heapless"] }
 stepper = { version = "0.6", features = ["dq542ma"] }

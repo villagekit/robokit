@@ -16,6 +16,8 @@ pub mod sensors;
 pub mod timer;
 pub mod util;
 
+pub use paste::paste;
+
 #[cfg(test)]
 mod unit_tests {
     use core::assert_eq;

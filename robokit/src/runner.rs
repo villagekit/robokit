@@ -117,13 +117,15 @@ where
         for _command_index in 0..num_commands {
             let command = self.active_commands.pop_front().unwrap();
             let result = match command {
-                Command::Led(id, _) => self.leds.poll(*id),
-                Command::Axis(id, _) => self.axes.get_mut(id).expect("Axis not found!").poll(),
+                Command::Led(id, _) => self.leds.poll(&id).map_err(|err| RunnerError::Led(id, err)),
+                Command::Axis(id, _) => self
+                    .axes
+                    .poll(&id)
+                    .map_err(|err| RunnerError::Axis(id, err)),
                 Command::Spindle(id, _) => self
                     .spindles
-                    .get_mut(id)
-                    .expect("Spindle not found!")
-                    .poll(),
+                    .poll(&id)
+                    .map_err(|err| RunnerError::Spindle(id, err)),
             };
 
             match result {

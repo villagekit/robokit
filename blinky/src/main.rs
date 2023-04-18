@@ -9,14 +9,18 @@ use defmt::Debug2Format;
 use defmt::Format;
 use fugit::ExtU32;
 use robokit::{
-    actuators::led::{LedDevice, LedAction},
+    actuator_set,
+    actuators::{
+        axis::AxisAction,
+        led::{LedAction, LedDevice},
+        spindle::SpindleAction,
+    },
     robot::Robot,
+    runner::Command,
     sensors::{
         switch::{SwitchDevice, SwitchStatus},
         Sensor,
     },
-    runner::Command,
-    actuator_set,
     timer::SuperTimer,
 };
 use stm32f7xx_hal::{pac, prelude::*};
@@ -29,9 +33,25 @@ const START_COMMANDS_COUNT: usize = 0;
 const STOP_COMMANDS_COUNT: usize = 0;
 const ACTIVE_COMMANDS_COUNT: usize = 1;
 
-actuator_set!(Led { Green, Blue, Red }, LedId, LedSet, LedSetError);
+actuator_set!(
+    Led { Green, Blue, Red },
+    LedAction<TICK_TIMER_HZ>,
+    LedId,
+    LedSet,
+    LedSetError
+);
 
-fn get_run_commands<const TIMER_HZ: u32>() -> [Command<TIMER_HZ, LedId, (), ()>; 6] {
+actuator_set!(Axis {}, AxisAction, AxisId, AxisSet, AxisSetError);
+
+actuator_set!(
+    Spindle {},
+    SpindleAction,
+    SpindleId,
+    SpindleSet,
+    SpindleSetError
+);
+
+fn get_run_commands<const TIMER_HZ: u32>() -> [Command<TIMER_HZ, LedId, AxisId, SpindleId>; 6] {
     [
         Command::Led(
             LedId::Green,
@@ -93,36 +113,31 @@ fn main() -> ! {
     let user_button_timer = super_timer.sub();
     let mut user_button = SwitchDevice::new_active_high(user_button_pin, user_button_timer);
 
-    let mut robot_builder: RobotBuilder<
-        TICK_TIMER_HZ,
-        RUN_COMMANDS_COUNT,
-        START_COMMANDS_COUNT,
-        STOP_COMMANDS_COUNT,
-        ACTIVE_COMMANDS_COUNT,
-        LedId,
-        (),
-        (),
-    > = RobotBuilder::new();
-
     let green_led_pin = gpiob.pb0.into_push_pull_output();
     let green_led_timer = super_timer.sub();
     let green_led = LedDevice::new(green_led_pin, green_led_timer);
-    robot_builder.add_led(LedId::Green, green_led).unwrap();
 
     let blue_led_pin = gpiob.pb7.into_push_pull_output();
     let blue_led_timer = super_timer.sub();
     let blue_led = LedDevice::new(blue_led_pin, blue_led_timer);
-    robot_builder.add_led(LedId::Blue, blue_led).unwrap();
 
     let red_led_pin = gpiob.pb14.into_push_pull_output();
     let red_led_timer = super_timer.sub();
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
-    robot_builder.add_led(LedId::Red, red_led).unwrap();
 
-    robot_builder.set_run_commands(&get_run_commands()).unwrap();
-
-    let mut robot = Robot::new(
-        .build().expect("Error validating robot");
+    let mut robot = Robot::builder()
+        .with_run_commands(&get_run_commands::<TICK_TIMER_HZ>())
+        .with_start_commands(&[])
+        .with_stop_commands(&[])
+        .with_leds(LedSet::new(green_led, blue_led, red_led))
+        .with_axes(AxisSet::new())
+        .with_spindles(SpindleSet::new())
+        .build::<
+            RUN_COMMANDS_COUNT,
+            START_COMMANDS_COUNT,
+            STOP_COMMANDS_COUNT,
+            ACTIVE_COMMANDS_COUNT,
+        >();
 
     super_timer.setup().expect("Failed to setup super time");
     loop {

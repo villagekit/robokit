@@ -1,10 +1,9 @@
-use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
 use heapless::Vec;
 
-use crate::{actuators::Actuator, error::Error, runner::RunnerAction};
+use crate::{actuators::Actuator, runner::RunnerAction};
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum SchedulerState {
@@ -41,7 +40,7 @@ impl<
         const STOP_COMMANDS_COUNT: usize,
     > Scheduler<Command, Runner, RUN_COMMANDS_COUNT, START_COMMANDS_COUNT, STOP_COMMANDS_COUNT>
 where
-    Command: Debug + Format,
+    Command: Copy + Debug + Format,
     Runner: Actuator<Action = RunnerAction<Command>>,
 {
     pub fn new(

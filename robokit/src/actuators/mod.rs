@@ -20,7 +20,7 @@ pub trait Actuator {
 
 pub trait ActuatorSet {
     type Action: Debug + Format;
-    type Id: Debug + Format;
+    type Id: Copy + Debug + Format;
     type Error: Error;
 
     fn run(&mut self, id: &Self::Id, action: &Self::Action);
@@ -36,7 +36,7 @@ macro_rules! actuator_set {
         $set:ident,
         $error:ident
     ) => {
-        paste::paste! {
+        $crate::paste! {
             #[derive(Copy, Clone, Debug, defmt::Format)]
             pub enum $id {
                 $(
@@ -62,7 +62,7 @@ macro_rules! actuator_set {
             >
             where
                 $(
-                    [<$actuator:camel $type:camel>]: crate::Actuator<Action = $action>,
+                    [<$actuator:camel $type:camel>]: $crate::actuators::Actuator<Action = $action>,
                 )*
             {
 
@@ -82,7 +82,7 @@ macro_rules! actuator_set {
             >
             where
                 $(
-                    [<$actuator:camel $type:camel>]: crate::Actuator<Action = $action>,
+                    [<$actuator:camel $type:camel>]: $crate::actuators::Actuator<Action = $action>,
                 )*
             {
                 pub fn new(
@@ -102,14 +102,14 @@ macro_rules! actuator_set {
                 $(
                     [<$actuator:camel $type:camel>],
                 )*
-            > crate::ActuatorSet for $set<
+            > $crate::actuators::ActuatorSet for $set<
                 $(
                     [<$actuator:camel $type:camel>],
                 )*
             >
             where
                 $(
-                    [<$actuator:camel $type:camel>]: crate::Actuator<Action = $action>,
+                    [<$actuator:camel $type:camel>]: $crate::actuators::Actuator<Action = $action>,
                     [<$actuator:camel $type:camel>]::Error: core::fmt::Debug,
                 )*
             {
