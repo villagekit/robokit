@@ -22,8 +22,9 @@ use robokit::{
         axis::{AxisDevice, AxisLimitSide},
         led::LedDevice,
         spindle::{SpindleDevice, SpindleDriverJmcHsv57},
+        ActuatorSet,
     },
-    robot::RobotBuilder,
+    robot::Robot,
     sensors::{
         switch::{SwitchActiveHigh, SwitchActiveLow, SwitchDevice, SwitchStatus},
         Sensor,
@@ -32,7 +33,8 @@ use robokit::{
 };
 
 use gridbot_tahi::{
-    commands::{get_run_commands, get_start_commands, get_stop_commands, AxisId, LedId, SpindleId},
+    actuators::{AxisSet, LedSet, SpindleSet},
+    commands::{get_run_commands, get_start_commands, get_stop_commands},
     init_heap,
 };
 
@@ -108,31 +110,17 @@ fn main() -> ! {
     let mut user_button: UserButton =
         SwitchDevice::new_active_high(user_button_pin, user_button_timer);
 
-    let mut robot_builder: RobotBuilder<
-        TICK_TIMER_HZ,
-        RUN_COMMANDS_COUNT,
-        START_COMMANDS_COUNT,
-        STOP_COMMANDS_COUNT,
-        ACTIVE_COMMANDS_COUNT,
-        LedId,
-        AxisId,
-        SpindleId,
-    > = RobotBuilder::new();
-
     let green_led_pin: GreenLedPin = gpiob.pb0.into_push_pull_output();
     let green_led_timer: GreenLedTimer = super_timer.sub();
     let green_led = LedDevice::new(green_led_pin, green_led_timer);
-    robot_builder.add_led(LedId::Green, green_led).unwrap();
 
     let blue_led_pin: BlueLedPin = gpiob.pb7.into_push_pull_output();
     let blue_led_timer: BlueLedTimer = super_timer.sub();
     let blue_led = LedDevice::new(blue_led_pin, blue_led_timer);
-    robot_builder.add_led(LedId::Blue, blue_led).unwrap();
 
     let red_led_pin: RedLedPin = gpiob.pb14.into_push_pull_output();
     let red_led_timer: RedLedTimer = super_timer.sub();
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
-    robot_builder.add_led(LedId::Red, red_led).unwrap();
 
     let max_acceleration_in_millimeters_per_sec_per_sec = 20_f64;
 
@@ -164,7 +152,6 @@ fn main() -> ! {
         x_axis_limit_max,
         AxisLimitSide::Min,
     );
-    robot_builder.add_axis(AxisId::X, x_axis).unwrap();
 
     let main_spindle_serial_tx = gpiod.pd5.into_alternate();
     let main_spindle_serial_rx = gpiod.pd6.into_alternate();
@@ -181,19 +168,20 @@ fn main() -> ! {
     );
     let main_spindle_driver: MainSpindleDriver = SpindleDriverJmcHsv57::new(main_spindle_serial);
     let main_spindle = SpindleDevice::new(main_spindle_driver);
-    robot_builder
-        .add_spindle(SpindleId::Main, main_spindle)
-        .unwrap();
 
-    robot_builder.set_run_commands(&get_run_commands()).unwrap();
-    robot_builder
-        .set_start_commands(&get_start_commands())
-        .unwrap();
-    robot_builder
-        .set_stop_commands(&get_stop_commands())
-        .unwrap();
-
-    let mut robot = robot_builder.build().expect("Error validating robot");
+    let mut robot = Robot::builder()
+        .with_run_commands(&get_run_commands::<TICK_TIMER_HZ>())
+        .with_start_commands(&get_start_commands::<TICK_TIMER_HZ>())
+        .with_stop_commands(&get_stop_commands::<TICK_TIMER_HZ>())
+        .with_leds(LedSet::new(green_led, blue_led, red_led))
+        .with_axes(AxisSet::new(x_axis))
+        .with_spindles(SpindleSet::new(main_spindle))
+        .build::<
+            RUN_COMMANDS_COUNT,
+            START_COMMANDS_COUNT,
+            STOP_COMMANDS_COUNT,
+            ACTIVE_COMMANDS_COUNT,
+        >();
 
     let mut iwdg = watchdog::IndependentWatchdog::new(p.IWDG);
 

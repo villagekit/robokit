@@ -6,7 +6,6 @@ use blinky as _;
 use core::task::Poll;
 use cortex_m_rt::entry;
 use defmt::Debug2Format;
-use defmt::Format;
 use fugit::ExtU32;
 use robokit::{
     actuator_set,
@@ -127,8 +126,8 @@ fn main() -> ! {
 
     let mut robot = Robot::builder()
         .with_run_commands(&get_run_commands::<TICK_TIMER_HZ>())
-        .with_start_commands(&[])
-        .with_stop_commands(&[])
+        .with_start_commands(&[] as &[Command<TICK_TIMER_HZ, LedId, AxisId, SpindleId>; 0])
+        .with_stop_commands(&[] as &[Command<TICK_TIMER_HZ, LedId, AxisId, SpindleId>; 0])
         .with_leds(LedSet::new(green_led, blue_led, red_led))
         .with_axes(AxisSet::new())
         .with_spindles(SpindleSet::new())

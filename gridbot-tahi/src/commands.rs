@@ -1,27 +1,10 @@
-use defmt::Format;
-use fixed_map::Key;
 use fugit::ExtU32;
 use robokit::{
     actuators::{axis::AxisAction, led::LedAction},
     runner::Command,
 };
 
-#[derive(Copy, Clone, Debug, Format, Key)]
-pub enum LedId {
-    Green,
-    Blue,
-    Red,
-}
-
-#[derive(Copy, Clone, Debug, Format, Key)]
-pub enum AxisId {
-    X,
-}
-
-#[derive(Copy, Clone, Debug, Format, Key)]
-pub enum SpindleId {
-    Main,
-}
+use crate::actuators::{AxisId, LedId, SpindleId};
 
 type BotCommand<const TIMER_HZ: u32> = Command<TIMER_HZ, LedId, AxisId, SpindleId>;
 

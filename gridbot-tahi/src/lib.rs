@@ -3,6 +3,7 @@
 
 extern crate alloc;
 
+pub mod actuators;
 pub mod commands;
 
 use embedded_alloc::Heap;
