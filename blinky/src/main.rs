@@ -7,6 +7,7 @@ use core::task::Poll;
 use cortex_m_rt::entry;
 use defmt::Debug2Format;
 use fugit::ExtU32;
+use heapless::Vec;
 use robokit::{
     actuator_set,
     actuators::{
@@ -124,6 +125,7 @@ fn main() -> ! {
     let red_led_timer = super_timer.sub();
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
 
+    /*
     let mut robot = Robot::builder()
         .with_run_commands(&get_run_commands::<TICK_TIMER_HZ>())
         .with_start_commands(&[] as &[Command<TICK_TIMER_HZ, LedId, AxisId, SpindleId>; 0])
@@ -137,6 +139,15 @@ fn main() -> ! {
             STOP_COMMANDS_COUNT,
             ACTIVE_COMMANDS_COUNT,
         >();
+    */
+    let mut robot = Robot::new(
+        Vec::from_slice(&get_run_commands::<TICK_TIMER_HZ>()).unwrap(),
+        Vec::new(),
+        Vec::new(),
+        LedSet::new(green_led, blue_led, red_led),
+        AxisSet::new(),
+        SpindleSet::new(),
+    );
 
     super_timer.setup().expect("Failed to setup super time");
     loop {
