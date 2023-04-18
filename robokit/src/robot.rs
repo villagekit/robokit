@@ -1,6 +1,7 @@
 use core::task::Poll;
 use heapless::Vec;
 
+use crate::actuators::EmptyActuatorSet;
 use crate::actuators::{axis::AxisAction, led::LedAction, spindle::SpindleAction, ActuatorSet};
 use crate::runner::{Command, Runner, RunnerError};
 use crate::scheduler::Scheduler;
@@ -106,37 +107,50 @@ where
     > {
         self.scheduler.poll()
     }
-
-    pub fn builder() -> RobotBuilder1<(), (), ()> {
-        RobotBuilder1::new()
-    }
 }
 
-pub struct RobotBuilder1<LedSet, AxisSet, SpindleSet> {
+pub struct RobotBuilder<const LED_TIMER_HZ: u32, LedSet, AxisSet, SpindleSet>
+where
+    LedSet: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
+    AxisSet: ActuatorSet<Action = AxisAction>,
+    SpindleSet: ActuatorSet<Action = SpindleAction>,
+{
     leds: LedSet,
     axes: AxisSet,
     spindles: SpindleSet,
 }
 
-impl RobotBuilder1<(), (), ()> {
+impl<const LED_TIMER_HZ: u32>
+    RobotBuilder<
+        LED_TIMER_HZ,
+        EmptyActuatorSet<LedAction<LED_TIMER_HZ>>,
+        EmptyActuatorSet<AxisAction>,
+        EmptyActuatorSet<SpindleAction>,
+    >
+{
     pub fn new() -> Self {
         Self {
-            leds: (),
-            axes: (),
-            spindles: (),
+            leds: EmptyActuatorSet::<LedAction<LED_TIMER_HZ>>::new(),
+            axes: EmptyActuatorSet::<AxisAction>::new(),
+            spindles: EmptyActuatorSet::<SpindleAction>::new(),
         }
     }
 }
 
-impl<AxisSet, SpindleSet> RobotBuilder1<(), AxisSet, SpindleSet> {
-    pub fn with_leds<const LED_TIMER_HZ: u32, LedSet>(
+impl<const LED_TIMER_HZ: u32, AxisSet, SpindleSet>
+    RobotBuilder<LED_TIMER_HZ, EmptyActuatorSet<LedAction<LED_TIMER_HZ>>, AxisSet, SpindleSet>
+where
+    AxisSet: ActuatorSet<Action = AxisAction>,
+    SpindleSet: ActuatorSet<Action = SpindleAction>,
+{
+    pub fn with_leds<LedSet>(
         self,
         leds: LedSet,
-    ) -> RobotBuilder1<LedSet, AxisSet, SpindleSet>
+    ) -> RobotBuilder<LED_TIMER_HZ, LedSet, AxisSet, SpindleSet>
     where
         LedSet: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
     {
-        RobotBuilder1 {
+        RobotBuilder {
             leds,
             axes: self.axes,
             spindles: self.spindles,
@@ -144,12 +158,20 @@ impl<AxisSet, SpindleSet> RobotBuilder1<(), AxisSet, SpindleSet> {
     }
 }
 
-impl<LedSet, SpindleSet> RobotBuilder1<LedSet, (), SpindleSet> {
-    pub fn with_axes<AxisSet>(self, axes: AxisSet) -> RobotBuilder1<LedSet, AxisSet, SpindleSet>
+impl<const LED_TIMER_HZ: u32, LedSet, SpindleSet>
+    RobotBuilder<LED_TIMER_HZ, LedSet, EmptyActuatorSet<AxisAction>, SpindleSet>
+where
+    LedSet: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
+    SpindleSet: ActuatorSet<Action = SpindleAction>,
+{
+    pub fn with_axes<AxisSet>(
+        self,
+        axes: AxisSet,
+    ) -> RobotBuilder<LED_TIMER_HZ, LedSet, AxisSet, SpindleSet>
     where
         AxisSet: ActuatorSet<Action = AxisAction>,
     {
-        RobotBuilder1 {
+        RobotBuilder {
             leds: self.leds,
             axes,
             spindles: self.spindles,
@@ -157,15 +179,20 @@ impl<LedSet, SpindleSet> RobotBuilder1<LedSet, (), SpindleSet> {
     }
 }
 
-impl<LedSet, AxisSet> RobotBuilder1<LedSet, AxisSet, ()> {
+impl<const LED_TIMER_HZ: u32, LedSet, AxisSet>
+    RobotBuilder<LED_TIMER_HZ, LedSet, AxisSet, EmptyActuatorSet<SpindleAction>>
+where
+    LedSet: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
+    AxisSet: ActuatorSet<Action = AxisAction>,
+{
     pub fn with_spindles<SpindleSet>(
         self,
         spindles: SpindleSet,
-    ) -> RobotBuilder1<LedSet, AxisSet, SpindleSet>
+    ) -> RobotBuilder<LED_TIMER_HZ, LedSet, AxisSet, SpindleSet>
     where
         SpindleSet: ActuatorSet<Action = SpindleAction>,
     {
-        RobotBuilder1 {
+        RobotBuilder {
             leds: self.leds,
             axes: self.axes,
             spindles,
@@ -174,7 +201,7 @@ impl<LedSet, AxisSet> RobotBuilder1<LedSet, AxisSet, ()> {
 }
 
 impl<const LED_TIMER_HZ: u32, LedSet, AxisSet, SpindleSet>
-    RobotBuilder1<LedSet, AxisSet, SpindleSet>
+    RobotBuilder<LED_TIMER_HZ, LedSet, AxisSet, SpindleSet>
 where
     LedSet: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
     AxisSet: ActuatorSet<Action = AxisAction>,
@@ -246,7 +273,7 @@ where
     AxisSet: ActuatorSet<Action = AxisAction>,
     SpindleSet: ActuatorSet<Action = SpindleAction>,
 {
-    pub fn new(builder1: RobotBuilder1<LedSet, AxisSet, SpindleSet>) -> Self {
+    pub fn new(builder1: RobotBuilder<LED_TIMER_HZ, LedSet, AxisSet, SpindleSet>) -> Self {
         Self {
             leds: builder1.leds,
             axes: builder1.axes,

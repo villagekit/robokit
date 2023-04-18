@@ -7,14 +7,10 @@ use core::task::Poll;
 use cortex_m_rt::entry;
 use defmt::Debug2Format;
 use fugit::ExtU32;
-use heapless::Vec;
 use robokit::{
     actuator_set,
-    actuators::{
-        led::{LedAction, LedDevice},
-        EmptyActuatorSet,
-    },
-    robot::Robot,
+    actuators::led::{LedAction, LedDevice},
+    robot::{Robot, RobotBuilder},
     runner::Command,
     sensors::{
         switch::{SwitchDevice, SwitchStatus},
@@ -123,32 +119,11 @@ fn main() -> ! {
         _,
         _,
         _,
-    > = Robot::builder()
+    > = RobotBuilder::new()
         .with_leds(LedSet::new(green_led, blue_led, red_led))
-        .with_axes(EmptyActuatorSet::new())
-        .with_spindles(EmptyActuatorSet::new())
         .build()
         .with_run_commands(&get_run_commands())
         .build();
-    /*
-    let mut robot: Robot<
-        TICK_TIMER_HZ,
-        RUN_COMMANDS_COUNT,
-        START_COMMANDS_COUNT,
-        STOP_COMMANDS_COUNT,
-        ACTIVE_COMMANDS_COUNT,
-        _,
-        _,
-        _,
-    > = Robot::new(
-        Vec::from_slice(&get_run_commands()).unwrap(),
-        Vec::new(),
-        Vec::new(),
-        LedSet::new(green_led, blue_led, red_led),
-        EmptyActuatorSet::new(),
-        EmptyActuatorSet::new(),
-    );
-    */
 
     super_timer.setup().expect("Failed to setup super time");
     loop {
