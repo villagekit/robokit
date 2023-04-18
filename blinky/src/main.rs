@@ -114,21 +114,23 @@ fn main() -> ! {
     let red_led_timer = super_timer.sub();
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
 
-    /*
-    let mut robot = Robot::builder()
-        .with_run_commands(&get_run_commands::<TICK_TIMER_HZ>())
-        .with_start_commands(&[] as &[Command<TICK_TIMER_HZ, LedId, AxisId, SpindleId>; 0])
-        .with_stop_commands(&[] as &[Command<TICK_TIMER_HZ, LedId, AxisId, SpindleId>; 0])
+    let mut robot: Robot<
+        TICK_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        ACTIVE_COMMANDS_COUNT,
+        _,
+        _,
+        _,
+    > = Robot::builder()
         .with_leds(LedSet::new(green_led, blue_led, red_led))
-        .with_axes(AxisSet::new())
-        .with_spindles(SpindleSet::new())
-        .build::<
-            RUN_COMMANDS_COUNT,
-            START_COMMANDS_COUNT,
-            STOP_COMMANDS_COUNT,
-            ACTIVE_COMMANDS_COUNT,
-        >();
-    */
+        .with_axes(EmptyActuatorSet::new())
+        .with_spindles(EmptyActuatorSet::new())
+        .build()
+        .with_run_commands(&get_run_commands())
+        .build();
+    /*
     let mut robot: Robot<
         TICK_TIMER_HZ,
         RUN_COMMANDS_COUNT,
@@ -146,6 +148,7 @@ fn main() -> ! {
         EmptyActuatorSet::new(),
         EmptyActuatorSet::new(),
     );
+    */
 
     super_timer.setup().expect("Failed to setup super time");
     loop {
