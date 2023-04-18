@@ -11,9 +11,8 @@ use heapless::Vec;
 use robokit::{
     actuator_set,
     actuators::{
-        axis::AxisAction,
         led::{LedAction, LedDevice},
-        spindle::SpindleAction,
+        EmptyActuatorSet,
     },
     robot::Robot,
     runner::Command,
@@ -41,17 +40,7 @@ actuator_set!(
     LedSetError
 );
 
-actuator_set!(Axis {}, AxisAction, AxisId, AxisSet, AxisSetError);
-
-actuator_set!(
-    Spindle {},
-    SpindleAction,
-    SpindleId,
-    SpindleSet,
-    SpindleSetError
-);
-
-fn get_run_commands<const TIMER_HZ: u32>() -> [Command<TIMER_HZ, LedId, AxisId, SpindleId>; 6] {
+fn get_run_commands<const TIMER_HZ: u32>() -> [Command<TIMER_HZ, LedId, (), ()>; 6] {
     [
         Command::Led(
             LedId::Green,
@@ -140,13 +129,22 @@ fn main() -> ! {
             ACTIVE_COMMANDS_COUNT,
         >();
     */
-    let mut robot = Robot::new(
-        Vec::from_slice(&get_run_commands::<TICK_TIMER_HZ>()).unwrap(),
+    let mut robot: Robot<
+        TICK_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        ACTIVE_COMMANDS_COUNT,
+        _,
+        _,
+        _,
+    > = Robot::new(
+        Vec::from_slice(&get_run_commands()).unwrap(),
         Vec::new(),
         Vec::new(),
         LedSet::new(green_led, blue_led, red_led),
-        AxisSet::new(),
-        SpindleSet::new(),
+        EmptyActuatorSet::new(),
+        EmptyActuatorSet::new(),
     );
 
     super_timer.setup().expect("Failed to setup super time");

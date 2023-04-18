@@ -3,6 +3,7 @@ pub mod led;
 pub mod spindle;
 
 use core::fmt::Debug;
+use core::marker::PhantomData;
 use core::task::Poll;
 use defmt::Format;
 
@@ -25,6 +26,35 @@ pub trait ActuatorSet {
 
     fn run(&mut self, id: &Self::Id, action: &Self::Action);
     fn poll(&mut self, id: &Self::Id) -> Poll<Result<(), Self::Error>>;
+}
+
+pub struct EmptyActuatorSet<Action> {
+    action: PhantomData<Action>,
+}
+
+impl<Action> EmptyActuatorSet<Action>
+where
+    Action: Debug + Format,
+{
+    pub fn new() -> Self {
+        Self {
+            action: PhantomData::<Action>,
+        }
+    }
+}
+
+impl<Action> ActuatorSet for EmptyActuatorSet<Action>
+where
+    Action: Debug + Format,
+{
+    type Action = Action;
+    type Id = ();
+    type Error = ();
+
+    fn run(&mut self, _id: &Self::Id, _action: &Self::Action) {}
+    fn poll(&mut self, _id: &Self::Id) -> Poll<Result<(), Self::Error>> {
+        unreachable!("EmptyActuatorSet::poll is unreachable.")
+    }
 }
 
 #[macro_export]

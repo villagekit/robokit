@@ -7,6 +7,7 @@ use core::task::Poll;
 use cortex_m_rt::entry;
 use defmt::Debug2Format;
 use fugit::ExtU32;
+use heapless::Vec;
 use stm32f7xx_hal::{
     gpio::{self, Alternate, Floating, Input, Output, Pin, PullUp, PushPull},
     pac,
@@ -22,7 +23,6 @@ use robokit::{
         axis::{AxisDevice, AxisLimitSide},
         led::LedDevice,
         spindle::{SpindleDevice, SpindleDriverJmcHsv57},
-        ActuatorSet,
     },
     robot::Robot,
     sensors::{
@@ -169,6 +169,7 @@ fn main() -> ! {
     let main_spindle_driver: MainSpindleDriver = SpindleDriverJmcHsv57::new(main_spindle_serial);
     let main_spindle = SpindleDevice::new(main_spindle_driver);
 
+    /*
     let mut robot = Robot::builder()
         .with_run_commands(&get_run_commands::<TICK_TIMER_HZ>())
         .with_start_commands(&get_start_commands::<TICK_TIMER_HZ>())
@@ -182,6 +183,25 @@ fn main() -> ! {
             STOP_COMMANDS_COUNT,
             ACTIVE_COMMANDS_COUNT,
         >();
+    */
+
+    let mut robot: Robot<
+        TICK_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        ACTIVE_COMMANDS_COUNT,
+        _,
+        _,
+        _,
+    > = Robot::new(
+        Vec::from_slice(&get_run_commands()).unwrap(),
+        Vec::from_slice(&get_start_commands()).unwrap(),
+        Vec::from_slice(&get_stop_commands()).unwrap(),
+        LedSet::new(green_led, blue_led, red_led),
+        AxisSet::new(x_axis),
+        SpindleSet::new(main_spindle),
+    );
 
     let mut iwdg = watchdog::IndependentWatchdog::new(p.IWDG);
 

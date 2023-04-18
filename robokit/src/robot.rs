@@ -70,7 +70,8 @@ where
         axes: AxisSet,
         spindles: SpindleSet,
     ) -> Self {
-        let runner = Runner::new(leds, axes, spindles);
+        let runner: Runner<LED_TIMER_HZ, ACTIVE_COMMANDS_COUNT, _, _, _> =
+            Runner::new(leds, axes, spindles);
         let scheduler = Scheduler::new(runner, run_commands, start_commands, stop_commands);
 
         Self { scheduler }
@@ -232,10 +233,13 @@ impl<RunCommands, StartCommands, LedSet, AxisSet, SpindleSet>
 impl<RunCommands, StartCommands, StopCommands, AxisSet, SpindleSet>
     RobotBuilder<RunCommands, StartCommands, StopCommands, (), AxisSet, SpindleSet>
 {
-    pub fn with_leds<LedSet>(
+    pub fn with_leds<const LED_TIMER_HZ: u32, LedSet>(
         self,
         leds: LedSet,
-    ) -> RobotBuilder<RunCommands, StartCommands, StopCommands, LedSet, AxisSet, SpindleSet> {
+    ) -> RobotBuilder<RunCommands, StartCommands, StopCommands, LedSet, AxisSet, SpindleSet>
+    where
+        LedSet: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
+    {
         RobotBuilder {
             run_commands: self.run_commands,
             start_commands: self.start_commands,
@@ -253,7 +257,10 @@ impl<RunCommands, StartCommands, StopCommands, LedSet, SpindleSet>
     pub fn with_axes<AxisSet>(
         self,
         axes: AxisSet,
-    ) -> RobotBuilder<RunCommands, StartCommands, StopCommands, LedSet, AxisSet, SpindleSet> {
+    ) -> RobotBuilder<RunCommands, StartCommands, StopCommands, LedSet, AxisSet, SpindleSet>
+    where
+        AxisSet: ActuatorSet<Action = AxisAction>,
+    {
         RobotBuilder {
             run_commands: self.run_commands,
             start_commands: self.start_commands,
@@ -271,7 +278,10 @@ impl<RunCommands, StartCommands, StopCommands, LedSet, AxisSet>
     pub fn with_spindles<SpindleSet>(
         self,
         spindles: SpindleSet,
-    ) -> RobotBuilder<RunCommands, StartCommands, StopCommands, LedSet, AxisSet, SpindleSet> {
+    ) -> RobotBuilder<RunCommands, StartCommands, StopCommands, LedSet, AxisSet, SpindleSet>
+    where
+        SpindleSet: ActuatorSet<Action = SpindleAction>,
+    {
         RobotBuilder {
             run_commands: self.run_commands,
             start_commands: self.start_commands,
