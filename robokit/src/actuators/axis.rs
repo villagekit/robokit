@@ -493,6 +493,8 @@ where
 
                         self.state = AxisState::Idle;
 
+                        self.logical_position = 0_f64;
+
                         Poll::Ready(Ok(()))
                     }
                 }
