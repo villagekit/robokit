@@ -207,21 +207,7 @@ where
     AxisSet: ActuatorSet<Action = AxisAction>,
     SpindleSet: ActuatorSet<Action = SpindleAction>,
 {
-    pub fn build<
-        const RUN_COMMANDS_COUNT: usize,
-        const START_COMMANDS_COUNT: usize,
-        const STOP_COMMANDS_COUNT: usize,
-    >(
-        self,
-    ) -> RobotBuilder2<
-        LED_TIMER_HZ,
-        RUN_COMMANDS_COUNT,
-        START_COMMANDS_COUNT,
-        STOP_COMMANDS_COUNT,
-        LedSet,
-        AxisSet,
-        SpindleSet,
-    > {
+    pub fn build(self) -> RobotBuilder2<LED_TIMER_HZ, 0, 0, 0, LedSet, AxisSet, SpindleSet> {
         RobotBuilder2::new(self)
     }
 }
@@ -250,24 +236,8 @@ pub struct RobotBuilder2<
         Vec<Command<LED_TIMER_HZ, LedSet::Id, AxisSet::Id, SpindleSet::Id>, STOP_COMMANDS_COUNT>,
 }
 
-impl<
-        const LED_TIMER_HZ: u32,
-        const RUN_COMMANDS_COUNT: usize,
-        const START_COMMANDS_COUNT: usize,
-        const STOP_COMMANDS_COUNT: usize,
-        LedSet,
-        AxisSet,
-        SpindleSet,
-    >
-    RobotBuilder2<
-        LED_TIMER_HZ,
-        RUN_COMMANDS_COUNT,
-        START_COMMANDS_COUNT,
-        STOP_COMMANDS_COUNT,
-        LedSet,
-        AxisSet,
-        SpindleSet,
-    >
+impl<const LED_TIMER_HZ: u32, LedSet, AxisSet, SpindleSet>
+    RobotBuilder2<LED_TIMER_HZ, 0, 0, 0, LedSet, AxisSet, SpindleSet>
 where
     LedSet: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
     AxisSet: ActuatorSet<Action = AxisAction>,
@@ -281,6 +251,144 @@ where
             run_commands: Vec::new(),
             start_commands: Vec::new(),
             stop_commands: Vec::new(),
+        }
+    }
+}
+
+impl<
+        const LED_TIMER_HZ: u32,
+        const START_COMMANDS_COUNT: usize,
+        const STOP_COMMANDS_COUNT: usize,
+        LedSet,
+        AxisSet,
+        SpindleSet,
+    >
+    RobotBuilder2<
+        LED_TIMER_HZ,
+        0,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        LedSet,
+        AxisSet,
+        SpindleSet,
+    >
+where
+    LedSet: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
+    AxisSet: ActuatorSet<Action = AxisAction>,
+    SpindleSet: ActuatorSet<Action = SpindleAction>,
+{
+    pub fn with_run_commands<const RUN_COMMANDS_COUNT: usize>(
+        self,
+        run_commands: &[Command<LED_TIMER_HZ, LedSet::Id, AxisSet::Id, SpindleSet::Id>;
+             RUN_COMMANDS_COUNT],
+    ) -> RobotBuilder2<
+        LED_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        LedSet,
+        AxisSet,
+        SpindleSet,
+    > {
+        RobotBuilder2 {
+            run_commands: Vec::from_slice(run_commands).unwrap(),
+            start_commands: self.start_commands,
+            stop_commands: self.stop_commands,
+            leds: self.leds,
+            axes: self.axes,
+            spindles: self.spindles,
+        }
+    }
+}
+
+impl<
+        const LED_TIMER_HZ: u32,
+        const RUN_COMMANDS_COUNT: usize,
+        const STOP_COMMANDS_COUNT: usize,
+        LedSet,
+        AxisSet,
+        SpindleSet,
+    >
+    RobotBuilder2<
+        LED_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        0,
+        STOP_COMMANDS_COUNT,
+        LedSet,
+        AxisSet,
+        SpindleSet,
+    >
+where
+    LedSet: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
+    AxisSet: ActuatorSet<Action = AxisAction>,
+    SpindleSet: ActuatorSet<Action = SpindleAction>,
+{
+    pub fn with_start_commands<const START_COMMANDS_COUNT: usize>(
+        self,
+        start_commands: &[Command<LED_TIMER_HZ, LedSet::Id, AxisSet::Id, SpindleSet::Id>;
+             START_COMMANDS_COUNT],
+    ) -> RobotBuilder2<
+        LED_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        LedSet,
+        AxisSet,
+        SpindleSet,
+    > {
+        RobotBuilder2 {
+            run_commands: self.run_commands,
+            start_commands: Vec::from_slice(start_commands).unwrap(),
+            stop_commands: self.stop_commands,
+            leds: self.leds,
+            axes: self.axes,
+            spindles: self.spindles,
+        }
+    }
+}
+
+impl<
+        const LED_TIMER_HZ: u32,
+        const RUN_COMMANDS_COUNT: usize,
+        const START_COMMANDS_COUNT: usize,
+        LedSet,
+        AxisSet,
+        SpindleSet,
+    >
+    RobotBuilder2<
+        LED_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        0,
+        LedSet,
+        AxisSet,
+        SpindleSet,
+    >
+where
+    LedSet: ActuatorSet<Action = LedAction<LED_TIMER_HZ>>,
+    AxisSet: ActuatorSet<Action = AxisAction>,
+    SpindleSet: ActuatorSet<Action = SpindleAction>,
+{
+    pub fn with_stop_commands<const STOP_COMMANDS_COUNT: usize>(
+        self,
+        stop_commands: &[Command<LED_TIMER_HZ, LedSet::Id, AxisSet::Id, SpindleSet::Id>;
+             STOP_COMMANDS_COUNT],
+    ) -> RobotBuilder2<
+        LED_TIMER_HZ,
+        RUN_COMMANDS_COUNT,
+        START_COMMANDS_COUNT,
+        STOP_COMMANDS_COUNT,
+        LedSet,
+        AxisSet,
+        SpindleSet,
+    > {
+        RobotBuilder2 {
+            run_commands: self.run_commands,
+            start_commands: self.start_commands,
+            stop_commands: Vec::from_slice(stop_commands).unwrap(),
+            leds: self.leds,
+            axes: self.axes,
+            spindles: self.spindles,
         }
     }
 }
@@ -308,47 +416,6 @@ where
     AxisSet: ActuatorSet<Action = AxisAction>,
     SpindleSet: ActuatorSet<Action = SpindleAction>,
 {
-    pub fn with_run_commands(
-        self,
-        run_commands: &[Command<LED_TIMER_HZ, LedSet::Id, AxisSet::Id, SpindleSet::Id>],
-    ) -> Self {
-        Self {
-            run_commands: Vec::from_slice(run_commands).unwrap(),
-            start_commands: self.start_commands,
-            stop_commands: self.stop_commands,
-            leds: self.leds,
-            axes: self.axes,
-            spindles: self.spindles,
-        }
-    }
-    pub fn with_start_commands(
-        self,
-        start_commands: &[Command<LED_TIMER_HZ, LedSet::Id, AxisSet::Id, SpindleSet::Id>],
-    ) -> Self {
-        Self {
-            run_commands: self.run_commands,
-            start_commands: Vec::from_slice(start_commands).unwrap(),
-            stop_commands: self.stop_commands,
-            leds: self.leds,
-            axes: self.axes,
-            spindles: self.spindles,
-        }
-    }
-
-    pub fn with_stop_commands(
-        self,
-        stop_commands: &[Command<LED_TIMER_HZ, LedSet::Id, AxisSet::Id, SpindleSet::Id>],
-    ) -> Self {
-        Self {
-            run_commands: self.run_commands,
-            start_commands: self.start_commands,
-            stop_commands: Vec::from_slice(stop_commands).unwrap(),
-            leds: self.leds,
-            axes: self.axes,
-            spindles: self.spindles,
-        }
-    }
-
     pub fn build<const ACTIVE_COMMANDS_COUNT: usize>(
         self,
     ) -> Robot<

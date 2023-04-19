@@ -10,7 +10,7 @@ use fugit::ExtU32;
 use robokit::{
     actuator_set,
     actuators::led::{LedAction, LedDevice},
-    robot::{Robot, RobotBuilder},
+    robot::RobotBuilder,
     runner::Command,
     sensors::{
         switch::{SwitchDevice, SwitchStatus},
@@ -23,9 +23,6 @@ use stm32f7xx_hal::{pac, prelude::*};
 use blinky::init_heap;
 
 const TICK_TIMER_HZ: u32 = 1_000_000;
-const RUN_COMMANDS_COUNT: usize = 6;
-const START_COMMANDS_COUNT: usize = 0;
-const STOP_COMMANDS_COUNT: usize = 0;
 const ACTIVE_COMMANDS_COUNT: usize = 1;
 
 actuator_set!(
@@ -110,20 +107,11 @@ fn main() -> ! {
     let red_led_timer = super_timer.sub();
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
 
-    let mut robot: Robot<
-        TICK_TIMER_HZ,
-        RUN_COMMANDS_COUNT,
-        START_COMMANDS_COUNT,
-        STOP_COMMANDS_COUNT,
-        ACTIVE_COMMANDS_COUNT,
-        _,
-        _,
-        _,
-    > = RobotBuilder::new()
+    let mut robot = RobotBuilder::new()
         .with_leds(LedSet::new(green_led, blue_led, red_led))
         .build()
         .with_run_commands(&get_run_commands())
-        .build();
+        .build::<ACTIVE_COMMANDS_COUNT>();
 
     super_timer.setup().expect("Failed to setup super time");
     loop {

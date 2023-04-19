@@ -23,7 +23,7 @@ use robokit::{
         led::LedDevice,
         spindle::{SpindleDevice, SpindleDriverJmcHsv57},
     },
-    robot::{Robot, RobotBuilder},
+    robot::RobotBuilder,
     sensors::{
         switch::{SwitchActiveHigh, SwitchActiveLow, SwitchDevice, SwitchStatus},
         Sensor,
@@ -37,9 +37,6 @@ use gridbot_tahi::{
     init_heap,
 };
 
-const RUN_COMMANDS_COUNT: usize = 32;
-const START_COMMANDS_COUNT: usize = 4;
-const STOP_COMMANDS_COUNT: usize = 4;
 const ACTIVE_COMMANDS_COUNT: usize = 8;
 
 const TICK_TIMER_MAX: u32 = u32::MAX;
@@ -168,16 +165,7 @@ fn main() -> ! {
     let main_spindle_driver: MainSpindleDriver = SpindleDriverJmcHsv57::new(main_spindle_serial);
     let main_spindle = SpindleDevice::new(main_spindle_driver);
 
-    let mut robot: Robot<
-        TICK_TIMER_HZ,
-        RUN_COMMANDS_COUNT,
-        START_COMMANDS_COUNT,
-        STOP_COMMANDS_COUNT,
-        ACTIVE_COMMANDS_COUNT,
-        _,
-        _,
-        _,
-    > = RobotBuilder::new()
+    let mut robot = RobotBuilder::new()
         .with_leds(LedSet::new(green_led, blue_led, red_led))
         .with_axes(AxisSet::new(x_axis))
         .with_spindles(SpindleSet::new(main_spindle))
@@ -185,7 +173,7 @@ fn main() -> ! {
         .with_run_commands(&get_run_commands())
         .with_start_commands(&get_start_commands())
         .with_stop_commands(&get_stop_commands())
-        .build();
+        .build::<ACTIVE_COMMANDS_COUNT>();
 
     let mut iwdg = watchdog::IndependentWatchdog::new(p.IWDG);
 
