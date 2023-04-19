@@ -10,9 +10,6 @@ use nb;
 
 use super::Sensor;
 
-pub trait AnyInputSwitch: Sensor<Message = SwitchUpdate> {}
-impl<T: Sensor<Message = SwitchUpdate>> AnyInputSwitch for T {}
-
 #[derive(Copy, Clone, Debug, Format, PartialEq)]
 pub enum SwitchStatus {
     On,

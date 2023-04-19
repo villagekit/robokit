@@ -8,15 +8,8 @@ use cortex_m_rt::entry;
 use defmt::Debug2Format;
 use fugit::ExtU32;
 use robokit::{
-    actuator_set,
-    actuators::led::{LedAction, LedDevice},
-    robot::RobotBuilder,
-    runner::Command,
-    sensors::{
-        switch::{SwitchDevice, SwitchStatus},
-        Sensor,
-    },
-    timer::SuperTimer,
+    actuator_set, Command, LedAction, LedDevice, RobotBuilder, Sensor, SuperTimer, SwitchDevice,
+    SwitchStatus,
 };
 use stm32f7xx_hal::{pac, prelude::*};
 

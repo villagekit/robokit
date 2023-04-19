@@ -14,18 +14,15 @@ pub enum LedAction<const TIMER_HZ: u32> {
     Blink { duration: TimerDuration<TIMER_HZ> },
 }
 
-pub trait AnyLed<const TIMER_HZ: u32>: Actuator<Action = LedAction<TIMER_HZ>> {}
-impl<const TIMER_HZ: u32, T: Actuator<Action = LedAction<TIMER_HZ>>> AnyLed<TIMER_HZ> for T {}
-
 #[derive(Clone, Copy, Debug, Format)]
-pub enum LedBlinkStatus {
+enum LedBlinkStatus {
     Start,
     Wait,
     Done,
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub enum LedState<const TIMER_HZ: u32> {
+enum LedState<const TIMER_HZ: u32> {
     Set {
         is_on: bool,
     },

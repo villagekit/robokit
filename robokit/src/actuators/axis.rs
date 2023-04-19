@@ -15,7 +15,7 @@ use stepper::{
 
 use super::Actuator;
 use crate::sensors::{
-    switch::{AnyInputSwitch, SwitchStatus},
+    switch::{SwitchStatus, SwitchUpdate},
     Sensor,
 };
 
@@ -35,26 +35,20 @@ pub enum AxisAction {
     },
 }
 
-pub trait AnyAxis: Actuator<Action = AxisAction> {}
-impl<T: Actuator<Action = AxisAction>> AnyAxis for T {}
-
 type AxisVelocity = f64;
-pub type AxisMotionProfile = ramp_maker::Trapezoidal<AxisVelocity>;
-pub type AxisMotionControl<Driver, Timer, const TIMER_HZ: u32> = SoftwareMotionControl<
+type AxisMotionProfile = ramp_maker::Trapezoidal<AxisVelocity>;
+type AxisMotionControl<Driver, Timer, const TIMER_HZ: u32> = SoftwareMotionControl<
     Driver,
     StepperTimer<Timer, TIMER_HZ>,
     AxisMotionProfile,
     DelayToTicks<TimerDuration<TIMER_HZ>, TIMER_HZ>,
     TIMER_HZ,
 >;
-
-pub type AxisDriverDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> = AxisMotionControl<
+type AxisDriverDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> = AxisMotionControl<
     drivers::dq542ma::DQ542MA<(), compat::Pin<PinStep>, compat::Pin<PinDir>>,
     Timer,
     TIMER_HZ,
 >;
-pub type AxisDriverErrorDQ542MA<PinDir, PinStep, Timer, const TIMER_HZ: u32> =
-    <AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ> as MotionControl>::Error;
 
 // https://docs.rs/stepper/latest/src/stepper/stepper/move_to.rs.html
 #[derive(Clone, Copy, Debug, Format)]
@@ -104,7 +98,7 @@ pub enum AxisLimitSide {
 }
 
 #[derive(Clone, Copy, Debug, Format, PartialEq, Eq)]
-pub enum AxisLimitStatus {
+enum AxisLimitStatus {
     Under,
     Over,
 }
@@ -112,8 +106,8 @@ pub enum AxisLimitStatus {
 pub struct AxisDevice<Driver, LimitMin, LimitMax>
 where
     Driver: MotionControl,
-    LimitMin: AnyInputSwitch,
-    LimitMax: AnyInputSwitch,
+    LimitMin: Sensor<Message = SwitchUpdate>,
+    LimitMax: Sensor<Message = SwitchUpdate>,
 {
     stepper: Stepper<Driver>,
     steps_per_millimeter: f64,
@@ -135,8 +129,8 @@ where
     <PinStep as OutputPin>::Error: Debug,
     Timer: FugitTimer<TIMER_HZ>,
     <AxisDriverDQ542MA<PinDir, PinStep, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
-    LimitMin: AnyInputSwitch,
-    LimitMax: AnyInputSwitch,
+    LimitMin: Sensor<Message = SwitchUpdate>,
+    LimitMax: Sensor<Message = SwitchUpdate>,
 {
     pub fn new_dq542ma(
         dir: PinDir,
@@ -181,8 +175,8 @@ impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax>
 where
     Driver: SetDirection + Step,
     Timer: FugitTimer<TIMER_HZ>,
-    LimitMin: AnyInputSwitch,
-    LimitMax: AnyInputSwitch,
+    LimitMin: Sensor<Message = SwitchUpdate>,
+    LimitMax: Sensor<Message = SwitchUpdate>,
 {
     pub fn get_current_step(&mut self) -> i32 {
         self.stepper.driver_mut().current_step()
@@ -229,9 +223,9 @@ where
     Driver: SetDirection + Step,
     Timer: FugitTimer<TIMER_HZ>,
     <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
-    LimitMin: AnyInputSwitch,
+    LimitMin: Sensor<Message = SwitchUpdate>,
     LimitMin::Error: Debug,
-    LimitMax: AnyInputSwitch,
+    LimitMax: Sensor<Message = SwitchUpdate>,
     LimitMax::Error: Debug,
 {
     type Action = AxisAction;
@@ -494,9 +488,9 @@ impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax>
 where
     Driver: SetDirection + Step,
     Timer: FugitTimer<TIMER_HZ>,
-    LimitMin: AnyInputSwitch,
+    LimitMin: Sensor<Message = SwitchUpdate>,
     LimitMin::Error: Debug,
-    LimitMax: AnyInputSwitch,
+    LimitMax: Sensor<Message = SwitchUpdate>,
     LimitMax::Error: Debug,
 {
     pub fn update_limit_switches(

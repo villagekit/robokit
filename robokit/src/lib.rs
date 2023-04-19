@@ -18,6 +18,20 @@ pub mod util;
 
 pub use paste::paste;
 
+pub use crate::actuators::axis::{AxisAction, AxisDevice, AxisError, AxisLimitSide};
+pub use crate::actuators::led::{LedAction, LedDevice, LedError};
+pub use crate::actuators::spindle::{
+    SpindleAction, SpindleDevice, SpindleDriverJmcHsv57, SpindleError, SpindleStatus,
+};
+pub use crate::actuators::{Actuator, ActuatorSet, EmptyActuatorSet};
+pub use crate::robot::{Robot, RobotBuilder};
+pub use crate::runner::Command;
+pub use crate::sensors::switch::{
+    SwitchActiveHigh, SwitchActiveLow, SwitchDevice, SwitchError, SwitchStatus, SwitchUpdate,
+};
+pub use crate::sensors::Sensor;
+pub use crate::timer::{SubTimer, SubTimerError, SuperTimer};
+
 #[cfg(test)]
 mod unit_tests {
     use core::assert_eq;
