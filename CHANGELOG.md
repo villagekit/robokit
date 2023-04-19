@@ -6,6 +6,18 @@ with help from [`git log`](https://www.git-scm.com/docs/git-log):
 git log --oneline --format="- [%h](https://github.com/villagekit/robokit/commit/%H): %s"
 ```
 
+## [robokit-0.3.0](https://github.com/villagekit/robokit/releases/tag/robokit-0.3.0)
+
+- [af19fde](https://github.com/villagekit/robokit/commit/af19fde814b6773133d90d4f5d59cc153491d963): cleanup modules (#42)
+- [ad4b3df](https://github.com/villagekit/robokit/commit/ad4b3df0c8d6aa3bdc7e630e83af936eaeb64fe9): back to actuator sets (#41)
+- [d7bfb94](https://github.com/villagekit/robokit/commit/d7bfb949bd68cfe5e4e6bfe389e390d4bdc7fa25): update for gridbot tahi demo (#37)
+- [6029690](https://github.com/villagekit/robokit/commit/60296909ef4f9f0d3e00096d21d2bcab1fc4d6c7): fix silly runtime bugs (#40)
+- [5b9f674](https://github.com/villagekit/robokit/commit/5b9f67459be12d53be93e9d88beb63d793a2f27a): refactor switch errors (#39)
+- [5f71470](https://github.com/villagekit/robokit/commit/5f71470eb3655a9c8c14693b8ebf3e73df21e2af): use fixed_map as better actuator registry (#38)
+- [eb28d6d](https://github.com/villagekit/robokit/commit/eb28d6d8cb577561ccd440dea8208c58673ab276): validate all command ids exist when building robot (#36)
+- [5acbe2a](https://github.com/villagekit/robokit/commit/5acbe2a90b2abcce3eb23d3d9531c3c33df9deaa): refactor axis errors (#35)
+- [3affaa4](https://github.com/villagekit/robokit/commit/3affaa4465e4a43f402d523833e7b9bb89f8ac96): refactor led (#34)
+
 ## [robokit-0.2.0](https://github.com/villagekit/robokit/releases/tag/robokit-0.2.0)
 
 - [a4832dc](https://github.com/villagekit/robokit/commit/a4832dc78d6c03d637b7fb0c4584d36336d31679): use explicit heapless sizes (#33)

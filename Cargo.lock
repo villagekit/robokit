@@ -258,26 +258,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fixed-map"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "371343526624eade25dc7ed378122dd560bc75185bdc64834977fe11174fdf69"
-dependencies = [
- "fixed-map-derive",
-]
-
-[[package]]
-name = "fixed-map-derive"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7be63f8e07fcb843b5d8b9c1b21f8c9223c4ccda49556a76f6de9ccf90fd1af1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "fixed-sqrt"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -580,11 +560,10 @@ dependencies = [
 
 [[package]]
 name = "robokit"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "defmt",
  "embedded-hal 0.2.7",
- "fixed-map",
  "fugit",
  "fugit-timer",
  "heapless",

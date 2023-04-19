@@ -1,6 +1,6 @@
 [package]
 name = "robokit"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Michael Williams <hello@mikey.nz>"]
 description = "Build custom firmware for simple robotic automation"
@@ -13,7 +13,6 @@ categories = ["no-std", "embedded", "science::robotics", ]
 [dependencies]
 defmt = "0.3"
 embedded-hal = { version = "0.2", features = ["unproven"] }
-fixed-map = { version = "0.8.2", default-features = false }
 fugit = { version = "0.3", features = ["defmt"] }
 fugit-timer = "0.1"
 heapless = "0.7"
