@@ -1,7 +1,4 @@
-use robokit::{
-    actuator_set,
-    actuators::{axis::AxisAction, led::LedAction, spindle::SpindleAction},
-};
+use robokit::{actuator_set, AxisAction, LedAction, SpindleAction};
 
 const TICK_TIMER_HZ: u32 = 1_000_000;
 

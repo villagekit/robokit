@@ -36,12 +36,13 @@ If you're here and like what's happening, please give this a star and [say hi](h
 - Actuators:
   - [x] Led
       - Actions:
+        - Set { is_on }
         - Blink { duration }
   - [x] Linear Axis
       - Drivers: [Stepper](https://github.com/braun-embedded/stepper)
       - Actions:
         - MoveRelative { max_acceleration, distance }
-        - MoveAbsolute { max_acceleration, duration }
+        - MoveAbsolute { max_acceleration, position }
         - Home { max_acceleration, back_off_distance }
   - [x] Spindle
       - Drivers:
@@ -78,15 +79,8 @@ use cortex_m_rt::entry;
 use defmt::Debug2Format;
 use fugit::ExtU32;
 use robokit::{
-    actuator_set,
-    actuators::led::{LedAction, LedDevice},
-    robot::RobotBuilder,
-    runner::Command,
-    sensors::{
-        switch::{SwitchDevice, SwitchStatus},
-        Sensor,
-    },
-    timer::SuperTimer,
+    actuator_set, Command, LedAction, LedDevice, RobotBuilder, Sensor, SuperTimer, SwitchDevice,
+    SwitchStatus,
 };
 use stm32f7xx_hal::{pac, prelude::*};
 

@@ -18,17 +18,9 @@ use stm32f7xx_hal::{
 };
 
 use robokit::{
-    actuators::{
-        axis::{AxisDevice, AxisLimitSide},
-        led::LedDevice,
-        spindle::{SpindleDevice, SpindleDriverJmcHsv57},
-    },
-    robot::RobotBuilder,
-    sensors::{
-        switch::{SwitchActiveHigh, SwitchActiveLow, SwitchDevice, SwitchStatus},
-        Sensor,
-    },
-    timer::{SubTimer, SuperTimer},
+    AxisDevice, AxisLimitSide, LedDevice, RobotBuilder, Sensor, SpindleDevice,
+    SpindleDriverJmcHsv57, SubTimer, SuperTimer, SwitchActiveHigh, SwitchActiveLow, SwitchDevice,
+    SwitchStatus,
 };
 
 use gridbot_tahi::{
@@ -46,7 +38,6 @@ type TickTimer = SuperTimer<TickTimerDevice, TICK_TIMER_HZ>;
 
 type UserButtonPin = Pin<'C', 13, Input<Floating>>;
 type UserButtonTimer = SubTimer<TICK_TIMER_HZ>;
-// type UserButtonError = SwitchError<<UserButtonPin as InputPin>::Error>;
 type UserButton = SwitchDevice<UserButtonPin, SwitchActiveHigh, UserButtonTimer, TICK_TIMER_HZ>;
 
 /* actuators */
@@ -62,11 +53,6 @@ const X_AXIS_TIMER_HZ: u32 = 1_000_000;
 type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
 type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
 type XAxisTimer = Counter<pac::TIM3, X_AXIS_TIMER_HZ>;
-
-type MainSpindleSerial = Serial<pac::USART2, (gpio::PD5<Alternate<7>>, gpio::PD6<Alternate<7>>)>;
-type MainSpindleDriver = SpindleDriverJmcHsv57<MainSpindleSerial>;
-
-/* sensors */
 type XAxisLimitMinPin = Pin<'F', 15, Input<PullUp>>; // D2
 type XAxisLimitMinTimer = SubTimer<TICK_TIMER_HZ>;
 type XAxisLimitMin =
@@ -75,6 +61,9 @@ type XAxisLimitMaxPin = Pin<'F', 14, Input<PullUp>>; // D4
 type XAxisLimitMaxTimer = SubTimer<TICK_TIMER_HZ>;
 type XAxisLimitMax =
     SwitchDevice<XAxisLimitMaxPin, SwitchActiveLow, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
+
+type MainSpindleSerial = Serial<pac::USART2, (gpio::PD5<Alternate<7>>, gpio::PD6<Alternate<7>>)>;
+type MainSpindleDriver = SpindleDriverJmcHsv57<MainSpindleSerial>;
 
 #[entry]
 fn main() -> ! {

@@ -1,8 +1,5 @@
 use fugit::ExtU32;
-use robokit::{
-    actuators::{axis::AxisAction, led::LedAction},
-    runner::Command,
-};
+use robokit::{AxisAction, Command, LedAction};
 
 use crate::actuators::{AxisId, LedId, SpindleId};
 
