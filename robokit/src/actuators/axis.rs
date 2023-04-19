@@ -14,12 +14,9 @@ use stepper::{
 };
 
 use super::Actuator;
-use crate::{
-    error::Error,
-    sensors::{
-        switch::{AnyInputSwitch, SwitchStatus},
-        Sensor,
-    },
+use crate::sensors::{
+    switch::{AnyInputSwitch, SwitchStatus},
+    Sensor,
 };
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -39,6 +36,7 @@ pub enum AxisAction {
 }
 
 pub trait AnyAxis: Actuator<Action = AxisAction> {}
+impl<T: Actuator<Action = AxisAction>> AnyAxis for T {}
 
 type AxisVelocity = f64;
 pub type AxisMotionProfile = ramp_maker::Trapezoidal<AxisVelocity>;
@@ -126,19 +124,6 @@ where
     limit_min_status: Option<AxisLimitStatus>,
     limit_max_status: Option<AxisLimitStatus>,
     home_side: AxisLimitSide,
-}
-
-impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> AnyAxis
-    for AxisDevice<AxisMotionControl<Driver, Timer, TIMER_HZ>, LimitMin, LimitMax>
-where
-    Driver: SetDirection + Step,
-    Timer: FugitTimer<TIMER_HZ>,
-    <AxisMotionControl<Driver, Timer, TIMER_HZ> as MotionControl>::Error: Debug,
-    LimitMin: AnyInputSwitch,
-    LimitMin::Error: Debug,
-    LimitMax: AnyInputSwitch,
-    LimitMax::Error: Debug,
-{
 }
 
 impl<PinDir, PinStep, Timer, const TIMER_HZ: u32, LimitMin, LimitMax>
@@ -236,11 +221,6 @@ pub enum AxisError<DriverError: Debug, LimitMinSenseError: Debug, LimitMaxSenseE
     Limit(AxisLimitSide),
     LimitSensor(LimitSensorError<LimitMinSenseError, LimitMaxSenseError>),
     Unexpected,
-}
-
-impl<DriverError: Debug, LimitMinSenseError: Debug, LimitMaxSenseError: Debug> Error
-    for AxisError<DriverError, LimitMinSenseError, LimitMaxSenseError>
-{
 }
 
 impl<Driver, Timer, const TIMER_HZ: u32, LimitMin, LimitMax> Actuator

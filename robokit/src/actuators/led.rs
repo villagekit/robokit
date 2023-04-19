@@ -6,8 +6,6 @@ use fugit::TimerDurationU32 as TimerDuration;
 use fugit_timer::Timer;
 use nb;
 
-use crate::error::Error;
-
 use super::Actuator;
 
 #[derive(Clone, Copy, Debug, Format)]
@@ -17,6 +15,7 @@ pub enum LedAction<const TIMER_HZ: u32> {
 }
 
 pub trait AnyLed<const TIMER_HZ: u32>: Actuator<Action = LedAction<TIMER_HZ>> {}
+impl<const TIMER_HZ: u32, T: Actuator<Action = LedAction<TIMER_HZ>>> AnyLed<TIMER_HZ> for T {}
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum LedBlinkStatus {
@@ -47,15 +46,6 @@ where
     state: Option<LedState<TIMER_HZ>>,
 }
 
-impl<P, T, const TIMER_HZ: u32> AnyLed<TIMER_HZ> for LedDevice<P, T, TIMER_HZ>
-where
-    P: OutputPin,
-    P::Error: Debug,
-    T: Timer<TIMER_HZ>,
-    T::Error: Debug,
-{
-}
-
 impl<P, T, const TIMER_HZ: u32> LedDevice<P, T, TIMER_HZ>
 where
     P: OutputPin,
@@ -76,8 +66,6 @@ pub enum LedError<PinError: Debug, TimerError: Debug> {
     TimerStart(TimerError),
     TimerWait(TimerError),
 }
-
-impl<PinError: Debug, TimerError: Debug> Error for LedError<PinError, TimerError> {}
 
 impl<P, T, const TIMER_HZ: u32> Actuator for LedDevice<P, T, TIMER_HZ>
 where

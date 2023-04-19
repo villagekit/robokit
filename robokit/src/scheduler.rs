@@ -1,10 +1,9 @@
-use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::task::Poll;
 use defmt::Format;
 use heapless::Vec;
 
-use crate::{actuators::Actuator, error::Error, runner::RunnerAction};
+use crate::{actuators::Actuator, runner::RunnerAction};
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum SchedulerState {
@@ -41,9 +40,8 @@ impl<
         const STOP_COMMANDS_COUNT: usize,
     > Scheduler<Command, Runner, RUN_COMMANDS_COUNT, START_COMMANDS_COUNT, STOP_COMMANDS_COUNT>
 where
-    Command: Copy + Clone + Debug + Format,
+    Command: Copy + Debug + Format,
     Runner: Actuator<Action = RunnerAction<Command>>,
-    Runner::Error: 'static,
 {
     pub fn new(
         runner: Runner,
@@ -80,7 +78,7 @@ where
         };
     }
 
-    pub fn poll(&mut self) -> Poll<Result<(), Box<dyn Error>>> {
+    pub fn poll(&mut self) -> Poll<Result<(), Runner::Error>> {
         match self.state {
             SchedulerState::Idle => Poll::Ready(Ok(())),
             SchedulerState::Start => {
@@ -131,7 +129,7 @@ where
 
                     Poll::Pending
                 }
-                Poll::Ready(Err(err)) => Poll::Ready(Err(err.into())),
+                Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
                 Poll::Pending => Poll::Pending,
             },
             SchedulerState::Stop => {
