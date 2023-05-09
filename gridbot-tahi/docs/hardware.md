@@ -15,20 +15,10 @@ Notes:
 
 ## Limit Switches
 
-opto = 24v -> 3.3v opto
-
-- mcu D2 : opto O1
-- mcu D4 : opto O2
-- mcu 3.3v : opto VCC
-- mcu GND : opto GND
-
-- opto 1+ -> length axis min limit switch C (Common) / 1
-- opto 1- -> 24V GND
-- 24V -> length axis min limit switch NC (Normally Connected) / 3
-
-- opto 2+ -> length axis max limit switch C (Common) / 1
-- opto 2- -> 24V GND
-- 24V -> length axis max limit switch NC (Normally Connected) / 3
+- Pin 1: D0 / PG_9
+- Pin 2: D1 / PG_14
+- Pin 3: D2 / PF_15
+- Pin 4: D4 / PF_14
 
 ```
 graph LR
@@ -87,10 +77,10 @@ graph LR
     end
 
     subgraph Microcontroller
-        McuD2[D0]
-        McuD4[D1]
-        McuD5[D2]
-        McuD6[D3]
+        McuPin0[PIN_0]
+        McuPin1[PIN_1]
+        McuPin2[PIN_2]
+        McuPin3[PIN_3]
     end
      
     24VCC[24V VCC] --> LengthMinC
@@ -111,68 +101,30 @@ graph LR
     3.3VCC[3.3V VCC] --> OptoVCC
     3.3GND[3.3V GND] --> OptoGND
 
-    OptoOutput1 --> McuD2
-    OptoOutput2 --> McuD4
-    OptoOutput3 --> McuD5
-    OptoOutput4 --> McuD6
+    OptoOutput1 --> McuPin0
+    OptoOutput2 --> McuPin1
+    OptoOutput3 --> McuPin2
+    OptoOutput4 --> McuPin3
 ```
 
 ## Stepper Driver
 
-Length Axis
+Length Axis:
 
-```
-graph LR
-    subgraph Microcontroller [MCU]
-        MCU_GND[GND]
-        MCU_D0[D0]
-        MCU_D1[D1]
-    end
-
-    subgraph Stepper Motor Driver
-        DRIVER_PUL+[PUL+]
-        DRIVER_PUL-[PUL-]
-        DRIVER_DIR+[DIR+]
-        DRIVER_DIR-[DIR-]
-        DRIVER_ENBL-[ENBL-]
-        DRIVER_DC+[DC+]
-        DRIVER_DC-[DC-]
-        DRIVER_A+[A+]
-        DRIVER_A-[A-]
-        DRIVER_B+[B+]
-        DRIVER_B-[B-]
-    end
-
-    subgraph Stepper Motor
-        MOTOR_RED[red]
-        MOTOR_GREEN[green]
-        MOTOR_YELLOW[yellow]
-        MOTOR_BLUE[blue]
-    end
-
-    MCU_D0--> DRIVER_PUL+[PUL+]
-    MCU_GND --> DRIVER_PUL-[PUL-]
-    MCU_D1 --> DRIVER_DIR+[DIR+]
-    MCU_GND --> DRIVER_DIR-[DIR-]
-    MCU_GND --> DRIVER_ENBL-[ENBL-]
-
-    48V_POS[48V] --> DRIVER_DC+[DC+]
-    48V_NEG[48V GND] --> DRIVER_DC-[DC-]
-
-    DRIVER_A+[A+] --- MOTOR_RED[red]
-    DRIVER_A-[A-] --- MOTOR_GREEN[green]
-    DRIVER_B+[B+] --- MOTOR_YELLOW[yellow]
-    DRIVER_B-[B-] --- MOTOR_BLUE[blue]
-```
+- PIN_0: PG_1
+- PIN_1: PF_9
 
 Width Axis
 
+- PIN_0: PF_7
+- PIN_0: PF_8
+
 ```
 graph LR
     subgraph Microcontroller [MCU]
         MCU_GND[GND]
-        MCU_D0[D0]
-        MCU_D1[D1]
+        MCU_PIN_0[PIN_0]
+        MCU_PIN_1[PIN_1]
     end
 
     subgraph Stepper Motor Driver
@@ -181,6 +133,7 @@ graph LR
         DRIVER_DIR+[DIR+]
         DRIVER_DIR-[DIR-]
         DRIVER_ENBL-[ENBL-]
+        DRIVER_ENBL+[ENBL-]
         DRIVER_DC+[DC+]
         DRIVER_DC-[DC-]
         DRIVER_A+[A+]
@@ -196,14 +149,14 @@ graph LR
         MOTOR_BLUE[blue]
     end
 
-    MCU_D0--> DRIVER_PUL+[PUL+]
+    MCU_PIN_0--> DRIVER_PUL+[PUL+]
+    MCU_PIN_1 --> DRIVER_DIR+[DIR+]
     MCU_GND --> DRIVER_PUL-[PUL-]
-    MCU_D1 --> DRIVER_DIR+[DIR+]
     MCU_GND --> DRIVER_DIR-[DIR-]
     MCU_GND --> DRIVER_ENBL-[ENBL-]
 
-    48V_POS[48V] --> DRIVER_DC+[DC+]
-    48V_NEG[48V GND] --> DRIVER_DC-[DC-]
+    48V_VCC[48V VCC] --> DRIVER_DC+[DC+]
+    48V_GND[48V GND] --> DRIVER_DC-[DC-]
 
     DRIVER_A+[A+] --- MOTOR_RED[red]
     DRIVER_A-[A-] --- MOTOR_GREEN[green]
