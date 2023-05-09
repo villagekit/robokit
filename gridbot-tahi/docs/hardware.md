@@ -1,5 +1,18 @@
 # Grid Bot Tahi hardware
 
+## Microcontroller
+
+- micro-controller: [Nucleo-144 STM32-F767ZI](https://nz.element14.com/stmicroelectronics/nucleo-f767zi/dev-board-nucleo-32-mcu/dp/2546569)
+  - pins: https://os.mbed.com/platforms/ST-Nucleo-F767ZI/
+  - chip: https://www.st.com/resource/en/datasheet/stm32f767zi.pdf
+
+Notes:
+
+- some pins overlap with Cargo Flash / USB thing.
+  - which pins are those?
+    - D3? ( PE-13)
+      - but why?
+
 ## Limit Switches
 
 opto = 24v -> 3.3v opto
@@ -74,10 +87,10 @@ graph LR
     end
 
     subgraph Microcontroller
-        McuD2[D2]
-        McuD4[D4]
-        McuD5[D5?]
-        McuD6[D6?]
+        McuD2[D0]
+        McuD4[D1]
+        McuD5[D2]
+        McuD6[D3]
     end
      
     24VCC[24V VCC] --> LengthMinC
@@ -104,4 +117,96 @@ graph LR
     OptoOutput4 --> McuD6
 ```
 
-## Stepper Driver: 
+## Stepper Driver
+
+Length Axis
+
+```
+graph LR
+    subgraph Microcontroller [MCU]
+        MCU_GND[GND]
+        MCU_D0[D0]
+        MCU_D1[D1]
+    end
+
+    subgraph Stepper Motor Driver
+        DRIVER_PUL+[PUL+]
+        DRIVER_PUL-[PUL-]
+        DRIVER_DIR+[DIR+]
+        DRIVER_DIR-[DIR-]
+        DRIVER_ENBL-[ENBL-]
+        DRIVER_DC+[DC+]
+        DRIVER_DC-[DC-]
+        DRIVER_A+[A+]
+        DRIVER_A-[A-]
+        DRIVER_B+[B+]
+        DRIVER_B-[B-]
+    end
+
+    subgraph Stepper Motor
+        MOTOR_RED[red]
+        MOTOR_GREEN[green]
+        MOTOR_YELLOW[yellow]
+        MOTOR_BLUE[blue]
+    end
+
+    MCU_D0--> DRIVER_PUL+[PUL+]
+    MCU_GND --> DRIVER_PUL-[PUL-]
+    MCU_D1 --> DRIVER_DIR+[DIR+]
+    MCU_GND --> DRIVER_DIR-[DIR-]
+    MCU_GND --> DRIVER_ENBL-[ENBL-]
+
+    48V_POS[48V] --> DRIVER_DC+[DC+]
+    48V_NEG[48V GND] --> DRIVER_DC-[DC-]
+
+    DRIVER_A+[A+] --- MOTOR_RED[red]
+    DRIVER_A-[A-] --- MOTOR_GREEN[green]
+    DRIVER_B+[B+] --- MOTOR_YELLOW[yellow]
+    DRIVER_B-[B-] --- MOTOR_BLUE[blue]
+```
+
+Width Axis
+
+```
+graph LR
+    subgraph Microcontroller [MCU]
+        MCU_GND[GND]
+        MCU_D0[D0]
+        MCU_D1[D1]
+    end
+
+    subgraph Stepper Motor Driver
+        DRIVER_PUL+[PUL+]
+        DRIVER_PUL-[PUL-]
+        DRIVER_DIR+[DIR+]
+        DRIVER_DIR-[DIR-]
+        DRIVER_ENBL-[ENBL-]
+        DRIVER_DC+[DC+]
+        DRIVER_DC-[DC-]
+        DRIVER_A+[A+]
+        DRIVER_A-[A-]
+        DRIVER_B+[B+]
+        DRIVER_B-[B-]
+    end
+
+    subgraph Stepper Motor
+        MOTOR_RED[red]
+        MOTOR_GREEN[green]
+        MOTOR_YELLOW[yellow]
+        MOTOR_BLUE[blue]
+    end
+
+    MCU_D0--> DRIVER_PUL+[PUL+]
+    MCU_GND --> DRIVER_PUL-[PUL-]
+    MCU_D1 --> DRIVER_DIR+[DIR+]
+    MCU_GND --> DRIVER_DIR-[DIR-]
+    MCU_GND --> DRIVER_ENBL-[ENBL-]
+
+    48V_POS[48V] --> DRIVER_DC+[DC+]
+    48V_NEG[48V GND] --> DRIVER_DC-[DC-]
+
+    DRIVER_A+[A+] --- MOTOR_RED[red]
+    DRIVER_A-[A-] --- MOTOR_GREEN[green]
+    DRIVER_B+[B+] --- MOTOR_YELLOW[yellow]
+    DRIVER_B-[B-] --- MOTOR_BLUE[blue]
+```
