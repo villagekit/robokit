@@ -14,7 +14,7 @@ pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 9] {
             },
         ),
         Command::Axis(
-            AxisId::X,
+            AxisId::Length,
             AxisAction::MoveAbsolute {
                 max_velocity_in_millimeters_per_sec: 10_f64,
                 position_in_millimeters: 40_f64,
@@ -27,7 +27,7 @@ pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 9] {
             },
         ),
         Command::Axis(
-            AxisId::X,
+            AxisId::Length,
             AxisAction::MoveAbsolute {
                 max_velocity_in_millimeters_per_sec: 10_f64,
                 position_in_millimeters: 80_f64,
@@ -40,7 +40,7 @@ pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 9] {
             },
         ),
         Command::Axis(
-            AxisId::X,
+            AxisId::Length,
             AxisAction::MoveAbsolute {
                 max_velocity_in_millimeters_per_sec: 10_f64,
                 position_in_millimeters: 120_f64,
@@ -70,7 +70,7 @@ pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 9] {
 pub fn get_start_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
     [
         Command::Axis(
-            AxisId::X,
+            AxisId::Length,
             AxisAction::Home {
                 max_velocity_in_millimeters_per_sec: 10_f64,
                 back_off_distance_in_millimeters: 2_f64,
@@ -87,7 +87,7 @@ pub fn get_start_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
 pub fn get_stop_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
     [
         Command::Axis(
-            AxisId::X,
+            AxisId::Length,
             AxisAction::MoveAbsolute {
                 max_velocity_in_millimeters_per_sec: 10_f64,
                 position_in_millimeters: 0_f64,

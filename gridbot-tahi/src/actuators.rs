@@ -10,7 +10,13 @@ actuator_set!(
     LedSetError
 );
 
-actuator_set!(Axis { X }, AxisAction, AxisId, AxisSet, AxisSetError);
+actuator_set!(
+    Axis { Length, Width },
+    AxisAction,
+    AxisId,
+    AxisSet,
+    AxisSetError
+);
 
 actuator_set!(
     Spindle { Main },

@@ -40,7 +40,7 @@ type UserButtonPin = Pin<'C', 13, Input<Floating>>;
 type UserButtonTimer = SubTimer<TICK_TIMER_HZ>;
 type UserButton = SwitchDevice<UserButtonPin, SwitchActiveHigh, UserButtonTimer, TICK_TIMER_HZ>;
 
-/* actuators */
+/* leds */
 
 type GreenLedPin = Pin<'B', 0, Output<PushPull>>;
 type GreenLedTimer = SubTimer<TICK_TIMER_HZ>;
@@ -49,18 +49,38 @@ type BlueLedTimer = SubTimer<TICK_TIMER_HZ>;
 type RedLedPin = Pin<'B', 14, Output<PushPull>>;
 type RedLedTimer = SubTimer<TICK_TIMER_HZ>;
 
-const X_AXIS_TIMER_HZ: u32 = 1_000_000;
-type XAxisDirPin = Pin<'G', 9, Output<PushPull>>; // D0
-type XAxisStepPin = Pin<'G', 14, Output<PushPull>>; // D1
-type XAxisTimer = Counter<pac::TIM3, X_AXIS_TIMER_HZ>;
-type XAxisLimitMinPin = Pin<'F', 15, Input<PullUp>>; // D2
-type XAxisLimitMinTimer = SubTimer<TICK_TIMER_HZ>;
-type XAxisLimitMin =
-    SwitchDevice<XAxisLimitMinPin, SwitchActiveLow, XAxisLimitMinTimer, TICK_TIMER_HZ>;
-type XAxisLimitMaxPin = Pin<'F', 14, Input<PullUp>>; // D4
-type XAxisLimitMaxTimer = SubTimer<TICK_TIMER_HZ>;
-type XAxisLimitMax =
-    SwitchDevice<XAxisLimitMaxPin, SwitchActiveLow, XAxisLimitMaxTimer, TICK_TIMER_HZ>;
+/* limit switches */
+type LengthAxisLimitMinPin = Pin<'G', 9, Input<PullUp>>; // D0
+type LengthAxisLimitMinTimer = SubTimer<TICK_TIMER_HZ>;
+type LengthAxisLimitMin =
+    SwitchDevice<LengthAxisLimitMinPin, SwitchActiveLow, LengthAxisLimitMinTimer, TICK_TIMER_HZ>;
+type LengthAxisLimitMaxPin = Pin<'G', 14, Input<PullUp>>; // D1
+type LengthAxisLimitMaxTimer = SubTimer<TICK_TIMER_HZ>;
+type LengthAxisLimitMax =
+    SwitchDevice<LengthAxisLimitMaxPin, SwitchActiveLow, LengthAxisLimitMaxTimer, TICK_TIMER_HZ>;
+
+type WidthAxisLimitMinPin = Pin<'F', 15, Input<PullUp>>; // D2
+type WidthAxisLimitMinTimer = SubTimer<TICK_TIMER_HZ>;
+type WidthAxisLimitMin =
+    SwitchDevice<WidthAxisLimitMinPin, SwitchActiveLow, WidthAxisLimitMinTimer, TICK_TIMER_HZ>;
+type WidthAxisLimitMaxPin = Pin<'F', 14, Input<PullUp>>; // D4
+type WidthAxisLimitMaxTimer = SubTimer<TICK_TIMER_HZ>;
+type WidthAxisLimitMax =
+    SwitchDevice<WidthAxisLimitMaxPin, SwitchActiveLow, WidthAxisLimitMaxTimer, TICK_TIMER_HZ>;
+
+/* axes */
+
+const LENGTH_AXIS_TIMER_HZ: u32 = 1_000_000;
+type LengthAxisStepPin = Pin<'G', 1, Output<PushPull>>;
+type LengthAxisDirPin = Pin<'F', 9, Output<PushPull>>;
+type LengthAxisTimer = Counter<pac::TIM3, LENGTH_AXIS_TIMER_HZ>;
+
+const WIDTH_AXIS_TIMER_HZ: u32 = 1_000_000;
+type WidthAxisStepPin = Pin<'F', 7, Output<PushPull>>;
+type WidthAxisDirPin = Pin<'F', 8, Output<PushPull>>;
+type WidthAxisTimer = Counter<pac::TIM4, WIDTH_AXIS_TIMER_HZ>;
+
+/* spindle */
 
 type MainSpindleSerial = Serial<pac::USART2, (gpio::PD5<Alternate<7>>, gpio::PD6<Alternate<7>>)>;
 type MainSpindleDriver = SpindleDriverJmcHsv57<MainSpindleSerial>;
@@ -116,25 +136,47 @@ fn main() -> ! {
 
     defmt::println!("Steps per mm: {}", steps_per_millimeter);
 
-    let x_axis_dir_pin: XAxisDirPin = gpiog.pg9.into_push_pull_output();
-    let x_axis_step_pin: XAxisStepPin = gpiog.pg14.into_push_pull_output();
-    let x_axis_timer: XAxisTimer = p.TIM3.counter(&clocks);
-    let x_axis_limit_min_pin: XAxisLimitMinPin = gpiof.pf15.into_pull_up_input();
-    let x_axis_limit_min_timer: XAxisLimitMinTimer = super_timer.sub();
-    let x_axis_limit_min: XAxisLimitMin =
-        SwitchDevice::new_active_low(x_axis_limit_min_pin, x_axis_limit_min_timer);
-    let x_axis_limit_max_pin: XAxisLimitMaxPin = gpiof.pf14.into_pull_up_input();
-    let x_axis_limit_max_timer: XAxisLimitMaxTimer = super_timer.sub();
-    let x_axis_limit_max: XAxisLimitMax =
-        SwitchDevice::new_active_low(x_axis_limit_max_pin, x_axis_limit_max_timer);
-    let x_axis = AxisDevice::new_dq542ma(
-        x_axis_dir_pin,
-        x_axis_step_pin,
-        x_axis_timer,
+    let length_axis_dir_pin: LengthAxisDirPin = gpiof.pf9.into_push_pull_output();
+    let length_axis_step_pin: LengthAxisStepPin = gpiog.pg1.into_push_pull_output();
+    let length_axis_timer: LengthAxisTimer = p.TIM3.counter(&clocks);
+    let length_axis_limit_min_pin: LengthAxisLimitMinPin = gpiog.pg9.into_pull_up_input();
+    let length_axis_limit_min_timer: LengthAxisLimitMinTimer = super_timer.sub();
+    let length_axis_limit_min: LengthAxisLimitMin =
+        SwitchDevice::new_active_low(length_axis_limit_min_pin, length_axis_limit_min_timer);
+    let length_axis_limit_max_pin: LengthAxisLimitMaxPin = gpiog.pg14.into_pull_up_input();
+    let length_axis_limit_max_timer: LengthAxisLimitMaxTimer = super_timer.sub();
+    let length_axis_limit_max: LengthAxisLimitMax =
+        SwitchDevice::new_active_low(length_axis_limit_max_pin, length_axis_limit_max_timer);
+    let length_axis = AxisDevice::new_dq542ma(
+        length_axis_dir_pin,
+        length_axis_step_pin,
+        length_axis_timer,
         max_acceleration_in_millimeters_per_sec_per_sec,
         steps_per_millimeter,
-        x_axis_limit_min,
-        x_axis_limit_max,
+        length_axis_limit_min,
+        length_axis_limit_max,
+        AxisLimitSide::Min,
+    );
+
+    let width_axis_dir_pin: WidthAxisDirPin = gpiof.pf8.into_push_pull_output();
+    let width_axis_step_pin: WidthAxisStepPin = gpiof.pf7.into_push_pull_output();
+    let width_axis_timer: WidthAxisTimer = p.TIM4.counter(&clocks);
+    let width_axis_limit_min_pin: WidthAxisLimitMinPin = gpiof.pf15.into_pull_up_input();
+    let width_axis_limit_min_timer: WidthAxisLimitMinTimer = super_timer.sub();
+    let width_axis_limit_min: WidthAxisLimitMin =
+        SwitchDevice::new_active_low(width_axis_limit_min_pin, width_axis_limit_min_timer);
+    let width_axis_limit_max_pin: WidthAxisLimitMaxPin = gpiof.pf14.into_pull_up_input();
+    let width_axis_limit_max_timer: WidthAxisLimitMaxTimer = super_timer.sub();
+    let width_axis_limit_max: WidthAxisLimitMax =
+        SwitchDevice::new_active_low(width_axis_limit_max_pin, width_axis_limit_max_timer);
+    let width_axis = AxisDevice::new_dq542ma(
+        width_axis_dir_pin,
+        width_axis_step_pin,
+        width_axis_timer,
+        max_acceleration_in_millimeters_per_sec_per_sec,
+        steps_per_millimeter,
+        width_axis_limit_min,
+        width_axis_limit_max,
         AxisLimitSide::Min,
     );
 
@@ -156,7 +198,7 @@ fn main() -> ! {
 
     let mut robot = RobotBuilder::new()
         .with_leds(LedSet::new(green_led, blue_led, red_led))
-        .with_axes(AxisSet::new(x_axis))
+        .with_axes(AxisSet::new(length_axis, width_axis))
         .with_spindles(SpindleSet::new(main_spindle))
         .build()
         .with_run_commands(&get_run_commands())
