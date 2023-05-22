@@ -127,14 +127,18 @@ fn main() -> ! {
     let red_led_timer: RedLedTimer = super_timer.sub();
     let red_led = LedDevice::new(red_led_pin, red_led_timer);
 
-    let max_acceleration_in_millimeters_per_sec_per_sec = 20_f64;
+    let max_acceleration_in_millimeters_per_sec_per_sec = 5_f64;
 
     // https://www.makerstore.com.au/product/gear-m1/
-    let steps_per_revolution = 6400_f64;
-    let millimeters_per_revolution = 125.66_f64;
-    let steps_per_millimeter = steps_per_revolution * (1_f64 / millimeters_per_revolution);
+    let length_axis_steps_per_revolution = 6400_f64;
+    let length_axis_millimeters_per_revolution = 125.66_f64;
+    let length_axis_steps_per_millimeter =
+        length_axis_steps_per_revolution * (1_f64 / length_axis_millimeters_per_revolution);
 
-    defmt::println!("Steps per mm: {}", steps_per_millimeter);
+    defmt::println!(
+        "Length axis steps per mm: {}",
+        length_axis_steps_per_millimeter
+    );
 
     let length_axis_dir_pin: LengthAxisDirPin = gpiof.pf9.into_push_pull_output();
     let length_axis_step_pin: LengthAxisStepPin = gpiog.pg1.into_push_pull_output();
@@ -152,10 +156,23 @@ fn main() -> ! {
         length_axis_step_pin,
         length_axis_timer,
         max_acceleration_in_millimeters_per_sec_per_sec,
-        steps_per_millimeter,
+        length_axis_steps_per_millimeter,
         length_axis_limit_min,
         length_axis_limit_max,
         AxisLimitSide::Min,
+    );
+
+    let width_axis_steps_per_revolution = 6400_f64;
+    let width_axis_leadscrew_starts = 4_f64;
+    let width_axis_leadscrew_pitch = 2_f64;
+    let width_axis_millimeters_per_revolution =
+        width_axis_leadscrew_starts * width_axis_leadscrew_pitch;
+    let width_axis_steps_per_millimeter =
+        width_axis_steps_per_revolution / width_axis_millimeters_per_revolution;
+
+    defmt::println!(
+        "Width axis steps per mm: {}",
+        width_axis_steps_per_millimeter
     );
 
     let width_axis_dir_pin: WidthAxisDirPin = gpiof.pf8.into_push_pull_output();
@@ -174,7 +191,7 @@ fn main() -> ! {
         width_axis_step_pin,
         width_axis_timer,
         max_acceleration_in_millimeters_per_sec_per_sec,
-        steps_per_millimeter,
+        width_axis_steps_per_millimeter,
         width_axis_limit_min,
         width_axis_limit_max,
         AxisLimitSide::Min,

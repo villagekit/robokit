@@ -5,7 +5,8 @@ use crate::actuators::{AxisId, LedId, SpindleId};
 
 type BotCommand<const TIMER_HZ: u32> = Command<TIMER_HZ, LedId, AxisId, SpindleId>;
 
-pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 9] {
+/*
+pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 4] {
     [
         Command::Led(
             LedId::Green,
@@ -21,7 +22,7 @@ pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 9] {
             },
         ),
         Command::Led(
-            LedId::Blue,
+            LedId::Green,
             LedAction::Blink {
                 duration: 500.millis(),
             },
@@ -30,9 +31,96 @@ pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 9] {
             AxisId::Length,
             AxisAction::MoveAbsolute {
                 max_velocity_in_millimeters_per_sec: 10_f64,
-                position_in_millimeters: 80_f64,
+                position_in_millimeters: 0_f64,
             },
         ),
+    ]
+}
+*/
+
+pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 4] {
+    [
+        Command::Led(
+            LedId::Blue,
+            LedAction::Blink {
+                duration: 500.millis(),
+            },
+        ),
+        Command::Axis(
+            AxisId::Width,
+            AxisAction::MoveAbsolute {
+                max_velocity_in_millimeters_per_sec: 1_f64,
+                position_in_millimeters: 2_f64,
+            },
+        ),
+        Command::Led(
+            LedId::Blue,
+            LedAction::Blink {
+                duration: 500.millis(),
+            },
+        ),
+        Command::Axis(
+            AxisId::Width,
+            AxisAction::MoveAbsolute {
+                max_velocity_in_millimeters_per_sec: 1_f64,
+                position_in_millimeters: 0_f64,
+            },
+        ),
+    ]
+}
+
+/*
+pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 6] {
+    [
+        Command::Led(
+            LedId::Green,
+            LedAction::Blink {
+                duration: 500.millis(),
+            },
+        ),
+        Command::Axis(
+            AxisId::Length,
+            AxisAction::MoveAbsolute {
+                max_velocity_in_millimeters_per_sec: 10_f64,
+                position_in_millimeters: 40_f64,
+            },
+        ),
+        /*
+        Command::Led(
+            LedId::Blue,
+            LedAction::Blink {
+                duration: 500.millis(),
+            },
+        ),
+        Command::Axis(
+            AxisId::Width,
+            AxisAction::MoveAbsolute {
+                max_velocity_in_millimeters_per_sec: 1_f64,
+                position_in_millimeters: 2_f64,
+            },
+        ),
+        Command::Led(
+            LedId::Blue,
+            LedAction::Blink {
+                duration: 500.millis(),
+            },
+        ),
+        Command::Axis(
+            AxisId::Width,
+            AxisAction::MoveAbsolute {
+                max_velocity_in_millimeters_per_sec: 1_f64,
+                position_in_millimeters: 0_f64,
+            },
+        ),
+        */
+        Command::Axis(
+            AxisId::Length,
+            AxisAction::MoveAbsolute {
+                max_velocity_in_millimeters_per_sec: 10_f64,
+                position_in_millimeters: 0_f64,
+            },
+        ),
+        /*
         Command::Led(
             LedId::Red,
             LedAction::Blink {
@@ -46,6 +134,7 @@ pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 9] {
                 position_in_millimeters: 120_f64,
             },
         ),
+         */
         Command::Led(
             LedId::Red,
             LedAction::Blink {
@@ -66,9 +155,11 @@ pub fn get_run_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 9] {
         ),
     ]
 }
+*/
 
-pub fn get_start_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
+pub fn get_start_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 0] {
     [
+        /*
         Command::Axis(
             AxisId::Length,
             AxisAction::Home {
@@ -76,7 +167,6 @@ pub fn get_start_commands<const TIMER_HZ: u32>() -> [BotCommand<TIMER_HZ>; 1] {
                 back_off_distance_in_millimeters: 2_f64,
             },
         ),
-        /*
         Command::MainSpindleSet(SpindleSetMessage {
             status: SpindleStatus::On { rpm: 1000 },
         }),
